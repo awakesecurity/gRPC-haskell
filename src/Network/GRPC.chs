@@ -2,7 +2,7 @@ module Network.GRPC where
 
 import Foreign.Ptr
 
-#include "grpc.h"
+#include "grpc/grpc.h"
 
 {#context prefix = "grpc" #}
 

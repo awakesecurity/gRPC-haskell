@@ -22,8 +22,7 @@ library
   -- other-modules:       
   -- other-extensions:    
   extra-libraries:      grpc
-  includes:             grpc.h
-  include-dirs:         /usr/local/include/grpc
+  includes:             grpc/grpc.h
   build-tools:          c2hs
   build-depends:        base >=4.7 && <4.8
   hs-source-dirs:       src
