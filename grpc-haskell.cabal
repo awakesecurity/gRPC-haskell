@@ -19,6 +19,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:
     Network.GRPC
+    Network.GRPC.Constants
     Network.GRPC.Time
   -- other-modules:       
   -- other-extensions:    
