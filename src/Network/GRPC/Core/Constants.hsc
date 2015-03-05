@@ -1,4 +1,4 @@
-module Network.GRPC.Constants where
+module Network.GRPC.Core.Constants where
 
 #include "grpc/grpc.h"
 
