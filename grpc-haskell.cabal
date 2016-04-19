@@ -1,7 +1,7 @@
 name:                grpc-haskell
 version:             0.0.0.0
 synopsis:            Haskell implementation of gRPC layered on shared C library.
--- description:         
+-- description:
 homepage:            http://github.com/aloiscochard/grpc-haskell
 license:             Apache-2.0
 license-file:        LICENSE
@@ -14,18 +14,18 @@ cabal-version:       >=1.10
 extra-source-files:   cbits, include
 
 library
-  build-depends:        
-      base              >=4.7     && <4.8
-    , clock             >=0.4     && <0.5
-  c-sources:            
+  build-depends:
+      base
+    , clock
+  c-sources:
     cbits/grpc_haskell.c
   exposed-modules:
     Network.GRPC.Core
     Network.GRPC.Core.Constants
     Network.GRPC.Core.Time
-  extra-libraries:      
+  extra-libraries:
     grpc
-  includes:             
+  includes:
       include/grpc_haskell.h
     , grpc/grpc.h
     , grpc/status.h
@@ -37,9 +37,9 @@ library
   hs-source-dirs:       src
 
 test-suite test
-  build-depends:       
+  build-depends:
       base
-    , QuickCheck        >= 2.7      && < 2.8
+    , QuickCheck        
   default-language:     Haskell2010
   ghc-options:          -Wall -fwarn-incomplete-patterns -O2 -threaded -rtsopts
   hs-source-dirs:       tests
