@@ -44,7 +44,7 @@ data ArgValue = ArgString String | ArgInt Int
 {#pointer *grpc_op as Op newtype #}
 
 {#fun grpc_init as ^ {} -> `()'#}
-{#fun grpc_shutdown as ^ {} -> `()'#} 
+{#fun grpc_shutdown as ^ {} -> `()'#}
 
 {#fun grpc_completion_queue_create as ^ {`Ptr ()'} -> `CompletionQueue'#}
 
@@ -54,7 +54,7 @@ data ArgValue = ArgString String | ArgInt Int
 {#fun grpc_completion_queue_shutdown as ^ {`CompletionQueue'} -> `()'#}
 {#fun grpc_completion_queue_destroy as ^ {`CompletionQueue'} -> `()'#}
 
-{#fun grpc_channel_create_call_ as ^ {`Channel', `CompletionQueue', `String', `String', `CTimeSpecPtr'} -> `Call'#}
+{#fun grpc_channel_create_call_ as ^ {`Channel', `Call', `Int', `CompletionQueue', `String', `String', `CTimeSpecPtr', `Ptr ()'} -> `Call'#}
 {#fun grpc_insecure_channel_create as ^ {`String', `ChannelArgsPtr', `Ptr ()'} -> `Channel'#}
 {#fun grpc_channel_destroy as ^ {`Channel'} -> `()'#}
 
