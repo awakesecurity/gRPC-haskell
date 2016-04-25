@@ -5,8 +5,11 @@ module Network.GRPC.Core where
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
+import Foreign.Storable
+import Foreign.Marshal.Utils
 
 import Network.GRPC.Core.Time
+import Network.GRPC.Core.Constants
 
 #include <grpc/grpc.h>
 #include <grpc/status.h>
@@ -21,6 +24,8 @@ import Network.GRPC.Core.Time
 {#pointer *grpc_channel as Channel newtype #}
 {#pointer *grpc_server as Server newtype #}
 {#pointer *grpc_call as Call newtype #}
+{#pointer *grpc_call_details as CallDetails newtype #}
+{#pointer *grpc_metadata_array as MetadataArray newtype #}
 
 -- {#enum grpc_arg_type as ArgType {underscoreToCase} deriving (Eq)#}
 
@@ -48,13 +53,13 @@ data ArgValue = ArgString String | ArgInt Int
 
 {#fun grpc_completion_queue_create as ^ {`Ptr ()'} -> `CompletionQueue'#}
 
-{#fun grpc_completion_queue_next_ as ^ {`CompletionQueue', `CTimeSpecPtr'} -> `Event'#}
-{#fun grpc_completion_queue_pluck_ as ^ {`CompletionQueue', `Ptr ()', `CTimeSpecPtr'} -> `Event'#}
+{#fun grpc_completion_queue_next_ as ^ {`CompletionQueue', `CTimeSpecPtr', `Ptr ()'} -> `Event'#}
+{#fun grpc_completion_queue_pluck_ as ^ {`CompletionQueue', `Ptr ()', `CTimeSpecPtr', `Ptr ()'} -> `Event'#}
 
 {#fun grpc_completion_queue_shutdown as ^ {`CompletionQueue'} -> `()'#}
 {#fun grpc_completion_queue_destroy as ^ {`CompletionQueue'} -> `()'#}
 
-{#fun grpc_channel_create_call_ as ^ {`Channel', `Call', `Int', `CompletionQueue', `String', `String', `CTimeSpecPtr', `Ptr ()'} -> `Call'#}
+{#fun grpc_channel_create_call_ as ^ {`Channel', `Call', fromIntegral `PropagationMask', `CompletionQueue', `String', `String', `CTimeSpecPtr', `Ptr ()'} -> `Call'#}
 {#fun grpc_insecure_channel_create as ^ {`String', `ChannelArgsPtr', `Ptr ()'} -> `Channel'#}
 {#fun grpc_channel_destroy as ^ {`Channel'} -> `()'#}
 
@@ -62,3 +67,7 @@ data ArgValue = ArgString String | ArgInt Int
 {#fun grpc_call_cancel as ^ {`Call', `Ptr ()'} -> `()'#}
 {#fun grpc_call_cancel_with_status as ^ {`Call', `StatusCode', `String', `Ptr ()'} -> `()'#}
 {#fun grpc_call_destroy as ^ {`Call'} -> `()'#}
+
+-- Server stuff
+
+--{#fun grpc_server_request_call as ^ {`Server',with* `Call' peek*, `CallDetails', `MetadataArray', `CompletionQueue', `CompletionQueue', `Ptr ()'} -> `CallError'#}

@@ -1,3 +1,5 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 module Network.GRPC.Core.Constants where
 
 #include "grpc/grpc.h"
@@ -19,16 +21,19 @@ writeNoCompress :: Int
 writeNoCompress = #const GRPC_WRITE_NO_COMPRESS
 
 newtype PropagationMask = PropagationMask {unPropagationMask :: Int}
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord, Integral, Enum, Real, Num)
 
-propagateDeadline :: Int
-propagateDeadline = #const GRPC_PROPAGATE_DEADLINE
+propagateDeadline :: PropagationMask
+propagateDeadline = PropagationMask $ #const GRPC_PROPAGATE_DEADLINE
 
-propagateCensusStatsContext :: Int
-propagateCensusStatsContext = #const GRPC_PROPAGATE_CENSUS_STATS_CONTEXT
+propagateCensusStatsContext :: PropagationMask
+propagateCensusStatsContext =
+  PropagationMask $ #const GRPC_PROPAGATE_CENSUS_STATS_CONTEXT
 
-propagateCensusTracingContext :: Int
-propagateCensusTracingContext = #const GRPC_PROPAGATE_CENSUS_TRACING_CONTEXT
+propagateCensusTracingContext :: PropagationMask
+propagateCensusTracingContext =
+  PropagationMask $ #const GRPC_PROPAGATE_CENSUS_TRACING_CONTEXT
 
-propagateCancellation :: Int
-propagateCancellation = #const GRPC_PROPAGATE_CANCELLATION
+propagateCancellation :: PropagationMask
+propagateCancellation =
+  PropagationMask $ #const GRPC_PROPAGATE_CANCELLATION
