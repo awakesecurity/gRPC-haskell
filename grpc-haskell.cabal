@@ -15,14 +15,20 @@ extra-source-files:   cbits, include
 
 library
   build-depends:
-      base
-    , clock
+      base ==4.8.*
+    , clock ==0.6.*
+    , bytestring ==0.10.*
   c-sources:
     cbits/grpc_haskell.c
   exposed-modules:
-    Network.GRPC.Core
-    Network.GRPC.Core.Constants
-    Network.GRPC.Core.Time
+  -- NOTE: the order of these matters to c2hs.
+    Network.GRPC.Unsafe.Constants
+    Network.GRPC.Unsafe.Time
+    Network.GRPC.Unsafe.Slice
+    Network.GRPC.Unsafe.ByteBuffer
+    Network.GRPC.Unsafe.Metadata
+    Network.GRPC.Unsafe.Op
+    Network.GRPC.Unsafe
   extra-libraries:
     grpc
   includes:
@@ -30,6 +36,9 @@ library
     , grpc/grpc.h
     , grpc/status.h
     , grpc/support/time.h
+    , grpc/impl/codegen/compression_types.h
+    , grpc/impl/codegen/slice_buffer.h
+    , grpc/impl/codegen/slice.h
   build-tools:          c2hs
   default-language:     Haskell2010
   ghc-options:          -Wall -fwarn-incomplete-patterns
@@ -38,11 +47,16 @@ library
 
 test-suite test
   build-depends:
-      base
-    , QuickCheck
+      base ==4.8.*
     , grpc-haskell
+    , bytestring ==0.10.*
+    , unix
+    , time
+    , async
+    , tasty >= 0.11 && <0.12
+    , tasty-hunit >= 0.9 && <0.10
   default-language:     Haskell2010
-  ghc-options:          -Wall -fwarn-incomplete-patterns -O2 -threaded -rtsopts
+  ghc-options:          -Wall -fwarn-incomplete-patterns -g -threaded
   hs-source-dirs:       tests
   main-is:              Properties.hs
   type:                 exitcode-stdio-1.0

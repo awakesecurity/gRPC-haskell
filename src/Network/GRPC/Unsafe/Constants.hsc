@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Network.GRPC.Core.Constants where
+module Network.GRPC.Unsafe.Constants where
 
 #include "grpc/grpc.h"
 #include "grpc/impl/codegen/propagation_bits.h"
@@ -20,6 +20,9 @@ writeBufferHint = #const GRPC_WRITE_BUFFER_HINT
 writeNoCompress :: Int
 writeNoCompress = #const GRPC_WRITE_NO_COMPRESS
 
+maxCompletionQueuePluckers :: Int
+maxCompletionQueuePluckers = #const GRPC_MAX_COMPLETION_QUEUE_PLUCKERS
+
 newtype PropagationMask = PropagationMask {unPropagationMask :: Int}
   deriving (Show, Eq, Ord, Integral, Enum, Real, Num)
 
@@ -37,3 +40,6 @@ propagateCensusTracingContext =
 propagateCancellation :: PropagationMask
 propagateCancellation =
   PropagationMask $ #const GRPC_PROPAGATE_CANCELLATION
+
+propagateDefaults :: PropagationMask
+propagateDefaults = PropagationMask $ #const GRPC_PROPAGATE_DEFAULTS
