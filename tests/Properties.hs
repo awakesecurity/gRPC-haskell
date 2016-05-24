@@ -1,21 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-import Control.Concurrent.Async
-import Network.GRPC.Unsafe
-import Network.GRPC.Unsafe.Slice
-import Network.GRPC.Unsafe.ByteBuffer
-import Network.GRPC.Unsafe.Time
-import Network.GRPC.Unsafe.Metadata
-import Network.GRPC.Unsafe.Op
-import Network.GRPC.Unsafe.Constants
-import qualified Data.ByteString as B
-import Foreign.Marshal.Alloc
-import Foreign.Storable
-import Foreign.Ptr
-import Test.Tasty
-import Test.Tasty.HUnit as HU
+import           Control.Concurrent.Async
+import qualified Data.ByteString                as B
+import           Foreign.Marshal.Alloc
+import           Foreign.Ptr
+import           Foreign.Storable
+import           Network.GRPC.Unsafe
+import           Network.GRPC.Unsafe.ByteBuffer
+import           Network.GRPC.Unsafe.Constants
+import           Network.GRPC.Unsafe.Metadata
+import           Network.GRPC.Unsafe.Op
+import           Network.GRPC.Unsafe.Slice
+import           Network.GRPC.Unsafe.Time
+import           Test.Tasty
+import           Test.Tasty.HUnit               as HU
 
-import LowLevelTests
+import           LowLevelTests
 
 roundtripSlice :: B.ByteString -> TestTree
 roundtripSlice bs = testCase "Slice C bindings roundtrip" $ do
