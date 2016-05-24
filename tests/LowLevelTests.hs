@@ -2,22 +2,21 @@
 
 module LowLevelTests where
 
-import           Data.ByteString (ByteString)
-import qualified Data.Map as M
-import           Network.GRPC.LowLevel
-import           Test.Tasty
-import           Test.Tasty.HUnit as HU ((@?=), testCase)
 import           Control.Concurrent.Async
+import           Data.ByteString                (ByteString)
+import qualified Data.Map                       as M
 import           Foreign.Marshal.Alloc
 import           Foreign.Ptr
 import           Foreign.Storable
+import           Network.GRPC.LowLevel
 import           Network.GRPC.Unsafe
 import           Network.GRPC.Unsafe.ByteBuffer
 import           Network.GRPC.Unsafe.Constants
 import           Network.GRPC.Unsafe.Metadata
 import           Network.GRPC.Unsafe.Op
 import           Network.GRPC.Unsafe.Time
-
+import           Test.Tasty
+import           Test.Tasty.HUnit               as HU (testCase, (@?=))
 
 lowLevelTests :: TestTree
 lowLevelTests = testGroup "Unit tests of low-level Haskell library"
@@ -64,7 +63,7 @@ testPayloadLowLevelServer grpc = do
   withServer grpc conf $ \server -> do
     let method = head (registeredMethods server)
     result <- serverHandleNormalRegisteredCall server method 11 M.empty $
-                \reqBody reqMeta -> return ("reply test", dummyMeta, dummyMeta)
+                \_reqBody _reqMeta -> return ("reply test", dummyMeta, dummyMeta)
     case result of
       Left err -> error $ show err
       Right _ -> return ()
@@ -77,7 +76,7 @@ testPayloadLowLevelClient grpc =
     reqResult <- clientRegisteredRequest client method 10 "Hello!" M.empty
     case reqResult of
       Left x -> error $ "Client got error: " ++ show x
-      Right (NormalRequestResult respBody initMeta trailingMeta respCode) -> do
+      Right (NormalRequestResult respBody _initMeta _trailingMeta respCode) -> do
         respBody @?= "reply test"
         respCode @?= GrpcStatusOk
 
@@ -87,7 +86,7 @@ testPayloadLowLevelClientUnregistered grpc = do
     reqResult <- clientRequest client "/foo" "localhost" 10 "Hello!" M.empty
     case reqResult of
       Left x -> error $ "Client got error: " ++ show x
-      Right (NormalRequestResult respBody initMeta trailingMeta respCode) -> do
+      Right (NormalRequestResult respBody _initMeta _trailingMeta respCode) -> do
         respBody @?= "reply test"
         respCode @?= GrpcStatusOk
 
@@ -95,7 +94,7 @@ testPayloadLowLevelServerUnregistered :: GRPC -> IO ()
 testPayloadLowLevelServerUnregistered grpc = do
   withServer grpc (ServerConfig "localhost" 50051 []) $ \server -> do
     result <- serverHandleNormalCall server 11 M.empty $
-                \reqBody reqMeta -> return ("reply test", M.empty)
+                \_reqBody _reqMeta -> return ("reply test", M.empty)
     case result of
       Left x -> error $ show x
       Right _ -> return ()
