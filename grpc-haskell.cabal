@@ -13,11 +13,18 @@ build-type:          Simple
 cabal-version:       >=1.10
 extra-source-files:   cbits, include
 
+Flag Debug
+  Description: Adds debug logging.
+  Manual:      True
+  Default:     False
+
 library
   build-depends:
       base ==4.8.*
     , clock ==0.6.*
     , bytestring ==0.10.*
+    , stm == 2.4.*
+    , containers ==0.5.*
   c-sources:
     cbits/grpc_haskell.c
   exposed-modules:
@@ -29,6 +36,14 @@ library
     Network.GRPC.Unsafe.Metadata
     Network.GRPC.Unsafe.Op
     Network.GRPC.Unsafe
+    Network.GRPC.LowLevel
+  other-modules:
+    Network.GRPC.LowLevel.CompletionQueue
+    Network.GRPC.LowLevel.GRPC
+    Network.GRPC.LowLevel.Op
+    Network.GRPC.LowLevel.Server
+    Network.GRPC.LowLevel.Call
+    Network.GRPC.LowLevel.Client
   extra-libraries:
     grpc
   includes:
@@ -44,6 +59,11 @@ library
   ghc-options:          -Wall -fwarn-incomplete-patterns
   include-dirs:         include
   hs-source-dirs:       src
+  default-extensions:   CPP
+
+  if flag(debug)
+    CPP-Options: -DDEBUG
+    CC-Options:  -DGRPC_HASKELL_DEBUG
 
 test-suite test
   build-depends:
@@ -55,8 +75,14 @@ test-suite test
     , async
     , tasty >= 0.11 && <0.12
     , tasty-hunit >= 0.9 && <0.10
+    , containers ==0.5.*
+  other-modules: LowLevelTests
   default-language:     Haskell2010
   ghc-options:          -Wall -fwarn-incomplete-patterns -g -threaded
   hs-source-dirs:       tests
   main-is:              Properties.hs
   type:                 exitcode-stdio-1.0
+  extensions:           CPP
+
+  if flag(debug)
+    GHC-Options: -DDEBUG

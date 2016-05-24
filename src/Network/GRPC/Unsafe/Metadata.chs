@@ -3,6 +3,7 @@ module Network.GRPC.Unsafe.Metadata where
 import Control.Exception
 import Control.Monad
 import Data.ByteString (ByteString, useAsCString, packCString)
+import Data.Map.Strict as M
 import Foreign.C.String
 import Foreign.Ptr
 import Foreign.Storable
@@ -23,6 +24,11 @@ import Foreign.Storable
 -- TODO: we need a function for getting a 'MetadataKeyValPtr'
 -- and length from this type.
 {#pointer *grpc_metadata_array as MetadataArray newtype#}
+
+{#fun metadata_array_get_metadata as ^
+  {`MetadataArray'} -> `MetadataKeyValPtr'#}
+
+{#fun metadata_array_get_count as ^ {`MetadataArray'} -> `Int'#}
 
 instance Storable MetadataArray where
   sizeOf (MetadataArray r) = sizeOf r
@@ -68,3 +74,23 @@ getMetadataKey m = getMetadataKey' m >=> packCString
 
 getMetadataVal :: MetadataKeyValPtr -> Int -> IO ByteString
 getMetadataVal m = getMetadataVal' m >=> packCString
+
+createMetadata :: M.Map ByteString ByteString -> IO MetadataKeyValPtr
+createMetadata m = do
+  let l = M.size m
+  let indexedKeyVals = zip [0..] $ M.toList m
+  metadata <- metadataAlloc l
+  forM_ indexedKeyVals $ \(i,(k,v)) -> setMetadataKeyVal k v metadata i
+  return metadata
+
+getAllMetadataArray :: MetadataArray -> IO (M.Map ByteString ByteString)
+getAllMetadataArray m = do
+  kvs <- metadataArrayGetMetadata m
+  l <- metadataArrayGetCount m
+  getAllMetadata kvs l
+
+getAllMetadata :: MetadataKeyValPtr -> Int -> IO (M.Map ByteString ByteString)
+getAllMetadata m count = do
+  let indices = [0..count-1]
+  fmap M.fromList $ forM indices $
+    \i -> liftM2 (,) (getMetadataKey m i) (getMetadataVal m i)

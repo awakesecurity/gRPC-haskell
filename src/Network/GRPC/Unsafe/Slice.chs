@@ -4,12 +4,9 @@ module Network.GRPC.Unsafe.Slice where
 #include <grpc_haskell.h>
 
 import qualified Data.ByteString as B
-import Control.Applicative
-import Data.Word
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
-import Foreign.Marshal.Alloc
 
 -- | A 'Slice' is gRPC's string type. We can easily convert these to and from
 -- ByteStrings. This type is a pointer to a C type.

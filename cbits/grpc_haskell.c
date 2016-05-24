@@ -7,6 +7,13 @@
 #include <string.h>
 #include <grpc_haskell.h>
 
+void grpc_haskell_free(char *debugMsg, void *ptr){
+  #ifdef GRPC_HASKELL_DEBUG
+  printf("C wrapper: freeing %s, ptr: %p\n", debugMsg, ptr);
+  #endif
+  free(ptr);
+}
+
 grpc_event *grpc_completion_queue_next_(grpc_completion_queue *cq,
                                         gpr_timespec *deadline,
                                         void *reserved) {
@@ -49,9 +56,13 @@ gpr_slice* gpr_slice_from_copied_string_(const char *source){
   return retval;
 }
 
+void gpr_slice_unref_(gpr_slice* slice){
+  gpr_slice_unref(*slice);
+}
+
 void free_slice(gpr_slice *slice){
   gpr_slice_unref(*slice);
-  free(slice);
+  grpc_haskell_free("free_slice", slice);
 }
 
 grpc_byte_buffer **create_receiving_byte_buffer(){
@@ -62,7 +73,7 @@ grpc_byte_buffer **create_receiving_byte_buffer(){
 
 void destroy_receiving_byte_buffer(grpc_byte_buffer **bb){
   grpc_byte_buffer_destroy(*bb);
-  free(bb);
+  grpc_haskell_free("destroy_receiving_byte_buffer", bb);
 }
 
 grpc_byte_buffer_reader *byte_buffer_reader_create(grpc_byte_buffer *buffer){
@@ -73,7 +84,7 @@ grpc_byte_buffer_reader *byte_buffer_reader_create(grpc_byte_buffer *buffer){
 
 void byte_buffer_reader_destroy(grpc_byte_buffer_reader *reader){
   grpc_byte_buffer_reader_destroy(reader);
-  free(reader);
+  grpc_haskell_free("byte_buffer_reader_destroy", reader);
 }
 
 gpr_slice *grpc_byte_buffer_reader_readall_(grpc_byte_buffer_reader *reader){
@@ -83,7 +94,7 @@ gpr_slice *grpc_byte_buffer_reader_readall_(grpc_byte_buffer_reader *reader){
 }
 
 void timespec_destroy(gpr_timespec* t){
-  free(t);
+  grpc_haskell_free("timespec_destroy", t);
 }
 
 gpr_timespec* gpr_inf_future_(gpr_clock_type t){
@@ -125,8 +136,8 @@ grpc_metadata_array** metadata_array_create(){
 
 void metadata_array_destroy(grpc_metadata_array **arr){
   grpc_metadata_array_destroy(*arr);
-  free(*arr);
-  free(arr);
+  grpc_haskell_free("metadata_array_destroy1", *arr);
+  grpc_haskell_free("metadata_array_destroy1", arr);
 }
 
 grpc_metadata* metadata_alloc(size_t n){
@@ -135,7 +146,7 @@ grpc_metadata* metadata_alloc(size_t n){
 }
 
 void metadata_free(grpc_metadata* m){
-  free(m);
+  grpc_haskell_free("metadata_free", m);
 }
 
 void set_metadata_key_val(char *key, char *val, grpc_metadata *arr, size_t i){
@@ -174,8 +185,10 @@ void op_array_destroy(grpc_op* op_array, size_t n){
       case GRPC_OP_SEND_CLOSE_FROM_CLIENT:
       break;
       case GRPC_OP_SEND_STATUS_FROM_SERVER:
-      free(op->data.send_status_from_server.trailing_metadata);
-      free(op->data.send_status_from_server.status_details);
+      grpc_haskell_free("op_array_destroy: GRPC_OP_SEND_STATUS_FROM_SERVER",
+                        op->data.send_status_from_server.trailing_metadata);
+      grpc_haskell_free("op_array_destroy: GRPC_OP_SEND_STATUS_FROM_SERVER",
+                      (char*)(op->data.send_status_from_server.status_details));
       break;
       case GRPC_OP_RECV_INITIAL_METADATA:
       break;
@@ -187,7 +200,7 @@ void op_array_destroy(grpc_op* op_array, size_t n){
       break;
     }
   }
-  free(op_array);
+  grpc_haskell_free("op_array_destroy", op_array);
 }
 
 void op_send_initial_metadata(grpc_op *op_array, size_t i,
@@ -280,17 +293,7 @@ void op_send_status_server(grpc_op *op_array, size_t i,
   op->data.send_status_from_server.status = status;
   op->data.send_status_from_server.status_details
     = malloc(sizeof(char)*(strlen(details) + 1));
-  strcpy(op->data.send_status_from_server.status_details, details);
-  op->flags = 0;
-  op->reserved = NULL;
-}
-
-void op_send_ok_status_server(grpc_op *op_array, size_t i){
-  grpc_op *op = op_array + i;
-  op->op = GRPC_OP_SEND_STATUS_FROM_SERVER;
-  op->data.send_status_from_server.trailing_metadata_count = 0;
-  op->data.send_status_from_server.status = GRPC_STATUS_OK;
-  op->data.send_status_from_server.status_details = "OK";
+  strcpy((char*)(op->data.send_status_from_server.status_details), details);
   op->flags = 0;
   op->reserved = NULL;
 }
@@ -299,8 +302,12 @@ grpc_status_code* create_status_code_ptr(){
   return malloc(sizeof(grpc_status_code));
 }
 
+grpc_status_code deref_status_code_ptr(grpc_status_code* p){
+  return *p;
+}
+
 void destroy_status_code_ptr(grpc_status_code* p){
-  free(p);
+  grpc_haskell_free("destroy_status_code_ptr", p);
 }
 
 grpc_call_details* create_call_details(){
@@ -311,7 +318,7 @@ grpc_call_details* create_call_details(){
 
 void destroy_call_details(grpc_call_details* cd){
   grpc_call_details_destroy(cd);
-  free(cd);
+  grpc_haskell_free("destroy_call_details", cd);
 }
 
 void grpc_channel_watch_connectivity_state_(grpc_channel *channel,
@@ -322,4 +329,25 @@ void grpc_channel_watch_connectivity_state_(grpc_channel *channel,
                                             void *tag){
   grpc_channel_watch_connectivity_state(channel, last_observed_state, *deadline,
                                         cq, tag);
+}
+
+grpc_metadata* metadata_array_get_metadata(grpc_metadata_array* arr){
+  return arr->metadata;
+}
+
+size_t metadata_array_get_count(grpc_metadata_array* arr){
+  return arr->count;
+}
+
+grpc_call* grpc_channel_create_registered_call_(
+  grpc_channel *channel, grpc_call *parent_call, uint32_t propagation_mask,
+  grpc_completion_queue *completion_queue, void *registered_call_handle,
+  gpr_timespec *deadline, void *reserved){
+    #ifdef GRPC_HASKELL_DEBUG
+    printf("calling grpc_channel_create_registered_call with deadline %p\n",
+           deadline);
+    #endif
+    return grpc_channel_create_registered_call(channel, parent_call,
+             propagation_mask, completion_queue, registered_call_handle,
+             *deadline, reserved);
 }

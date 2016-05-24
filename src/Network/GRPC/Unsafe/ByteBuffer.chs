@@ -74,10 +74,15 @@ withByteBufferPtr
 {#fun grpc_raw_byte_buffer_from_reader as ^
   {`ByteBufferReader'} -> `ByteBuffer'#}
 
+-- TODO: Issue #5
 withByteStringAsByteBuffer :: B.ByteString -> (ByteBuffer -> IO a) -> IO a
 withByteStringAsByteBuffer bs f = do
   bracket (byteStringToSlice bs) freeSlice $ \slice -> do
     bracket (grpcRawByteBufferCreate slice 1) grpcByteBufferDestroy f
+
+-- TODO: Issue #5
+createByteBuffer :: B.ByteString -> IO ByteBuffer
+createByteBuffer bs = byteStringToSlice bs >>= flip grpcRawByteBufferCreate 1
 
 copyByteBufferToByteString :: ByteBuffer -> IO B.ByteString
 copyByteBufferToByteString bb = do

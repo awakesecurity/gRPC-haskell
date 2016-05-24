@@ -29,7 +29,14 @@ import Network.GRPC.Unsafe.Constants
 -- | Represents a pointer to a call. To users of the gRPC core library, this
 -- type is abstract; we have no access to its fields.
 {#pointer *grpc_call as Call newtype #}
+
+instance Show Call where
+  show (Call ptr) = show ptr
+
 {#pointer *grpc_call_details as CallDetails newtype #}
+
+instance Show CallDetails where
+  show (CallDetails ptr) = show ptr
 
 {#fun create_call_details as ^ {} -> `CallDetails'#}
 {#fun destroy_call_details as ^ {`CallDetails'} -> `()'#}
@@ -65,6 +72,11 @@ instance Storable Tag where
   alignment (Tag p) = alignment p
   peek p = fmap Tag (peek (castPtr p))
   poke p (Tag r) = poke (castPtr p) r
+
+-- | A 'CallHandle' is an identifier used to refer to a registered call. Create
+-- one on the client with 'grpcChannelRegisterCall', and on the server with
+-- 'grpcServerRegisterMethod'.
+newtype CallHandle = CallHandle {unCallHandle :: Ptr ()} deriving (Show, Eq)
 
 -- | 'Reserved' is an as-yet unused void pointer param to several gRPC
 -- functions. Create one with 'reserved'.
@@ -158,6 +170,14 @@ castPeek p = peek (castPtr p)
 {#fun grpc_insecure_channel_create as ^
   {`String', `ChannelArgsPtr',unReserved `Reserved'} -> `Channel'#}
 
+{#fun grpc_channel_register_call as ^
+  {`Channel', `String', `String',unReserved `Reserved'}
+  -> `CallHandle' CallHandle#}
+
+{#fun grpc_channel_create_registered_call_ as ^
+  {`Channel', `Call', fromIntegral `PropagationMask', `CompletionQueue',
+   unCallHandle `CallHandle', `CTimeSpecPtr', unReserved `Reserved'} -> `Call'#}
+
 -- | get the current connectivity state of the given channel. The 'Bool' is
 -- True if we should try to connect the channel.
 {#fun grpc_channel_check_connectivity_state as ^
@@ -190,10 +210,16 @@ castPeek p = peek (castPtr p)
 
 {#fun grpc_call_destroy as ^ {`Call'} -> `()'#}
 
+--TODO: we need to free this string with gpr_free!
+{#fun grpc_call_get_peer as ^ {`Call'} -> `String' #}
+
 -- Server stuff
 
 {#fun grpc_server_create as ^
   {`ChannelArgsPtr',unReserved `Reserved'} -> `Server'#}
+
+{#fun grpc_server_register_method as ^
+  {`Server', `String', `String'} -> `CallHandle' CallHandle#}
 
 {#fun grpc_server_register_completion_queue as ^
   {`Server', `CompletionQueue', unReserved `Reserved'} -> `()'#}
@@ -229,6 +255,7 @@ castPeek p = peek (castPtr p)
 
 -- | TODO: I am not yet sure how this function is supposed to be used.
 {#fun grpc_server_request_registered_call as ^
-  {`Server',unTag `Tag',id `Ptr Call', `CTimeSpecPtr', `MetadataArray' id,
-   id `Ptr ByteBuffer', `CompletionQueue', `CompletionQueue',unTag `Tag'}
+  {`Server',unCallHandle `CallHandle',id `Ptr Call', `CTimeSpecPtr',
+   `MetadataArray', id `Ptr ByteBuffer', `CompletionQueue',
+   `CompletionQueue',unTag `Tag'}
   -> `CallError'#}

@@ -1,6 +1,6 @@
 module Network.GRPC.Unsafe.Time where
 
-import Control.Applicative
+import Control.Exception (bracket)
 import Control.Monad
 import Foreign.C.Types
 import Foreign.Storable
@@ -42,6 +42,9 @@ instance Storable CTimeSpec where
 -- | Returns a GprClockMonotonic representing a deadline n seconds in the
 -- future.
 {#fun seconds_to_deadline as ^ {`Int'} -> `CTimeSpecPtr'#}
+
+withDeadlineSeconds :: Int -> (CTimeSpecPtr -> IO a) -> IO a
+withDeadlineSeconds i = bracket (secondsToDeadline i) timespecDestroy
 
 -- | Returns a GprClockMonotonic representing a deadline n milliseconds
 -- in the future.

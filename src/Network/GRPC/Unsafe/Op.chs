@@ -1,8 +1,6 @@
 module Network.GRPC.Unsafe.Op where
 
 import Control.Exception
-import Control.Monad
-import qualified Data.ByteString as B
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
@@ -14,8 +12,8 @@ import Foreign.Ptr
 #include <grpc/impl/codegen/grpc_types.h>
 #include <grpc_haskell.h>
 
-{#enum grpc_op_type as OpType {underscoreToCase} deriving (Eq)#}
-{#enum grpc_status_code as StatusCode {underscoreToCase} deriving (Eq)#}
+{#enum grpc_op_type as OpType {underscoreToCase} deriving (Eq, Show)#}
+{#enum grpc_status_code as StatusCode {underscoreToCase} deriving (Eq, Show)#}
 
 -- NOTE: We don't alloc the space for the enum in Haskell because enum size is
 -- implementation-dependent. See:
@@ -23,6 +21,8 @@ import Foreign.Ptr
 -- | Allocates space for a 'StatusCode' and returns a pointer to it. Used to
 -- receive a status code from the server with 'opRecvStatusClient'.
 {#fun create_status_code_ptr as ^ {} -> `Ptr StatusCode' castPtr#}
+
+{#fun deref_status_code_ptr as ^ {castPtr `Ptr StatusCode'} -> `StatusCode'#}
 
 {#fun destroy_status_code_ptr as ^ {castPtr `Ptr StatusCode'} -> `()' #}
 

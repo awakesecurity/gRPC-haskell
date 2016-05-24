@@ -99,6 +99,8 @@ void op_send_status_server(grpc_op *op_array, size_t i,
 
 grpc_status_code* create_status_code_ptr();
 
+grpc_status_code deref_status_code_ptr(grpc_status_code* p);
+
 void destroy_status_code_ptr(grpc_status_code* p);
 
 grpc_call_details* create_call_details();
@@ -111,5 +113,14 @@ void grpc_channel_watch_connectivity_state_(grpc_channel *channel,
                                             gpr_timespec* deadline,
                                             grpc_completion_queue *cq,
                                             void *tag);
+
+grpc_metadata* metadata_array_get_metadata(grpc_metadata_array* arr);
+
+size_t metadata_array_get_count(grpc_metadata_array* arr);
+
+grpc_call* grpc_channel_create_registered_call_(
+  grpc_channel *channel, grpc_call *parent_call, uint32_t propagation_mask,
+  grpc_completion_queue *completion_queue, void *registered_call_handle,
+  gpr_timespec *deadline, void *reserved);
 
 #endif //GRPC_HASKELL

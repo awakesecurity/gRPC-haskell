@@ -9,13 +9,13 @@ import Network.GRPC.Unsafe.Metadata
 import Network.GRPC.Unsafe.Op
 import Network.GRPC.Unsafe.Constants
 import qualified Data.ByteString as B
-import Data.Time.Clock.POSIX
-import GHC.Exts
 import Foreign.Marshal.Alloc
 import Foreign.Storable
 import Foreign.Ptr
 import Test.Tasty
 import Test.Tasty.HUnit as HU
+
+import LowLevelTests
 
 roundtripSlice :: B.ByteString -> TestTree
 roundtripSlice bs = testCase "Slice C bindings roundtrip" $ do
@@ -205,13 +205,40 @@ testPayload = testCase "low-level C bindings request/response " $ do
   grpcShutdown
   putStrLn "Done."
 
-unitTests :: TestTree
-unitTests = testGroup "Unit tests"
+testCreateDestroyMetadata :: TestTree
+testCreateDestroyMetadata = testCase "create/destroy metadataArrayPtr " $ do
+  grpcInit
+  withMetadataArrayPtr $ const (return ())
+  grpcShutdown
+
+testCreateDestroyMetadataKeyVals :: TestTree
+testCreateDestroyMetadataKeyVals = testCase "create/destroy metadata k/vs " $ do
+  grpcInit
+  withMetadataKeyValPtr 10 $ const (return ())
+  grpcShutdown
+
+testCreateDestroyDeadline :: TestTree
+testCreateDestroyDeadline = testCase "create/destroy deadline " $ do
+  grpcInit
+  withDeadlineSeconds 10 $ const (return ())
+  grpcShutdown
+
+unsafeTests :: TestTree
+unsafeTests = testGroup "Unit tests for unsafe C bindings."
   [testPayload,
    roundtripSlice "Hello, world!",
    roundtripByteBuffer "Hwaet! We gardena in geardagum...",
    testMetadata,
-   testNow]
+   testNow,
+   testCreateDestroyMetadata,
+   testCreateDestroyMetadataKeyVals,
+   testCreateDestroyDeadline
+   ]
+
+allTests :: TestTree
+allTests = testGroup "All tests"
+  [ unsafeTests,
+   lowLevelTests]
 
 main :: IO ()
-main = defaultMain unitTests
+main = defaultMain allTests
