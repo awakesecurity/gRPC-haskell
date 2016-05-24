@@ -30,7 +30,9 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
    , testClientRequestNoServer
    , testServerAwaitNoClient
    , testPayloadLowLevelUnregistered
+   , testPayload
    ]
+  ]
 
 dummyMeta :: M.Map ByteString ByteString
 dummyMeta = M.fromList [("foo","bar")]
@@ -265,8 +267,9 @@ testPayloadServer = do
           cancelledPtr <- malloc
           opRecvCloseServer respOps 0 cancelledPtr
           opSendMessage respOps 1 respbb
-          opSendStatusServer respOps 2 0 (MetadataKeyValPtr nullPtr)
-                             GrpcStatusOk "ok"
+          B.useAsCString "ok" $ \detailsStr ->
+            opSendStatusServer respOps 2 0 (MetadataKeyValPtr nullPtr)
+                               GrpcStatusOk detailsStr
           serverCall <- peek serverCallPtr
           respBatchError <- grpcCallStartBatch serverCall respOps 3
                                                (tag 103) reserved
