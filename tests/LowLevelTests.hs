@@ -11,17 +11,17 @@ import           Test.Tasty.HUnit ((@?=), testCase)
 
 lowLevelTests :: TestTree
 lowLevelTests = testGroup "Unit tests of low-level Haskell library"
-  [  testGRPCBracket
-   , testCompletionQueueCreateDestroy
-   , testServerCreateDestroy
-   , testClientCreateDestroy
-   , testWithServerCall
-   , testWithClientCall
-   --, testPayloadLowLevel --TODO: currently crashing from free on unalloced ptr
-   --, testClientRequestNoServer --TODO: succeeds when no other tests run.
-   , testServerAwaitNoClient
-   --, testPayloadLowLevelUnregistered --TODO: succeeds when no other tests run.
-   ]
+  [ testGRPCBracket
+  , testCompletionQueueCreateDestroy
+  , testServerCreateDestroy
+  , testClientCreateDestroy
+  , testWithServerCall
+  , testWithClientCall
+  -- , testPayloadLowLevel --TODO: currently crashing from free on unalloced ptr
+  -- , testClientRequestNoServer --TODO: succeeds when no other tests run.
+  , testServerAwaitNoClient
+  -- , testPayloadLowLevelUnregistered --TODO: succeeds when no other tests run.
+  ]
 
 dummyMeta :: M.Map ByteString ByteString
 dummyMeta = M.fromList [("foo","bar")]
