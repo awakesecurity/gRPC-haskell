@@ -47,6 +47,7 @@ GRPC
 , runOps
 , Op(..)
 , OpRecvResult(..)
+, StatusDetails(..)
 
 ) where
 

@@ -30,6 +30,7 @@ import           Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar',
                                               readTVar, writeTVar)
 import           Control.Exception (bracket)
 import           Data.IORef (IORef, newIORef, atomicModifyIORef')
+import           Data.List (intersperse)
 import           Foreign.Marshal.Alloc (malloc, free)
 import           Foreign.Ptr (nullPtr, plusPtr)
 import           Foreign.Storable (peek)
@@ -188,7 +189,8 @@ startBatch :: CompletionQueue -> C.Call -> C.OpArray -> Int -> C.Tag
               -> IO (Either GRPCIOError ())
 startBatch cq@CompletionQueue{..} call opArray opArraySize tag =
     withPermission Push cq $ fmap throwIfCallError $ do
-      grpcDebug "startBatch: calling grpc_call_start_batch."
+      grpcDebug $ "startBatch: calling grpc_call_start_batch with pointers: "
+                  ++ show call ++ " " ++ show opArray
       res <- C.grpcCallStartBatch call opArray opArraySize tag C.reserved
       grpcDebug "startBatch: grpc_call_start_batch call returned."
       return res
@@ -230,6 +232,10 @@ channelCreateRegisteredCall :: C.Channel -> C.Call -> C.PropagationMask
 channelCreateRegisteredCall
   chan parent mask cq@CompletionQueue{..} handle deadline =
   withPermission Push cq $ do
+    grpcDebug $ "channelCreateRegisteredCall: call with "
+                ++ concat (intersperse " " [show chan, show parent, show mask,
+                                            show unsafeCQ, show handle,
+                                            show deadline])
     call <- C.grpcChannelCreateRegisteredCall chan parent mask unsafeCQ
                                               handle deadline C.reserved
     return $ Right $ ClientCall call

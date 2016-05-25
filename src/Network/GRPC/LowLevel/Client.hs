@@ -114,9 +114,10 @@ withClientCall client method host timeout f = do
 
 data NormalRequestResult = NormalRequestResult
                              ByteString
-                             MetadataMap --init metadata
+                             (Maybe MetadataMap) --init metadata
                              MetadataMap --trailing metadata
                              C.StatusCode
+                             StatusDetails
   deriving (Show, Eq)
 
 -- | Function for assembling call result when the 'MethodType' is 'Normal'.
@@ -128,8 +129,14 @@ compileNormalRequestResults
   -- core use cases easy.
   [OpRecvInitialMetadataResult m,
    OpRecvMessageResult body,
-   OpRecvStatusOnClientResult m2 status]
-    = NormalRequestResult body m m2 status
+   OpRecvStatusOnClientResult m2 status details]
+    = NormalRequestResult body (Just m) m2 status (StatusDetails details)
+  -- TODO: it seems registered request responses on the server
+  -- don't send initial metadata. Hence the 'Maybe'. Investigate.
+compileNormalRequestResults
+  [OpRecvMessageResult body,
+   OpRecvStatusOnClientResult m2 status details]
+    = NormalRequestResult body Nothing m2 status (StatusDetails details)
 compileNormalRequestResults _ =
   --TODO: impossible case should be enforced by more precise types.
   error "non-normal request input to compileNormalRequestResults."

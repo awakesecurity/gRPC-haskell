@@ -1,3 +1,5 @@
+{-# LANGUAGE StandaloneDeriving #-}
+
 module Network.GRPC.Unsafe where
 
 import Control.Monad
@@ -20,8 +22,12 @@ import Network.GRPC.Unsafe.Constants
 
 {#pointer *grpc_completion_queue as CompletionQueue newtype #}
 
+deriving instance Show CompletionQueue
+
 -- | Represents a connection to a server. Created on the client side.
 {#pointer *grpc_channel as Channel newtype #}
+
+deriving instance Show Channel
 
 -- | Represents a server. Created on the server side.
 {#pointer *grpc_server as Server newtype #}
@@ -30,13 +36,11 @@ import Network.GRPC.Unsafe.Constants
 -- type is abstract; we have no access to its fields.
 {#pointer *grpc_call as Call newtype #}
 
-instance Show Call where
-  show (Call ptr) = show ptr
+deriving instance Show Call
 
 {#pointer *grpc_call_details as CallDetails newtype #}
 
-instance Show CallDetails where
-  show (CallDetails ptr) = show ptr
+deriving instance Show CallDetails
 
 {#fun create_call_details as ^ {} -> `CallDetails'#}
 {#fun destroy_call_details as ^ {`CallDetails'} -> `()'#}

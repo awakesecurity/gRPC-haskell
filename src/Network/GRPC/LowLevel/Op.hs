@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Network.GRPC.LowLevel.Op where
 
@@ -6,10 +7,12 @@ import           Control.Exception
 import qualified Data.ByteString as B
 import qualified Data.Map.Strict as M
 import           Data.Maybe (catMaybes)
+import           Data.String (IsString)
+import           Foreign.C.String (CString)
 import           Foreign.C.Types (CInt)
-import           Foreign.Marshal.Alloc (malloc, free)
-import           Foreign.Ptr (Ptr)
-import           Foreign.Storable (peek)
+import           Foreign.Marshal.Alloc (malloc, mallocBytes, free)
+import           Foreign.Ptr (Ptr, nullPtr)
+import           Foreign.Storable (peek, poke)
 import qualified Network.GRPC.Unsafe as C
 import qualified Network.GRPC.Unsafe.Metadata as C
 import qualified Network.GRPC.Unsafe.ByteBuffer as C
@@ -21,13 +24,15 @@ import Network.GRPC.LowLevel.Call
 
 type MetadataMap = M.Map B.ByteString B.ByteString
 
+newtype StatusDetails = StatusDetails B.ByteString deriving (Show, Eq, IsString)
+
 -- | Sum describing all possible send and receive operations that can be batched
 -- and executed by gRPC. Usually these are processed in a handful of
 -- combinations depending on the 'MethodType' of the call being run.
 data Op = OpSendInitialMetadata MetadataMap
           | OpSendMessage B.ByteString
           | OpSendCloseFromClient
-          | OpSendStatusFromServer MetadataMap C.StatusCode --TODO: Issue #6
+          | OpSendStatusFromServer MetadataMap C.StatusCode StatusDetails
           | OpRecvInitialMetadata
           | OpRecvMessage
           | OpRecvStatusOnClient
@@ -42,10 +47,19 @@ data OpContext =
   | OpSendMessageContext C.ByteBuffer
   | OpSendCloseFromClientContext
   | OpSendStatusFromServerContext C.MetadataKeyValPtr Int C.StatusCode
+                                  B.ByteString
   | OpRecvInitialMetadataContext (Ptr C.MetadataArray)
   | OpRecvMessageContext (Ptr C.ByteBuffer)
   | OpRecvStatusOnClientContext (Ptr C.MetadataArray) (Ptr C.StatusCode)
+                                (Ptr CString)
   | OpRecvCloseOnServerContext (Ptr CInt)
+  deriving Show
+
+-- | Length we pass to gRPC for receiving status details
+-- when processing 'OpRecvStatusOnClient'. It appears that gRPC actually ignores
+-- this length and reallocates a longer string if necessary.
+defaultStatusStringLen :: Int
+defaultStatusStringLen = 128
 
 -- | Allocates and initializes the 'Opcontext' corresponding to the given 'Op'.
 createOpContext :: Op -> IO OpContext
@@ -56,19 +70,23 @@ createOpContext (OpSendInitialMetadata m) =
 createOpContext (OpSendMessage bs) =
   fmap OpSendMessageContext (C.createByteBuffer bs)
 createOpContext (OpSendCloseFromClient) = return OpSendCloseFromClientContext
-createOpContext (OpSendStatusFromServer m code) =
+createOpContext (OpSendStatusFromServer m code (StatusDetails str)) =
   OpSendStatusFromServerContext
   <$> C.createMetadata m
   <*> return (M.size m)
   <*> return code
+  <*> return str
 createOpContext OpRecvInitialMetadata =
   fmap OpRecvInitialMetadataContext C.metadataArrayCreate
 createOpContext OpRecvMessage =
   fmap OpRecvMessageContext C.createReceivingByteBuffer
-createOpContext OpRecvStatusOnClient =
-  OpRecvStatusOnClientContext
-  <$> C.metadataArrayCreate
-  <*> C.createStatusCodePtr
+createOpContext OpRecvStatusOnClient = do
+  pmetadata <- C.metadataArrayCreate
+  pstatus <- C.createStatusCodePtr
+  pstr <- malloc
+  cstring <- mallocBytes defaultStatusStringLen
+  poke pstr cstring
+  return $ OpRecvStatusOnClientContext pmetadata pstatus pstr
 createOpContext OpRecvCloseOnServer =
   fmap OpRecvCloseOnServerContext $ malloc
 
@@ -81,15 +99,15 @@ setOpArray arr i (OpSendMessageContext bb) =
   C.opSendMessage arr i bb
 setOpArray arr i OpSendCloseFromClientContext =
   C.opSendCloseClient arr i
-setOpArray arr i (OpSendStatusFromServerContext kvs l code) =
-  C.opSendStatusServer arr i l kvs code "" --TODO: Issue #6
+setOpArray arr i (OpSendStatusFromServerContext kvs l code details) =
+  B.useAsCString details $ \cstr ->
+    C.opSendStatusServer arr i l kvs code cstr
 setOpArray arr i (OpRecvInitialMetadataContext pmetadata) =
   C.opRecvInitialMetadata arr i pmetadata
 setOpArray arr i (OpRecvMessageContext pbb) =
   C.opRecvMessage arr i pbb
-setOpArray arr i (OpRecvStatusOnClientContext pmetadata pstatus) = do
-  pCString <- malloc --TODO: Issue #6
-  C.opRecvStatusClient arr i pmetadata pstatus pCString 0
+setOpArray arr i (OpRecvStatusOnClientContext pmetadata pstatus pstr) = do
+  C.opRecvStatusClient arr i pmetadata pstatus pstr defaultStatusStringLen
 setOpArray arr i (OpRecvCloseOnServerContext pcancelled) = do
   C.opRecvCloseServer arr i pcancelled
 
@@ -98,15 +116,18 @@ freeOpContext :: OpContext -> IO ()
 freeOpContext (OpSendInitialMetadataContext m _) = C.metadataFree m
 freeOpContext (OpSendMessageContext bb) = C.grpcByteBufferDestroy bb
 freeOpContext OpSendCloseFromClientContext = return ()
-freeOpContext (OpSendStatusFromServerContext metadata _ _) =
+freeOpContext (OpSendStatusFromServerContext metadata _ _ _) =
   C.metadataFree metadata
 freeOpContext (OpRecvInitialMetadataContext metadata) =
   C.metadataArrayDestroy metadata
 freeOpContext (OpRecvMessageContext pbb) =
   C.destroyReceivingByteBuffer pbb
-freeOpContext (OpRecvStatusOnClientContext metadata pcode) =
+freeOpContext (OpRecvStatusOnClientContext metadata pcode pstr) = do
   C.metadataArrayDestroy metadata
-  >> C.destroyStatusCodePtr pcode
+  C.destroyStatusCodePtr pcode
+  str <- peek pstr
+  free str
+  free pstr
 freeOpContext (OpRecvCloseOnServerContext pcancelled) =
   grpcDebug ("freeOpContext: freeing pcancelled: " ++ show pcancelled)
   >> free pcancelled
@@ -125,7 +146,7 @@ withOpArray n = bracket (C.opArrayCreate n)
 data OpRecvResult =
   OpRecvInitialMetadataResult MetadataMap
   | OpRecvMessageResult B.ByteString
-  | OpRecvStatusOnClientResult MetadataMap C.StatusCode
+  | OpRecvStatusOnClientResult MetadataMap C.StatusCode B.ByteString
   | OpRecvCloseOnServerResult Bool -- ^ True if call was cancelled.
   deriving (Eq, Show)
 
@@ -145,12 +166,14 @@ resultFromOpContext (OpRecvMessageContext pbb) = do
   bs <- C.copyByteBufferToByteString bb
   grpcDebug "resultFromOpContext: bb copied."
   return $ Just $ OpRecvMessageResult bs
-resultFromOpContext (OpRecvStatusOnClientContext pmetadata pcode) = do
+resultFromOpContext (OpRecvStatusOnClientContext pmetadata pcode pstr) = do
   grpcDebug "resultFromOpContext: OpRecvStatusOnClientContext"
   metadata <- peek pmetadata
   metadataMap <- C.getAllMetadataArray metadata
   code <- C.derefStatusCodePtr pcode
-  return $ Just $ OpRecvStatusOnClientResult metadataMap code
+  cstr <- peek pstr
+  statusInfo <- B.packCString cstr
+  return $ Just $ OpRecvStatusOnClientResult metadataMap code statusInfo
 resultFromOpContext (OpRecvCloseOnServerContext pcancelled) = do
   grpcDebug "resultFromOpContext: OpRecvCloseOnServerContext"
   cancelled <- fmap (\x -> if x > 0 then True else False)
@@ -185,7 +208,7 @@ runOps call cq ops timeLimit =
     withOpArray l $ \opArray -> do
       grpcDebug "runOps: created op array."
       withOpContexts ops $ \contexts -> do
-        grpcDebug "runOps: allocated op contexts."
+        grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
         sequence_ $ zipWith (setOpArray opArray) [0..l-1] contexts
         tag <- newTag cq
         callError <- startBatch cq (internalCall call) opArray l tag
