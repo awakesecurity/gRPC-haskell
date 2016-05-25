@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module LowLevelTests where
+module LowLevelTests (lowLevelTests) where
 
 import           Control.Concurrent.Async
 import           Data.ByteString                (ByteString)
@@ -55,8 +55,8 @@ testClientCreateDestroy =
   gtc "Client - start/stop" $ \grpc -> do
   withClient grpc (ClientConfig "localhost" 50051) nop
 
-testPayloadLowLevelServer :: GRPC -> IO ()
-testPayloadLowLevelServer grpc = do
+testPayloadLowLevelServer :: TestServer
+testPayloadLowLevelServer = TestServer $ \grpc -> do
   let conf = (ServerConfig "localhost" 50051 [("/foo", "localhost", Normal)])
   withServer grpc conf $ \server -> do
     let method = head (registeredMethods server)
@@ -68,8 +68,8 @@ testPayloadLowLevelServer grpc = do
       Left err -> error $ show err
       Right _ -> return ()
 
-testPayloadLowLevelClient :: GRPC -> IO ()
-testPayloadLowLevelClient grpc =
+testPayloadLowLevelClient :: TestClient
+testPayloadLowLevelClient = TestClient $ \grpc ->
   withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
     method <- clientRegisterMethod client "/foo" "localhost" Normal
     putStrLn "registered method on client."
@@ -81,8 +81,8 @@ testPayloadLowLevelClient grpc =
         respBody @?= "reply test"
         respCode @?= GrpcStatusOk
 
-testPayloadLowLevelClientUnregistered :: GRPC -> IO ()
-testPayloadLowLevelClientUnregistered grpc = do
+testPayloadLowLevelClientUnregistered :: TestClient
+testPayloadLowLevelClientUnregistered = TestClient $ \grpc -> do
   withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
     reqResult <- clientRequest client "/foo" "localhost" 10 "Hello!" M.empty
     case reqResult of
@@ -93,8 +93,8 @@ testPayloadLowLevelClientUnregistered grpc = do
         respCode @?= GrpcStatusOk
         details @?= "details string"
 
-testPayloadLowLevelServerUnregistered :: GRPC -> IO ()
-testPayloadLowLevelServerUnregistered grpc = do
+testPayloadLowLevelServerUnregistered :: TestServer
+testPayloadLowLevelServerUnregistered = TestServer $ \grpc -> do
   withServer grpc (ServerConfig "localhost" 50051 []) $ \server -> do
     result <- serverHandleNormalCall server 11 M.empty $
                 \reqBody reqMeta -> return ("reply test", M.empty,
@@ -166,8 +166,8 @@ assertCqEventComplete e = do
   eventCompletionType e HU.@?= OpComplete
   eventSuccess e HU.@?= True
 
-testPayloadClient :: GRPC -> IO ()
-testPayloadClient _grpc = do
+testPayloadClient :: TestClient
+testPayloadClient = TestClient $ \_grpc -> do
   client <- grpcInsecureChannelCreate "localhost:50051" nullPtr reserved
   cq <- grpcCompletionQueueCreate reserved
   withMetadataArrayPtr $ \initialMetadataRecv -> do
@@ -213,8 +213,8 @@ testPayloadClient _grpc = do
         grpcCompletionQueueDestroy cq
         grpcChannelDestroy client
 
-testPayloadServer :: GRPC -> IO ()
-testPayloadServer _grpc = do
+testPayloadServer :: TestServer
+testPayloadServer = TestServer $ \_grpc -> do
   server <- grpcServerCreate nullPtr reserved
   cq <- grpcCompletionQueueCreate reserved
   grpcServerRegisterCompletionQueue server cq reserved
@@ -291,18 +291,24 @@ testPayload =
   runClientServer testPayloadClient testPayloadServer
 
 --------------------------------------------------------------------------------
--- Utility functions
+-- Utility types and functions
+
+nop :: Monad m => a -> m ()
+nop = const (return ())
 
 -- | Boilerplate for naming a GRPC unit test
 gtc :: TestName -> (GRPC -> IO ()) -> TestTree
 gtc nm = testCase nm . withGRPC
 
-nop :: Monad m => a -> m ()
-nop = const (return ())
+newtype TestClient = TestClient (GRPC -> IO ())
+newtype TestServer = TestServer (GRPC -> IO ())
 
-runClientServer :: (GRPC -> IO ()) -> (GRPC -> IO ()) -> GRPC -> IO ()
-runClientServer client server grpc = do
-  withAsync (server grpc) $ \a1 -> do
-    withAsync (client grpc) $ \a2 -> do
+-- | Asyncs the given 'TestClient' and 'TestServer' and waits for both to
+-- terminate. TODO: We'll probably want to add toplevel timeouts and better
+-- error reporting.
+runClientServer :: TestClient -> TestServer -> GRPC -> IO ()
+runClientServer (TestClient c) (TestServer s) grpc = do
+  withAsync (s grpc) $ \a1 -> do
+    withAsync (c grpc) $ \a2 -> do
       wait a1
       wait a2
