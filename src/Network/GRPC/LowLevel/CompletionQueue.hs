@@ -6,8 +6,8 @@
 
 {-# LANGUAGE RecordWildCards #-}
 
-module Network.GRPC.LowLevel.CompletionQueue (
-  CompletionQueue
+module Network.GRPC.LowLevel.CompletionQueue
+  ( CompletionQueue
   , withCompletionQueue
   , createCompletionQueue
   , shutdownCompletionQueue
@@ -16,33 +16,35 @@ module Network.GRPC.LowLevel.CompletionQueue (
   , channelCreateRegisteredCall
   , channelCreateCall
   , TimeoutSeconds
-  , eventSuccess
+  , isEventSuccessful
   , serverRegisterCompletionQueue
   , serverShutdownAndNotify
   , serverRequestRegisteredCall
   , serverRequestCall
   , newTag
-) where
+  )
+where
 
-import           Control.Concurrent (forkIO, threadDelay)
-import           Control.Concurrent.STM (atomically, retry, check)
-import           Control.Concurrent.STM.TVar (TVar, newTVarIO, modifyTVar',
-                                              readTVar, writeTVar)
-import           Control.Exception (bracket)
-import           Data.IORef (IORef, newIORef, atomicModifyIORef')
-import           Data.List (intersperse)
-import           Foreign.Marshal.Alloc (malloc, free)
-import           Foreign.Ptr (nullPtr, plusPtr)
-import           Foreign.Storable (peek)
-import qualified Network.GRPC.Unsafe as C
+import           Control.Concurrent            (forkIO, threadDelay)
+import           Control.Concurrent.STM        (atomically, check, retry)
+import           Control.Concurrent.STM.TVar   (TVar, modifyTVar', newTVarIO,
+                                                readTVar, writeTVar)
+import           Control.Exception             (bracket)
+import           Data.IORef                    (IORef, atomicModifyIORef',
+                                                newIORef)
+import           Data.List                     (intersperse)
+import           Foreign.Marshal.Alloc         (free, malloc)
+import           Foreign.Ptr                   (nullPtr, plusPtr)
+import           Foreign.Storable              (peek)
+import qualified Network.GRPC.Unsafe           as C
 import qualified Network.GRPC.Unsafe.Constants as C
-import qualified Network.GRPC.Unsafe.Time as C
-import qualified Network.GRPC.Unsafe.Op as C
-import qualified Network.GRPC.Unsafe.Metadata as C
-import           System.Timeout (timeout)
+import qualified Network.GRPC.Unsafe.Metadata  as C
+import qualified Network.GRPC.Unsafe.Op        as C
+import qualified Network.GRPC.Unsafe.Time      as C
+import           System.Timeout                (timeout)
 
-import Network.GRPC.LowLevel.GRPC
-import Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.GRPC
 
 -- NOTE: the concurrency requirements for a CompletionQueue are a little
 -- complicated. There are two read operations: next and pluck. We can either
@@ -69,7 +71,7 @@ import Network.GRPC.LowLevel.Call
 -- are used to wait for batches gRPC operations ('Op's) to finish running, as
 -- well as wait for various other operations, such as server shutdown, pinging,
 -- checking to see if we've been disconnected, and so forth.
-data CompletionQueue = CompletionQueue {unsafeCQ :: C.CompletionQueue,
+data CompletionQueue = CompletionQueue {unsafeCQ        :: C.CompletionQueue,
                                         -- ^ All access to this field must be
                                         -- guarded by a check of 'shuttingDown'.
                                         currentPluckers :: TVar Int,
@@ -78,15 +80,15 @@ data CompletionQueue = CompletionQueue {unsafeCQ :: C.CompletionQueue,
                                         -- queue.
                                         -- The max value is set by gRPC in
                                         -- 'C.maxCompletionQueuePluckers'
-                                        currentPushers :: TVar Int,
+                                        currentPushers  :: TVar Int,
                                         -- ^ Used to prevent new work from
                                         -- being pushed onto the queue when
                                         -- the queue begins to shut down.
-                                        shuttingDown :: TVar Bool,
+                                        shuttingDown    :: TVar Bool,
                                         -- ^ Used to prevent new pluck calls on
                                         -- the queue when the queue begins to
                                         -- shut down.
-                                        nextTag :: IORef Int
+                                        nextTag         :: IORef Int
                                         -- ^ Used to supply unique tags for work
                                         -- items pushed onto the queue.
                                        }
@@ -159,13 +161,14 @@ eventToError (C.Event C.QueueShutdown _ _) = Left GRPCIOShutdown
 eventToError (C.Event C.QueueTimeout _ _) = Left GRPCIOTimeout
 eventToError _ = Left GRPCIOUnknownError
 
-isFailedEvent :: C.Event -> Bool
-isFailedEvent C.Event{..} = (eventCompletionType /= C.OpComplete)
-                            || not eventSuccess
+-- | Returns true iff the given grpc_event was a success.
+isEventSuccessful :: C.Event -> Bool
+isEventSuccessful (C.Event C.OpComplete True _) = True
+isEventSuccessful _ = False
 
 -- | Waits for the given number of seconds for the given tag to appear on the
 -- completion queue. Throws 'GRPCIOShutdown' if the completion queue is shutting
---down and cannot handle new requests.
+-- down and cannot handle new requests.
 pluck :: CompletionQueue -> C.Tag -> TimeoutSeconds
          -> IO (Either GRPCIOError ())
 pluck cq@CompletionQueue{..} tag waitSeconds = do
@@ -175,9 +178,7 @@ pluck cq@CompletionQueue{..} tag waitSeconds = do
     C.withDeadlineSeconds waitSeconds $ \deadline -> do
       ev <- C.grpcCompletionQueuePluck unsafeCQ tag deadline C.reserved
       grpcDebug $ "pluck: finished. Event: " ++ show ev
-      if isFailedEvent ev
-         then return $ eventToError ev
-         else return $ Right ()
+      return $ if isEventSuccessful ev then Right () else eventToError ev
 
 -- TODO: I'm thinking it might be easier to use 'Either' uniformly everywhere
 -- even when it's isomorphic to 'Maybe'. If that doesn't turn out to be the
@@ -207,7 +208,7 @@ shutdownCompletionQueue (CompletionQueue{..}) = do
   atomically $ readTVar currentPluckers >>= \x -> check (x == 0)
   --drain the queue
   C.grpcCompletionQueueShutdown unsafeCQ
-  loopRes <- timeout (5*10^6) drainLoop
+  loopRes <- timeout (5*10^(6::Int)) drainLoop
   case loopRes of
     Nothing -> return $ Left GRPCIOShutdownFailure
     Just () -> C.grpcCompletionQueueDestroy unsafeCQ >> return (Right ())
@@ -220,11 +221,6 @@ shutdownCompletionQueue (CompletionQueue{..}) = do
             C.QueueShutdown -> return ()
             C.QueueTimeout -> drainLoop
             C.OpComplete -> drainLoop
-
--- | Returns true iff the given grpc_event was a success.
-eventSuccess :: C.Event -> Bool
-eventSuccess (C.Event C.OpComplete True _) = True
-eventSuccess _ = False
 
 channelCreateRegisteredCall :: C.Channel -> C.Call -> C.PropagationMask
                                -> CompletionQueue -> C.CallHandle
@@ -290,7 +286,7 @@ serverRequestRegisteredCall
                      return $ Right assembledCall
       -- TODO: see TODO for failureCleanup in serverRequestCall.
       where failureCleanup deadline callPtr metadataArrayPtr bbPtr = forkIO $ do
-              threadDelay (30*10^6)
+              threadDelaySecs 30
               grpcDebug "serverRequestRegisteredCall: doing delayed cleanup."
               C.timespecDestroy deadline
               free callPtr
@@ -340,7 +336,7 @@ serverRequestCall server cq@CompletionQueue{..} timeLimit =
       -- we sleep for a while before freeing the objects. We should find a
       -- permanent solution that's more robust.
       where failureCleanup callPtr callDetails metadataArrayPtr = forkIO $ do
-              threadDelay (30*10^6)
+              threadDelaySecs 30
               grpcDebug "serverRequestCall: doing delayed cleanup."
               free callPtr
               C.destroyCallDetails callDetails
@@ -356,3 +352,6 @@ serverRegisterCompletionQueue server CompletionQueue{..} =
 serverShutdownAndNotify :: C.Server -> CompletionQueue -> C.Tag -> IO ()
 serverShutdownAndNotify server CompletionQueue{..} tag =
   C.grpcServerShutdownAndNotify server unsafeCQ tag
+
+threadDelaySecs :: Int -> IO ()
+threadDelaySecs = threadDelay . (* 10^(6::Int))

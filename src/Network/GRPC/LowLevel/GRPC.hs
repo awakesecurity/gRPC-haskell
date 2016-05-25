@@ -51,7 +51,7 @@ grpcDebug :: String -> IO ()
 grpcDebug str = do tid <- myThreadId
                    putStrLn $ (show tid) ++ ": " ++ str
 #else
-grpcDebug str = return ()
+grpcDebug _ = return ()
 #endif
 
 {-

@@ -107,3 +107,9 @@ destroyCall call@ServerCall{..} = do
   forM_ callDetails C.destroyCallDetails
   grpcDebug $ "destroying deadline." ++ show callDeadline
   forM_ callDeadline C.timespecDestroy
+
+_nowarn_unused :: a
+_nowarn_unused =
+  castPtr `undefined`
+  (peek :: Ptr Int -> IO Int) `undefined`
+  ()

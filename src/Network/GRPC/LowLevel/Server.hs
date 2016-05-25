@@ -2,26 +2,31 @@
 
 module Network.GRPC.LowLevel.Server where
 
-import           Control.Concurrent (threadDelay)
-import           Control.Exception (bracket, finally)
+import           Control.Concurrent                    (threadDelay)
+import           Control.Exception                     (bracket, finally)
 import           Control.Monad
-import           Data.ByteString (ByteString)
-import qualified Data.Map as M
-import           Foreign.Ptr (nullPtr)
-import           Foreign.Storable (peek)
-import qualified Network.GRPC.Unsafe as C
-import qualified Network.GRPC.Unsafe.Op as C
+import           Data.ByteString                       (ByteString)
+import qualified Data.Map                              as M
+import           Foreign.Ptr                           (nullPtr)
+import           Foreign.Storable                      (peek)
+import qualified Network.GRPC.Unsafe                   as C
+import qualified Network.GRPC.Unsafe.Op                as C
 
-import           Network.GRPC.LowLevel.GRPC
-import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
-                 pluck, serverRegisterCompletionQueue, serverShutdownAndNotify,
-                 createCompletionQueue, shutdownCompletionQueue, TimeoutSeconds,
-                 serverRequestRegisteredCall, serverRequestCall)
 import           Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
+                                                        TimeoutSeconds,
+                                                        createCompletionQueue,
+                                                        pluck,
+                                                        serverRegisterCompletionQueue,
+                                                        serverRequestCall,
+                                                        serverRequestRegisteredCall,
+                                                        serverShutdownAndNotify,
+                                                        shutdownCompletionQueue)
+import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
 
-import qualified Network.GRPC.Unsafe.ByteBuffer as C
-import qualified Network.GRPC.Unsafe.Metadata as C
+import qualified Network.GRPC.Unsafe.ByteBuffer        as C
+import qualified Network.GRPC.Unsafe.Metadata          as C
 
 -- | Wraps various gRPC state needed to run a server.
 data Server = Server {internalServer :: C.Server, serverCQ :: CompletionQueue,
@@ -30,10 +35,10 @@ data Server = Server {internalServer :: C.Server, serverCQ :: CompletionQueue,
 -- | Configuration needed to start a server. There might be more fields that
 -- need to be added to this in the future.
 data ServerConfig =
-  ServerConfig {hostName :: Host,
+  ServerConfig {hostName          :: Host,
                 -- ^ Name of the host the server is running on. Not sure
                 -- how this is used. Setting to "localhost" works fine in tests.
-                port :: Int,
+                port              :: Int,
                 -- ^ Port to listen for requests on.
                 methodsToRegister :: [(MethodName, Host, GRPCMethodType)]
                 -- ^ List of (method name, method host, method type) tuples
@@ -199,7 +204,7 @@ serverHandleNormalRegisteredCall :: Server
                              -- metadata and returns a response body and
                              -- metadata.
                           -> IO (Either GRPCIOError ())
-serverHandleNormalRegisteredCall s@Server{..} rm timeLimit initMetadata f = do
+serverHandleNormalRegisteredCall s@Server{..} rm timeLimit srvMetadata f = do
   -- TODO: we use this timeLimit twice, so the max time spent is 2*timeLimit.
   -- Should we just hard-code time limits instead? Not sure if client
   -- programmer cares, since this function will likely just be put in a loop
@@ -229,16 +234,16 @@ serverHandleNormalRegisteredCall s@Server{..} rm timeLimit initMetadata f = do
 -- | Handle one unregistered call.
 serverHandleNormalCall :: Server -> TimeoutSeconds
                           -> MetadataMap
-                          -- ^ Initial metadata.
+                          -- ^ Initial server metadata.
                           -> (ByteString -> MetadataMap
                               -> IO (ByteString, MetadataMap, StatusDetails))
                           -- ^ Handler function takes a request body and
                           -- metadata and returns a response body and metadata.
                           -> IO (Either GRPCIOError ())
-serverHandleNormalCall s@Server{..} timeLimit initMetadata f = do
+serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
   withServerCall s timeLimit $ \call -> do
     grpcDebug "serverHandleNormalCall: starting batch."
-    let recvOps = serverOpsGetNormalCall initMetadata
+    let recvOps = serverOpsGetNormalCall srvMetadata
     opResults <- runOps call serverCQ recvOps timeLimit
     case opResults of
       Left x -> return $ Left x
@@ -255,3 +260,6 @@ serverHandleNormalCall s@Server{..} timeLimit initMetadata f = do
           Right _ -> grpcDebug "serverHandleNormalCall: ops done."
                      >> return (Right ())
       x -> error $ "impossible pattern match: " ++ show x
+
+_nowarn_unused :: a
+_nowarn_unused = undefined threadDelay
