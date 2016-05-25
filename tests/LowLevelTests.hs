@@ -4,6 +4,7 @@ module LowLevelTests (lowLevelTests) where
 
 import           Control.Concurrent.Async
 import           Data.ByteString                (ByteString)
+import qualified Data.ByteString                as B
 import qualified Data.Map                       as M
 import           Foreign.Marshal.Alloc
 import           Foreign.Ptr
