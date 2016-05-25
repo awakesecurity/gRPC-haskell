@@ -34,29 +34,26 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
    ]
   ]
 
-dummyMeta :: M.Map ByteString ByteString
-dummyMeta = M.fromList [("foo","bar")]
-
 testGRPCBracket :: TestTree
-testGRPCBracket = gtc "Start/stop GRPC" nop
+testGRPCBracket = grpcTest "Start/stop GRPC" nop
 
 testCompletionQueueCreateDestroy :: TestTree
 testCompletionQueueCreateDestroy =
-  gtc "Create/destroy completion queue" $ \grpc -> do
+  grpcTest "Create/destroy completion queue" $ \grpc -> do
   withCompletionQueue grpc nop
 
 testServerCreateDestroy :: TestTree
 testServerCreateDestroy =
-  gtc "Server - start/stop" $ \grpc -> do
+  grpcTest "Server - start/stop" $ \grpc -> do
   withServer grpc (ServerConfig "localhost" 50051 []) nop
 
 testClientCreateDestroy :: TestTree
 testClientCreateDestroy =
-  gtc "Client - start/stop" $ \grpc -> do
+  grpcTest "Client - start/stop" $ \grpc -> do
   withClient grpc (ClientConfig "localhost" 50051) nop
 
-testPayloadLowLevelServer :: TestServer
-testPayloadLowLevelServer = TestServer $ \grpc -> do
+payloadLowLevelServer :: TestServer
+payloadLowLevelServer = TestServer $ \grpc -> do
   let conf = (ServerConfig "localhost" 50051 [("/foo", "localhost", Normal)])
   withServer grpc conf $ \server -> do
     let method = head (registeredMethods server)
@@ -68,8 +65,8 @@ testPayloadLowLevelServer = TestServer $ \grpc -> do
       Left err -> error $ show err
       Right _ -> return ()
 
-testPayloadLowLevelClient :: TestClient
-testPayloadLowLevelClient = TestClient $ \grpc ->
+payloadLowLevelClient :: TestClient
+payloadLowLevelClient = TestClient $ \grpc ->
   withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
     method <- clientRegisterMethod client "/foo" "localhost" Normal
     putStrLn "registered method on client."
@@ -81,8 +78,8 @@ testPayloadLowLevelClient = TestClient $ \grpc ->
         respBody @?= "reply test"
         respCode @?= GrpcStatusOk
 
-testPayloadLowLevelClientUnregistered :: TestClient
-testPayloadLowLevelClientUnregistered = TestClient $ \grpc -> do
+payloadLowLevelClientUnregistered :: TestClient
+payloadLowLevelClientUnregistered = TestClient $ \grpc -> do
   withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
     reqResult <- clientRequest client "/foo" "localhost" 10 "Hello!" M.empty
     case reqResult of
@@ -93,8 +90,8 @@ testPayloadLowLevelClientUnregistered = TestClient $ \grpc -> do
         respCode @?= GrpcStatusOk
         details @?= "details string"
 
-testPayloadLowLevelServerUnregistered :: TestServer
-testPayloadLowLevelServerUnregistered = TestServer $ \grpc -> do
+payloadLowLevelServerUnregistered :: TestServer
+payloadLowLevelServerUnregistered = TestServer $ \grpc -> do
   withServer grpc (ServerConfig "localhost" 50051 []) $ \server -> do
     result <- serverHandleNormalCall server 11 M.empty $
                 \reqBody reqMeta -> return ("reply test", M.empty,
@@ -105,7 +102,7 @@ testPayloadLowLevelServerUnregistered = TestServer $ \grpc -> do
 
 testClientRequestNoServer :: TestTree
 testClientRequestNoServer =
-  gtc "Client - request timeout when server DNE" $ \grpc -> do
+  grpcTest "Client - request timeout when server DNE" $ \grpc -> do
   withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
     method <- clientRegisterMethod client "/foo" "localhost" Normal
     reqResult <- clientRegisteredRequest client method 1 "Hello" M.empty
@@ -113,7 +110,7 @@ testClientRequestNoServer =
 
 testServerAwaitNoClient :: TestTree
 testServerAwaitNoClient =
-  gtc "Server - registered call handler timeout" $ \grpc -> do
+  grpcTest "Server - registered call handler timeout" $ \grpc -> do
   let conf = (ServerConfig "localhost" 50051 [("/foo", "localhost", Normal)])
   withServer grpc conf $ \server -> do
     let method = head (registeredMethods server)
@@ -123,7 +120,7 @@ testServerAwaitNoClient =
 
 testServerUnregisteredAwaitNoClient :: TestTree
 testServerUnregisteredAwaitNoClient =
-  gtc "Server - unregistered call handler timeout" $ \grpc -> do
+  grpcTest "Server - unregistered call handler timeout" $ \grpc -> do
     let conf = ServerConfig "localhost" 50051 []
     withServer grpc conf $ \server -> do
       result <- serverHandleNormalCall server 10 M.empty $
@@ -134,17 +131,17 @@ testServerUnregisteredAwaitNoClient =
 
 testPayloadLowLevel :: TestTree
 testPayloadLowLevel =
-  gtc "Client/Server - low-level (registered) request/response" $
-  runClientServer testPayloadLowLevelClient testPayloadLowLevelServer
+  grpcTest "Client/Server - low-level (registered) request/response" $
+  runClientServer payloadLowLevelClient payloadLowLevelServer
 
 testPayloadLowLevelUnregistered :: TestTree
 testPayloadLowLevelUnregistered =
-  gtc "Client/Server - low-level unregistered request/response" $
-  runClientServer testPayloadLowLevelClientUnregistered testPayloadLowLevelServerUnregistered
+  grpcTest "Client/Server - low-level unregistered request/response" $
+  runClientServer payloadLowLevelClientUnregistered payloadLowLevelServerUnregistered
 
 testWithServerCall :: TestTree
 testWithServerCall =
-  gtc "Server - Create/destroy call" $ \grpc -> do
+  grpcTest "Server - Create/destroy call" $ \grpc -> do
   let conf = ServerConfig "localhost" 50051 []
   withServer grpc conf $ \server -> do
     result <- withServerCall server 1 $ const $ return $ Right ()
@@ -152,7 +149,7 @@ testWithServerCall =
 
 testWithClientCall :: TestTree
 testWithClientCall =
-  gtc "Client - Create/destroy call" $ \grpc -> do
+  grpcTest "Client - Create/destroy call" $ \grpc -> do
   let conf = ClientConfig "localhost" 50051
   withClient grpc conf $ \client -> do
     result <- withClientCall client "foo" "localhost" 10 $
@@ -166,8 +163,8 @@ assertCqEventComplete e = do
   eventCompletionType e HU.@?= OpComplete
   eventSuccess e HU.@?= True
 
-testPayloadClient :: TestClient
-testPayloadClient = TestClient $ \_grpc -> do
+payloadClient :: TestClient
+payloadClient = TestClient $ \_grpc -> do
   client <- grpcInsecureChannelCreate "localhost:50051" nullPtr reserved
   cq <- grpcCompletionQueueCreate reserved
   withMetadataArrayPtr $ \initialMetadataRecv -> do
@@ -213,8 +210,8 @@ testPayloadClient = TestClient $ \_grpc -> do
         grpcCompletionQueueDestroy cq
         grpcChannelDestroy client
 
-testPayloadServer :: TestServer
-testPayloadServer = TestServer $ \_grpc -> do
+payloadServer :: TestServer
+payloadServer = TestServer $ \_grpc -> do
   server <- grpcServerCreate nullPtr reserved
   cq <- grpcCompletionQueueCreate reserved
   grpcServerRegisterCompletionQueue server cq reserved
@@ -287,18 +284,21 @@ testPayloadServer = TestServer $ \_grpc -> do
 -- minimal abstractions on top of it.
 testPayload :: TestTree
 testPayload =
-  gtc "Client/Server - End-to-end request/response" $
-  runClientServer testPayloadClient testPayloadServer
+  grpcTest "Client/Server - Unsafe request/response" $
+  runClientServer payloadClient payloadServer
 
 --------------------------------------------------------------------------------
--- Utility types and functions
+-- Utilities and helpers
+
+dummyMeta :: M.Map ByteString ByteString
+dummyMeta = M.fromList [("foo","bar")]
 
 nop :: Monad m => a -> m ()
 nop = const (return ())
 
--- | Boilerplate for naming a GRPC unit test
-gtc :: TestName -> (GRPC -> IO ()) -> TestTree
-gtc nm = testCase nm . withGRPC
+-- | Defines a general-purpose GRPC unit test
+grpcTest :: TestName -> (GRPC -> IO ()) -> TestTree
+grpcTest nm = testCase nm . withGRPC
 
 newtype TestClient = TestClient (GRPC -> IO ())
 newtype TestServer = TestServer (GRPC -> IO ())
