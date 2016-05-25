@@ -12,7 +12,7 @@ import           Test.Tasty
 import           Test.Tasty.HUnit               as HU (testCase, (@?=))
 
 unsafeTests :: TestTree
-unsafeTests = testGroup "Unit tests for unsafe C bindings."
+unsafeTests = testGroup "Unit tests for unsafe C bindings"
   [ roundtripSlice "Hello, world!"
   , roundtripByteBuffer "Hwaet! We gardena in geardagum..."
   , testMetadata
@@ -23,14 +23,14 @@ unsafeTests = testGroup "Unit tests for unsafe C bindings."
   ]
 
 roundtripSlice :: B.ByteString -> TestTree
-roundtripSlice bs = testCase "Slice C bindings roundtrip" $ do
+roundtripSlice bs = testCase "ByteString slice roundtrip" $ do
   slice <- byteStringToSlice bs
   unslice <- sliceToByteString slice
   bs HU.@?= unslice
   freeSlice slice
 
 roundtripByteBuffer :: B.ByteString -> TestTree
-roundtripByteBuffer bs = testCase "ByteBuffer C bindings roundtrip" $ do
+roundtripByteBuffer bs = testCase "ByteBuffer roundtrip" $ do
   slice <- byteStringToSlice bs
   buffer <- grpcRawByteBufferCreate slice 1
   reader <- byteBufferReaderCreate buffer
@@ -44,7 +44,7 @@ roundtripByteBuffer bs = testCase "ByteBuffer C bindings roundtrip" $ do
   freeSlice readSlice
 
 testMetadata :: TestTree
-testMetadata = testCase "metadata setter/getter C bindings roundtrip" $ do
+testMetadata = testCase "Metadata setter/getter roundtrip" $ do
   m <- metadataAlloc 3
   setMetadataKeyVal "hello" "world" m 0
   setMetadataKeyVal "foo" "bar" m 1
@@ -71,26 +71,26 @@ currTimeMillis t = do
   return tMillis
 
 testNow :: TestTree
-testNow = testCase "create and destroy various clock types" $ do
+testNow = testCase "Create/destroy various clock types" $ do
   _ <- currTimeMillis GprClockMonotonic
   _ <- currTimeMillis GprClockRealtime
   _ <- currTimeMillis GprClockPrecise
   return ()
 
 testCreateDestroyMetadata :: TestTree
-testCreateDestroyMetadata = testCase "create/destroy metadataArrayPtr " $ do
+testCreateDestroyMetadata = testCase "Create/destroy metadataArrayPtr" $ do
   grpcInit
   withMetadataArrayPtr $ const $ return ()
   grpcShutdown
 
 testCreateDestroyMetadataKeyVals :: TestTree
-testCreateDestroyMetadataKeyVals = testCase "create/destroy metadata k/vs " $ do
+testCreateDestroyMetadataKeyVals = testCase "Create/destroy metadata key/values" $ do
   grpcInit
   withMetadataKeyValPtr 10 $ const $ return ()
   grpcShutdown
 
 testCreateDestroyDeadline :: TestTree
-testCreateDestroyDeadline = testCase "create/destroy deadline " $ do
+testCreateDestroyDeadline = testCase "Create/destroy deadline" $ do
   grpcInit
   withDeadlineSeconds 10 $ const $ return ()
   grpcShutdown

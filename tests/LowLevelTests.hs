@@ -38,23 +38,23 @@ dummyMeta :: M.Map ByteString ByteString
 dummyMeta = M.fromList [("foo","bar")]
 
 testGRPCBracket :: TestTree
-testGRPCBracket = testCase "No errors starting and stopping GRPC" $
-                  withGRPC $ const $ return ()
+testGRPCBracket = testCase "Start/stop GRPC" $
+  withGRPC $ const $ return ()
 
 testCompletionQueueCreateDestroy :: TestTree
 testCompletionQueueCreateDestroy =
-  testCase "No errors creating and destroying a CQ" $ withGRPC $ \grpc ->
+  testCase "Create/destroy completion queue" $ withGRPC $ \grpc ->
     withCompletionQueue grpc $ const (return ())
 
 testServerCreateDestroy :: TestTree
 testServerCreateDestroy =
-  testCase "No errors when starting and stopping a server" $
+  testCase "Server - start/stop" $
   withGRPC $ \grpc -> withServer grpc (ServerConfig "localhost" 50051 [])
                                  (const $ return ())
 
 testClientCreateDestroy :: TestTree
 testClientCreateDestroy =
-  testCase "No errors when starting and stopping a client" $
+  testCase "Client - start/stop" $
   withGRPC $ \grpc -> withClient grpc (ClientConfig "localhost" 50051)
                                  (const $ return ())
 
@@ -107,7 +107,8 @@ testPayloadLowLevelServerUnregistered grpc = do
       Right _ -> return ()
 
 testClientRequestNoServer :: TestTree
-testClientRequestNoServer = testCase "request times out when no server " $ do
+testClientRequestNoServer =
+  testCase "Client - request timeout when server DNE" $
   withGRPC $ \grpc -> do
     withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
       method <- clientRegisterMethod client "/foo" "localhost" Normal
@@ -115,7 +116,8 @@ testClientRequestNoServer = testCase "request times out when no server " $ do
       reqResult @?= (Left GRPCIOTimeout)
 
 testServerAwaitNoClient :: TestTree
-testServerAwaitNoClient = testCase "server wait times out when no client " $ do
+testServerAwaitNoClient =
+  testCase "Server - registered call handler timeout" $
   withGRPC $ \grpc -> do
     let conf = (ServerConfig "localhost" 50051 [("/foo", "localhost", Normal)])
     withServer grpc conf $ \server -> do
@@ -126,7 +128,7 @@ testServerAwaitNoClient = testCase "server wait times out when no client " $ do
 
 testServerUnregisteredAwaitNoClient :: TestTree
 testServerUnregisteredAwaitNoClient =
-  testCase "server wait times out when no client -- unregistered method " $ do
+  testCase "Server - unregistered call handler timeout" $
     withGRPC $ \grpc -> do
       let conf = ServerConfig "localhost" 50051 []
       withServer grpc conf $ \server -> do
@@ -137,16 +139,17 @@ testServerUnregisteredAwaitNoClient =
           Right _ -> return ()
 
 testPayloadLowLevel :: TestTree
-testPayloadLowLevel = testCase "LowLevel Haskell library request/response " $ do
-  withGRPC $ \grpc -> do
-    withAsync (testPayloadLowLevelServer grpc) $ \a1 -> do
-      withAsync (testPayloadLowLevelClient grpc) $ \a2 -> do
-        wait a1
-        wait a2
+testPayloadLowLevel =
+  testCase "Client/Server - low-level (registered) request/response" $
+    withGRPC $ \grpc -> do
+      withAsync (testPayloadLowLevelServer grpc) $ \a1 -> do
+        withAsync (testPayloadLowLevelClient grpc) $ \a2 -> do
+          wait a1
+          wait a2
 
 testPayloadLowLevelUnregistered :: TestTree
 testPayloadLowLevelUnregistered =
-  testCase "LowLevel Haskell library unregistered request/response " $ do
+  testCase "Client/Server - low-level unregistered request/response" $ do
     withGRPC $ \grpc -> do
       withAsync (testPayloadLowLevelServerUnregistered grpc) $ \a1 ->
         withAsync (testPayloadLowLevelClientUnregistered grpc) $ \a2 -> do
@@ -155,7 +158,7 @@ testPayloadLowLevelUnregistered =
 
 testWithServerCall :: TestTree
 testWithServerCall =
-  testCase "Creating and destroying a call: no errors. " $
+  testCase "Server - Create/destroy call" $
     withGRPC $ \grpc -> do
       let conf = ServerConfig "localhost" 50051 []
       withServer grpc conf $ \server -> do
@@ -164,7 +167,7 @@ testWithServerCall =
 
 testWithClientCall :: TestTree
 testWithClientCall =
-  testCase "Creating and destroying a client call: no errors. " $
+  testCase "Client - Create/destroy call" $
     withGRPC $ \grpc -> do
       let conf = ClientConfig "localhost" 50051
       withClient grpc conf $ \client -> do
@@ -299,7 +302,7 @@ testPayloadServer = do
 -- This is intended to test the low-level C bindings, so we use only a few
 -- minimal abstractions on top of it.
 testPayload :: TestTree
-testPayload = testCase "low-level C bindings request/response " $ do
+testPayload = testCase "Client/Server - End-to-end request/response" $ do
   grpcInit
   withAsync testPayloadServer $ \a1 -> do
     withAsync testPayloadClient $ \a2 -> do
