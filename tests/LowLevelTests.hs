@@ -30,9 +30,8 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
    , testClientRequestNoServer
    , testServerAwaitNoClient
    , testPayloadLowLevelUnregistered
-   , testPayload
+   , testUnsafePayload
    ]
-  ]
 
 testGRPCBracket :: TestTree
 testGRPCBracket = grpcTest "Start/stop GRPC" nop
@@ -163,8 +162,8 @@ assertCqEventComplete e = do
   eventCompletionType e HU.@?= OpComplete
   eventSuccess e HU.@?= True
 
-payloadClient :: TestClient
-payloadClient = TestClient $ \_grpc -> do
+unsafePayloadClient :: TestClient
+unsafePayloadClient = TestClient $ \_grpc -> do
   client <- grpcInsecureChannelCreate "localhost:50051" nullPtr reserved
   cq <- grpcCompletionQueueCreate reserved
   withMetadataArrayPtr $ \initialMetadataRecv -> do
@@ -210,8 +209,8 @@ payloadClient = TestClient $ \_grpc -> do
         grpcCompletionQueueDestroy cq
         grpcChannelDestroy client
 
-payloadServer :: TestServer
-payloadServer = TestServer $ \_grpc -> do
+unsafePayloadServer :: TestServer
+unsafePayloadServer = TestServer $ \_grpc -> do
   server <- grpcServerCreate nullPtr reserved
   cq <- grpcCompletionQueueCreate reserved
   grpcServerRegisterCompletionQueue server cq reserved
@@ -282,10 +281,10 @@ payloadServer = TestServer $ \_grpc -> do
 -- | Straightforward translation of the gRPC core test end2end/tests/payload.c
 -- This is intended to test the low-level C bindings, so we use only a few
 -- minimal abstractions on top of it.
-testPayload :: TestTree
-testPayload =
+testUnsafePayload :: TestTree
+testUnsafePayload =
   grpcTest "Client/Server - Unsafe request/response" $
-  runClientServer payloadClient payloadServer
+  runClientServer unsafePayloadClient unsafePayloadServer
 
 --------------------------------------------------------------------------------
 -- Utilities and helpers
