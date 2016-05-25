@@ -1,3 +1,5 @@
+{-# LANGUAGE StandaloneDeriving #-}
+
 module Network.GRPC.Unsafe.ByteBuffer where
 
 #include <grpc/grpc.h>
@@ -20,6 +22,8 @@ import Foreign.Storable
 -- | Represents a pointer to a gRPC byte buffer containing 1 or more 'Slice's.
 -- Must be destroyed manually with 'grpcByteBufferDestroy'.
 {#pointer *grpc_byte_buffer as ByteBuffer newtype #}
+
+deriving instance Show ByteBuffer
 
 --Trivial Storable instance because 'ByteBuffer' type is a pointer.
 instance Storable ByteBuffer where

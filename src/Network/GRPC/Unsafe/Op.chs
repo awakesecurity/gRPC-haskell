@@ -1,3 +1,5 @@
+{-# LANGUAGE StandaloneDeriving #-}
+
 module Network.GRPC.Unsafe.Op where
 
 import Control.Exception
@@ -33,6 +35,8 @@ import Foreign.Ptr
 -- the new op. After processing the batch and getting out any results, call
 -- 'opArrayDestroy'.
 {#pointer *grpc_op as OpArray newtype #}
+
+deriving instance Show OpArray
 
 -- | Creates an empty 'OpArray' with space for the given number of ops.
 {#fun op_array_create as ^ {`Int'} -> `OpArray'#}
@@ -98,5 +102,5 @@ withOpArray n f = bracket (opArrayCreate n) (flip opArrayDestroy n) f
 -- Metadata and string are copied when creating the op, and can be safely
 -- destroyed immediately after calling this function.
 {#fun op_send_status_server as ^
-  {`OpArray', `Int', `Int', `MetadataKeyValPtr', `StatusCode', `String'}
+  {`OpArray', `Int', `Int', `MetadataKeyValPtr', `StatusCode', `CString'}
   -> `()'#}

@@ -17,10 +17,10 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
    , testClientCreateDestroy
    , testWithServerCall
    , testWithClientCall
-   --, testPayloadLowLevel --TODO: currently crashing from free on unalloced ptr
-   --, testClientRequestNoServer --TODO: succeeds when no other tests run.
+   , testPayloadLowLevel
+   , testClientRequestNoServer
    , testServerAwaitNoClient
-   --, testPayloadLowLevelUnregistered --TODO: succeeds when no other tests run.
+   , testPayloadLowLevelUnregistered
    ]
 
 dummyMeta :: M.Map ByteString ByteString
@@ -53,7 +53,9 @@ testPayloadLowLevelServer grpc = do
   withServer grpc conf $ \server -> do
     let method = head (registeredMethods server)
     result <- serverHandleNormalRegisteredCall server method 11 M.empty $
-                \reqBody reqMeta -> return ("reply test", dummyMeta, dummyMeta)
+                \reqBody reqMeta ->
+                  return ("reply test", dummyMeta, dummyMeta,
+                          StatusDetails "details string")
     case result of
       Left err -> error $ show err
       Right _ -> return ()
@@ -66,7 +68,8 @@ testPayloadLowLevelClient grpc =
     reqResult <- clientRegisteredRequest client method 10 "Hello!" M.empty
     case reqResult of
       Left x -> error $ "Client got error: " ++ show x
-      Right (NormalRequestResult respBody initMeta trailingMeta respCode) -> do
+      Right (NormalRequestResult respBody initMeta trailingMeta respCode details) -> do
+        details @?= "details string"
         respBody @?= "reply test"
         respCode @?= GrpcStatusOk
 
@@ -76,15 +79,18 @@ testPayloadLowLevelClientUnregistered grpc = do
     reqResult <- clientRequest client "/foo" "localhost" 10 "Hello!" M.empty
     case reqResult of
       Left x -> error $ "Client got error: " ++ show x
-      Right (NormalRequestResult respBody initMeta trailingMeta respCode) -> do
+      Right (NormalRequestResult
+              respBody initMeta trailingMeta respCode details) -> do
         respBody @?= "reply test"
         respCode @?= GrpcStatusOk
+        details @?= "details string"
 
 testPayloadLowLevelServerUnregistered :: GRPC -> IO ()
 testPayloadLowLevelServerUnregistered grpc = do
   withServer grpc (ServerConfig "localhost" 50051 []) $ \server -> do
     result <- serverHandleNormalCall server 11 M.empty $
-                \reqBody reqMeta -> return ("reply test", M.empty)
+                \reqBody reqMeta -> return ("reply test", M.empty,
+                                            StatusDetails "details string")
     case result of
       Left x -> error $ show x
       Right _ -> return ()
@@ -104,7 +110,7 @@ testServerAwaitNoClient = testCase "server wait times out when no client " $ do
     withServer grpc conf $ \server -> do
       let method = head (registeredMethods server)
       result <- serverHandleNormalRegisteredCall server method 1 M.empty $
-                  \_ _ -> return ("", M.empty, M.empty)
+                  \_ _ -> return ("", M.empty, M.empty, StatusDetails "details")
       result @?= Left GRPCIOTimeout
 
 testServerUnregisteredAwaitNoClient :: TestTree
@@ -114,7 +120,7 @@ testServerUnregisteredAwaitNoClient =
       let conf = ServerConfig "localhost" 50051 []
       withServer grpc conf $ \server -> do
         result <- serverHandleNormalCall server 10 M.empty $
-                    \_ _ -> return ("", M.empty)
+                    \_ _ -> return ("", M.empty, StatusDetails "")
         case result of
           Left err -> error $ show err
           Right _ -> return ()

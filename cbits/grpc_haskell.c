@@ -131,6 +131,10 @@ grpc_metadata_array** metadata_array_create(){
   grpc_metadata_array **retval = malloc(sizeof(grpc_metadata_array*));
   *retval = malloc(sizeof(grpc_metadata_array));
   grpc_metadata_array_init(*retval);
+  #ifdef GRPC_HASKELL_DEBUG
+  printf("C wrapper: metadata_array_create debug: %p %p %p\n", retval, *retval,
+         (*retval)->metadata);
+  #endif
   return retval;
 }
 
@@ -299,7 +303,11 @@ void op_send_status_server(grpc_op *op_array, size_t i,
 }
 
 grpc_status_code* create_status_code_ptr(){
-  return malloc(sizeof(grpc_status_code));
+  grpc_status_code* retval = malloc(sizeof(grpc_status_code));
+  #ifdef GRPC_HASKELL_DEBUG
+  printf("C wrapper: create_status_code_ptr debug: %p\n", retval);
+  #endif
+  return retval;
 }
 
 grpc_status_code deref_status_code_ptr(grpc_status_code* p){

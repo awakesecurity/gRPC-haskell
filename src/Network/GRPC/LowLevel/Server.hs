@@ -2,6 +2,7 @@
 
 module Network.GRPC.LowLevel.Server where
 
+import           Control.Concurrent (threadDelay)
 import           Control.Exception (bracket, finally)
 import           Control.Monad
 import           Data.ByteString (ByteString)
@@ -159,11 +160,12 @@ serverOpsGetNormalCall initMetadata =
 serverOpsSendNormalResponse :: ByteString
                                -> MetadataMap
                                -> C.StatusCode
+                               -> StatusDetails
                                -> [Op]
-serverOpsSendNormalResponse body metadata code =
+serverOpsSendNormalResponse body metadata code details =
   [OpRecvCloseOnServer,
    OpSendMessage body,
-   OpSendStatusFromServer metadata code]
+   OpSendStatusFromServer metadata code details]
 
 serverOpsSendNormalRegisteredResponse :: ByteString
                                          -> MetadataMap
@@ -171,12 +173,14 @@ serverOpsSendNormalRegisteredResponse :: ByteString
                                          -> MetadataMap
                                          -- ^ trailing metadata
                                          -> C.StatusCode
+                                         -> StatusDetails
                                          -> [Op]
-serverOpsSendNormalRegisteredResponse body initMetadata trailingMeta code =
+serverOpsSendNormalRegisteredResponse
+  body initMetadata trailingMeta code details =
   [OpSendInitialMetadata initMetadata,
    OpRecvCloseOnServer,
    OpSendMessage body,
-   OpSendStatusFromServer trailingMeta code]
+   OpSendStatusFromServer trailingMeta code details]
 
 -- TODO: we will want to replace this with some more general concept that also
 -- works with streaming calls in the future.
@@ -189,7 +193,8 @@ serverHandleNormalRegisteredCall :: Server
                           -> (ByteString -> MetadataMap
                               -> IO (ByteString,
                                      MetadataMap,
-                                     MetadataMap))
+                                     MetadataMap,
+                                     StatusDetails))
                              -- ^ Handler function takes a request body and
                              -- metadata and returns a response body and
                              -- metadata.
@@ -209,10 +214,10 @@ serverHandleNormalRegisteredCall s@Server{..} rm timeLimit initMetadata f = do
         requestBody <- C.copyByteBufferToByteString payload
         metadataArray <- peek $ requestMetadataRecv call
         metadata <- C.getAllMetadataArray metadataArray
-        (respBody, initMeta, trailingMeta) <- f requestBody metadata
+        (respBody, initMeta, trailingMeta, details) <- f requestBody metadata
         let status = C.GrpcStatusOk
         let respOps = serverOpsSendNormalRegisteredResponse
-                        respBody initMeta trailingMeta status
+                        respBody initMeta trailingMeta status details
         respOpsResults <- runOps call serverCQ respOps timeLimit
         grpcDebug "serverHandleNormalRegisteredCall: finished response ops."
         case respOpsResults of
@@ -226,7 +231,7 @@ serverHandleNormalCall :: Server -> TimeoutSeconds
                           -> MetadataMap
                           -- ^ Initial metadata.
                           -> (ByteString -> MetadataMap
-                              -> IO (ByteString, MetadataMap))
+                              -> IO (ByteString, MetadataMap, StatusDetails))
                           -- ^ Handler function takes a request body and
                           -- metadata and returns a response body and metadata.
                           -> IO (Either GRPCIOError ())
@@ -239,9 +244,10 @@ serverHandleNormalCall s@Server{..} timeLimit initMetadata f = do
       Left x -> return $ Left x
       Right [OpRecvMessageResult body] -> do
         --TODO: we need to get client metadata
-        (respBody, respMetadata) <- f body M.empty
+        (respBody, respMetadata, details) <- f body M.empty
         let status = C.GrpcStatusOk
-        let respOps = serverOpsSendNormalResponse respBody respMetadata status
+        let respOps = serverOpsSendNormalResponse
+                        respBody respMetadata status details
         respOpsResults <- runOps call serverCQ respOps timeLimit
         case respOpsResults of
           Left x -> do grpcDebug "serverHandleNormalCall: resp failed."

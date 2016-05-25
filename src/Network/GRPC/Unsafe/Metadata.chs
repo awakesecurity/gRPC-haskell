@@ -1,3 +1,5 @@
+{-# LANGUAGE StandaloneDeriving #-}
+
 module Network.GRPC.Unsafe.Metadata where
 
 import Control.Exception
@@ -18,12 +20,16 @@ import Foreign.Storable
 -- is intended to be used when sending metadata.
 {#pointer *grpc_metadata as MetadataKeyValPtr newtype#}
 
+deriving instance Show MetadataKeyValPtr
+
 -- | Represents a pointer to a grpc_metadata_array. Must be destroyed with
 -- 'metadataArrayDestroy'. This type is intended for receiving metadata.
 -- This can be populated by passing it to e.g. 'grpcServerRequestCall'.
 -- TODO: we need a function for getting a 'MetadataKeyValPtr'
 -- and length from this type.
 {#pointer *grpc_metadata_array as MetadataArray newtype#}
+
+deriving instance Show MetadataArray
 
 {#fun metadata_array_get_metadata as ^
   {`MetadataArray'} -> `MetadataKeyValPtr'#}
