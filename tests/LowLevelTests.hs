@@ -37,13 +37,6 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
 dummyMeta :: M.Map ByteString ByteString
 dummyMeta = M.fromList [("foo","bar")]
 
--- | Boilerplate for naming a GRPC unit test
-gtc :: TestName -> (GRPC -> IO ()) -> TestTree
-gtc nm = testCase nm . withGRPC
-
-nop :: Monad m => a -> m ()
-nop = const (return ())
-
 testGRPCBracket :: TestTree
 testGRPCBracket = gtc "Start/stop GRPC" nop
 
@@ -141,19 +134,13 @@ testServerUnregisteredAwaitNoClient =
 
 testPayloadLowLevel :: TestTree
 testPayloadLowLevel =
-  gtc "Client/Server - low-level (registered) request/response" $ \grpc -> do
-  withAsync (testPayloadLowLevelServer grpc) $ \a1 -> do
-    withAsync (testPayloadLowLevelClient grpc) $ \a2 -> do
-      wait a1
-      wait a2
+  gtc "Client/Server - low-level (registered) request/response" $
+  runClientServer testPayloadLowLevelClient testPayloadLowLevelServer
 
 testPayloadLowLevelUnregistered :: TestTree
 testPayloadLowLevelUnregistered =
-  gtc "Client/Server - low-level unregistered request/response" $ \grpc -> do
-  withAsync (testPayloadLowLevelServerUnregistered grpc) $ \a1 ->
-    withAsync (testPayloadLowLevelClientUnregistered grpc) $ \a2 -> do
-      wait a1
-      wait a2
+  gtc "Client/Server - low-level unregistered request/response" $
+  runClientServer testPayloadLowLevelClientUnregistered testPayloadLowLevelServerUnregistered
 
 testWithServerCall :: TestTree
 testWithServerCall =
@@ -179,8 +166,8 @@ assertCqEventComplete e = do
   eventCompletionType e HU.@?= OpComplete
   eventSuccess e HU.@?= True
 
-testPayloadClient :: IO ()
-testPayloadClient = do
+testPayloadClient :: GRPC -> IO ()
+testPayloadClient _grpc = do
   client <- grpcInsecureChannelCreate "localhost:50051" nullPtr reserved
   cq <- grpcCompletionQueueCreate reserved
   withMetadataArrayPtr $ \initialMetadataRecv -> do
@@ -226,8 +213,8 @@ testPayloadClient = do
         grpcCompletionQueueDestroy cq
         grpcChannelDestroy client
 
-testPayloadServer :: IO ()
-testPayloadServer = do
+testPayloadServer :: GRPC -> IO ()
+testPayloadServer _grpc = do
   server <- grpcServerCreate nullPtr reserved
   cq <- grpcCompletionQueueCreate reserved
   grpcServerRegisterCompletionQueue server cq reserved
@@ -300,8 +287,22 @@ testPayloadServer = do
 -- minimal abstractions on top of it.
 testPayload :: TestTree
 testPayload =
-  gtc "Client/Server - End-to-end request/response" $ \_ ->
-  withAsync testPayloadServer $ \a1 -> do
-    withAsync testPayloadClient $ \a2 -> do
+  gtc "Client/Server - End-to-end request/response" $
+  runClientServer testPayloadClient testPayloadServer
+
+--------------------------------------------------------------------------------
+-- Utility functions
+
+-- | Boilerplate for naming a GRPC unit test
+gtc :: TestName -> (GRPC -> IO ()) -> TestTree
+gtc nm = testCase nm . withGRPC
+
+nop :: Monad m => a -> m ()
+nop = const (return ())
+
+runClientServer :: (GRPC -> IO ()) -> (GRPC -> IO ()) -> GRPC -> IO ()
+runClientServer client server grpc = do
+  withAsync (server grpc) $ \a1 -> do
+    withAsync (client grpc) $ \a2 -> do
       wait a1
       wait a2
