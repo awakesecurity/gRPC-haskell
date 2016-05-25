@@ -2,7 +2,6 @@
 
 module LowLevelTests (lowLevelTests) where
 
-import           Control.Applicative
 import           Control.Concurrent.Async
 import           Control.Monad
 import           Data.ByteString                (ByteString)
@@ -49,7 +48,7 @@ payloadLowLevelServer = TestServer $ \grpc -> do
   withServer grpc conf $ \server -> do
     let method = head (registeredMethods server)
     result <- serverHandleNormalRegisteredCall server method 11 M.empty $
-                \reqBody reqMeta ->
+                \_reqBody _reqMeta ->
                   return ("reply test", dummyMeta, dummyMeta,
                           StatusDetails "details string")
     case result of
@@ -64,7 +63,7 @@ payloadLowLevelClient = TestClient $ \grpc ->
     reqResult <- clientRegisteredRequest client method 10 "Hello!" M.empty
     case reqResult of
       Left x -> error $ "Client got error: " ++ show x
-      Right (NormalRequestResult respBody initMeta trailingMeta respCode details) -> do
+      Right (NormalRequestResult respBody _initMeta _trailingMeta respCode details) -> do
         details @?= "details string"
         respBody @?= "reply test"
         respCode @?= GrpcStatusOk
@@ -76,7 +75,7 @@ payloadLowLevelClientUnregistered = TestClient $ \grpc -> do
     case reqResult of
       Left x -> error $ "Client got error: " ++ show x
       Right (NormalRequestResult
-              respBody initMeta trailingMeta respCode details) -> do
+              respBody _initMeta _trailingMeta respCode details) -> do
         respBody @?= "reply test"
         respCode @?= GrpcStatusOk
         details @?= "details string"
@@ -85,8 +84,8 @@ payloadLowLevelServerUnregistered :: TestServer
 payloadLowLevelServerUnregistered = TestServer $ \grpc -> do
   withServer grpc (ServerConfig "localhost" 50051 []) $ \server -> do
     result <- serverHandleNormalCall server 11 M.empty $
-                \reqBody reqMeta -> return ("reply test", M.empty,
-                                            StatusDetails "details string")
+                \_reqBody _reqMeta -> return ("reply test", M.empty,
+                                              StatusDetails "details string")
     case result of
       Left x -> error $ show x
       Right _ -> return ()
