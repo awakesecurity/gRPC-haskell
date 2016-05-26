@@ -99,25 +99,26 @@ testClientRequestNoServer =
     reqResult @?= (Left GRPCIOTimeout)
 
 testServerAwaitNoClient :: TestTree
-testServerAwaitNoClient =
-  grpcTest "Server - registered call handler timeout" $ \grpc -> do
-  let conf = (ServerConfig "localhost" 50051 [("/foo", "localhost", Normal)])
-  withServer grpc conf $ \server -> do
-    let method = head (registeredMethods server)
-    result <- serverHandleNormalRegisteredCall server method 1 M.empty $
-                \_ _ -> return ("", M.empty, M.empty, StatusDetails "details")
-    result @?= Left GRPCIOTimeout
+testServerAwaitNoClient = testCase "server wait times out when no client " $ do
+  withGRPC $ \grpc -> do
+    let conf = (ServerConfig "localhost" 50051 [("/foo", "localhost", Normal)])
+    withServer grpc conf $ \server -> do
+      let method = head (registeredMethods server)
+      result <- serverHandleNormalRegisteredCall server method 1 M.empty $
+                  \_ _ -> return ("", M.empty, M.empty, StatusDetails "details")
+      result @?= Left GRPCIOTimeout
 
 testServerUnregisteredAwaitNoClient :: TestTree
 testServerUnregisteredAwaitNoClient =
-  grpcTest "Server - unregistered call handler timeout" $ \grpc -> do
-    let conf = ServerConfig "localhost" 50051 []
-    withServer grpc conf $ \server -> do
-      result <- serverHandleNormalCall server 10 M.empty $
-                  \_ _ -> return ("", M.empty, StatusDetails "")
-      case result of
-        Left err -> error $ show err
-        Right _ -> return ()
+  testCase "server wait times out when no client -- unregistered method " $ do
+    withGRPC $ \grpc -> do
+      let conf = ServerConfig "localhost" 50051 []
+      withServer grpc conf $ \server -> do
+        result <- serverHandleNormalCall server 10 M.empty $
+                    \_ _ -> return ("", M.empty, StatusDetails "")
+        case result of
+          Left err -> error $ show err
+          Right _ -> return ()
 
 testPayloadLowLevel :: TestTree
 testPayloadLowLevel =
