@@ -123,4 +123,10 @@ grpc_call* grpc_channel_create_registered_call_(
   grpc_completion_queue *completion_queue, void *registered_call_handle,
   gpr_timespec *deadline, void *reserved);
 
+char* call_details_get_method(grpc_call_details* details);
+
+char* call_details_get_host(grpc_call_details* details);
+
+gpr_timespec* call_details_get_deadline(grpc_call_details* details);
+
 #endif //GRPC_HASKELL

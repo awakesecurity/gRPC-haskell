@@ -263,3 +263,9 @@ castPeek p = peek (castPtr p)
    `MetadataArray', id `Ptr ByteBuffer', `CompletionQueue',
    `CompletionQueue',unTag `Tag'}
   -> `CallError'#}
+
+{#fun call_details_get_method as ^ {`CallDetails'} -> `String'#}
+
+{#fun call_details_get_host as ^ {`CallDetails'} -> `String'#}
+
+{#fun call_details_get_deadline as ^ {`CallDetails'} -> `CTimeSpec' peek* #}

@@ -84,8 +84,10 @@ payloadLowLevelServerUnregistered :: TestServer
 payloadLowLevelServerUnregistered = TestServer $ \grpc -> do
   withServer grpc (ServerConfig "localhost" 50051 []) $ \server -> do
     result <- serverHandleNormalCall server 11 M.empty $
-                \_reqBody _reqMeta -> return ("reply test", M.empty,
-                                              StatusDetails "details string")
+                \reqBody _reqMeta reqMethod -> do
+                  reqBody @?= "Hello!"
+                  reqMethod @?= "/foo"
+                  return ("reply test", M.empty, StatusDetails "details string")
     case result of
       Left x -> error $ show x
       Right _ -> return ()
@@ -115,7 +117,7 @@ testServerUnregisteredAwaitNoClient =
       let conf = ServerConfig "localhost" 50051 []
       withServer grpc conf $ \server -> do
         result <- serverHandleNormalCall server 10 M.empty $
-                    \_ _ -> return ("", M.empty, StatusDetails "")
+                    \_ _ _ -> return ("", M.empty, StatusDetails "")
         case result of
           Left err -> error $ show err
           Right _ -> return ()
@@ -135,7 +137,7 @@ testWithServerCall =
   grpcTest "Server - Create/destroy call" $ \grpc -> do
   let conf = ServerConfig "localhost" 50051 []
   withServer grpc conf $ \server -> do
-    result <- withServerCall server 1 $ const $ return $ Right ()
+    result <- withServerUnregCall server 1 $ const $ return $ Right ()
     result @?= Left GRPCIOTimeout
 
 testWithClientCall :: TestTree

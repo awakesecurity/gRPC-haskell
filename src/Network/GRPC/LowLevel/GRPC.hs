@@ -10,11 +10,19 @@ import           Control.Monad.Except (ExceptT(..), runExceptT, throwError,
                                        MonadError)
 -}
 import           Control.Exception
+import qualified Data.ByteString as B
+import qualified Data.Map as M
+import           Data.String (IsString)
 import qualified Network.GRPC.Unsafe as C
+import qualified Network.GRPC.Unsafe.Op as C
 
 #ifdef DEBUG
 import           GHC.Conc (myThreadId)
 #endif
+
+type MetadataMap = M.Map B.ByteString B.ByteString
+
+newtype StatusDetails = StatusDetails B.ByteString deriving (Show, Eq, IsString)
 
 -- | Functions as a proof that the gRPC core has been started. The gRPC core
 -- must be initialized to create any gRPC state, so this is a requirement for
@@ -39,6 +47,7 @@ data GRPCIOError = GRPCIOCallError C.CallError
                    -- ^ Thrown if a 'CompletionQueue' fails to shut down in a
                    -- reasonable amount of time.
                    | GRPCIOUnknownError
+                   | GRPCIOBadStatusCode C.StatusCode StatusDetails
   deriving (Show, Eq)
 
 throwIfCallError :: C.CallError -> Either GRPCIOError ()

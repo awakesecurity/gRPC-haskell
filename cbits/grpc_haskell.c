@@ -359,3 +359,15 @@ grpc_call* grpc_channel_create_registered_call_(
              propagation_mask, completion_queue, registered_call_handle,
              *deadline, reserved);
 }
+
+char* call_details_get_method(grpc_call_details* details){
+  return details->method;
+}
+
+char* call_details_get_host(grpc_call_details* details){
+  return details->host;
+}
+
+gpr_timespec* call_details_get_deadline(grpc_call_details* details){
+  return &(details->deadline);
+}

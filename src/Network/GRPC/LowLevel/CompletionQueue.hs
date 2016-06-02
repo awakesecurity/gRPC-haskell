@@ -224,7 +224,8 @@ shutdownCompletionQueue (CompletionQueue{..}) = do
 
 channelCreateRegisteredCall :: C.Channel -> C.Call -> C.PropagationMask
                                -> CompletionQueue -> C.CallHandle
-                               -> C.CTimeSpecPtr -> IO (Either GRPCIOError Call)
+                               -> C.CTimeSpecPtr
+                               -> IO (Either GRPCIOError ClientCall)
 channelCreateRegisteredCall
   chan parent mask cq@CompletionQueue{..} handle deadline =
   withPermission Push cq $ do
@@ -238,7 +239,7 @@ channelCreateRegisteredCall
 
 channelCreateCall :: C.Channel -> C.Call -> C.PropagationMask -> CompletionQueue
                      -> MethodName -> Host -> C.CTimeSpecPtr
-                     -> IO (Either GRPCIOError Call)
+                     -> IO (Either GRPCIOError ClientCall)
 channelCreateCall
   chan parent mask cq@CompletionQueue{..} (MethodName methodName) (Host host)
   deadline =
@@ -250,7 +251,7 @@ channelCreateCall
 -- | Create the call object to handle a registered call.
 serverRequestRegisteredCall :: C.Server -> CompletionQueue -> TimeoutSeconds
                                -> RegisteredMethod
-                               -> IO (Either GRPCIOError Call)
+                               -> IO (Either GRPCIOError ServerRegCall)
 serverRequestRegisteredCall
   server cq@CompletionQueue{..} timeLimit RegisteredMethod{..} =
     withPermission Push cq $ do
@@ -280,9 +281,8 @@ serverRequestRegisteredCall
                      return $ Left x
                    Right () -> do
                      rawCall <- peek callPtr
-                     let assembledCall = ServerCall rawCall metadataArrayPtr
-                                                    (Just bbPtr) Nothing Nothing
-                                                    (Just deadline)
+                     let assembledCall = ServerRegCall rawCall metadataArrayPtr
+                                                       bbPtr Nothing deadline
                      return $ Right assembledCall
       -- TODO: see TODO for failureCleanup in serverRequestCall.
       where failureCleanup deadline callPtr metadataArrayPtr bbPtr = forkIO $ do
@@ -294,7 +294,7 @@ serverRequestRegisteredCall
               free bbPtr
 
 serverRequestCall :: C.Server -> CompletionQueue -> TimeoutSeconds
-                     -> IO (Either GRPCIOError Call)
+                     -> IO (Either GRPCIOError ServerUnregCall)
 serverRequestCall server cq@CompletionQueue{..} timeLimit =
   withPermission Push cq $ do
     callPtr <- malloc
@@ -321,12 +321,10 @@ serverRequestCall server cq@CompletionQueue{..} timeLimit =
                    return $ Left x
                  Right () -> do
                    rawCall <- peek callPtr
-                   let call = ServerCall rawCall
-                                         metadataArrayPtr
-                                         Nothing
-                                         Nothing
-                                         (Just callDetails)
-                                         Nothing
+                   let call = ServerUnregCall rawCall
+                                              metadataArrayPtr
+                                              Nothing
+                                              callDetails
                    return $ Right call
 
       --TODO: the gRPC library appears to hold onto these pointers for a random

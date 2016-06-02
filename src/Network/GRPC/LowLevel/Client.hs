@@ -3,6 +3,7 @@
 module Network.GRPC.LowLevel.Client where
 
 import           Control.Exception (bracket, finally)
+import           Control.Monad (join)
 import           Data.ByteString (ByteString)
 import           Foreign.Ptr (nullPtr)
 import qualified Network.GRPC.Unsafe as C
@@ -63,7 +64,7 @@ clientRegisterMethod _ _ _ _ = error "Streaming methods not yet implemented."
 -- Returns 'Left' if the CQ is shutting down or if the job to create a call
 -- timed out.
 clientCreateRegisteredCall :: Client -> RegisteredMethod -> TimeoutSeconds
-                    -> IO (Either GRPCIOError Call)
+                    -> IO (Either GRPCIOError ClientCall)
 clientCreateRegisteredCall Client{..} RegisteredMethod{..} timeout = do
   let parentCall = C.Call nullPtr --Unsure what this does. null is safe, though.
   C.withDeadlineSeconds timeout $ \deadline -> do
@@ -74,7 +75,7 @@ clientCreateRegisteredCall Client{..} RegisteredMethod{..} timeout = do
 -- by switching to ExceptT IO.
 -- | Handles safe creation and cleanup of a client call
 withClientRegisteredCall :: Client -> RegisteredMethod -> TimeoutSeconds
-                            -> (Call
+                            -> (ClientCall
                                 -> IO (Either GRPCIOError a))
                             -> IO (Either GRPCIOError a)
 withClientRegisteredCall client regmethod timeout f = do
@@ -83,7 +84,7 @@ withClientRegisteredCall client regmethod timeout f = do
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
       where logDestroy c = grpcDebug "withClientRegisteredCall: destroying."
-                           >> destroyCall c
+                           >> destroyClientCall c
 
 -- | Create a call on the client for an endpoint without using the
 -- method registration machinery. In practice, we'll probably only use the
@@ -94,7 +95,7 @@ clientCreateCall :: Client
                     -> Host
                     -- ^ The host.
                     -> TimeoutSeconds
-                    -> IO (Either GRPCIOError Call)
+                    -> IO (Either GRPCIOError ClientCall)
 clientCreateCall Client{..} method host timeout = do
   let parentCall = C.Call nullPtr
   C.withDeadlineSeconds timeout $ \deadline -> do
@@ -102,7 +103,7 @@ clientCreateCall Client{..} method host timeout = do
                       clientCQ method host deadline
 
 withClientCall :: Client -> MethodName -> Host -> TimeoutSeconds
-                  -> (Call -> IO (Either GRPCIOError a))
+                  -> (ClientCall -> IO (Either GRPCIOError a))
                   -> IO (Either GRPCIOError a)
 withClientCall client method host timeout f = do
   createResult <- clientCreateCall client method host timeout
@@ -110,7 +111,7 @@ withClientCall client method host timeout f = do
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
                     where logDestroy c = grpcDebug "withClientCall: destroying."
-                                         >> destroyCall c
+                                         >> destroyClientCall c
 
 data NormalRequestResult = NormalRequestResult
                              ByteString
@@ -121,26 +122,25 @@ data NormalRequestResult = NormalRequestResult
   deriving (Show, Eq)
 
 -- | Function for assembling call result when the 'MethodType' is 'Normal'.
-compileNormalRequestResults :: [OpRecvResult] -> NormalRequestResult
+compileNormalRequestResults :: [OpRecvResult]
+                               -> Either GRPCIOError NormalRequestResult
 compileNormalRequestResults
-  --TODO: consider using more precise type instead of match.
-  -- Whether we do so depends on whether this layer of abstraction is supposed
-  -- to be a safe interface to the gRPC C core library, or something that makes
-  -- core use cases easy.
   [OpRecvInitialMetadataResult m,
-   OpRecvMessageResult body,
+   OpRecvMessageResult (Just body),
    OpRecvStatusOnClientResult m2 status details]
-    = NormalRequestResult body (Just m) m2 status (StatusDetails details)
+    = Right $ NormalRequestResult body (Just m) m2 status
+                                  (StatusDetails details)
   -- TODO: it seems registered request responses on the server
   -- don't send initial metadata. Hence the 'Maybe'. Investigate.
 compileNormalRequestResults
-  [OpRecvMessageResult body,
+  [OpRecvMessageResult (Just body),
    OpRecvStatusOnClientResult m2 status details]
-    = NormalRequestResult body Nothing m2 status (StatusDetails details)
-compileNormalRequestResults _ =
-  --TODO: impossible case should be enforced by more precise types.
-  error "non-normal request input to compileNormalRequestResults."
-
+    = Right $ NormalRequestResult body Nothing m2 status (StatusDetails details)
+compileNormalRequestResults x =
+  case extractStatus x of
+    Nothing -> Left GRPCIOUnknownError
+    Just (OpRecvStatusOnClientResult _ status details) ->
+      Left (GRPCIOBadStatusCode status (StatusDetails details))
 
 -- | Make a request of the given method with the given body. Returns the
 -- server's response. TODO: This is preliminary until we figure out how many
@@ -162,37 +162,28 @@ clientRegisteredRequest :: Client
                            -> IO (Either GRPCIOError NormalRequestResult)
 clientRegisteredRequest client@(Client{..}) rm@(RegisteredMethod{..})
                         timeLimit body meta =
-  case methodType of
+  fmap join $ case methodType of
     Normal -> withClientRegisteredCall client rm timeLimit $ \call -> do
                 grpcDebug "clientRegisteredRequest: created call."
-                debugCall call
-                --TODO: doing one op at a time to debug. Some were hanging.
-                let op1 = [OpSendInitialMetadata meta]
-                res1 <- runOps call clientCQ op1 timeLimit
-                grpcDebug $ "finished res1: " ++ show res1
-                let op2 = [OpSendMessage body]
-                res2 <- runOps call clientCQ op2 timeLimit
-                grpcDebug $ "finished res2: " ++ show res2
-                let op3 = [OpSendCloseFromClient]
-                res3 <- runOps call clientCQ op3 timeLimit
-                grpcDebug $ "finished res3: " ++ show res3
-                let op4 = [OpRecvMessage]
-                res4 <- runOps call clientCQ op4 timeLimit
-                grpcDebug $ "finished res4: " ++ show res4
-                let op5 = [OpRecvStatusOnClient]
-                res5 <- runOps call clientCQ op5 timeLimit
-                grpcDebug $ "finished res5: " ++ show res5
-                let results = do
-                              r1 <- res1
-                              r2 <- res2
-                              r3 <- res3
-                              r4 <- res4
-                              r5 <- res5
-                              return $ r1 ++ r2 ++ r3 ++ r4 ++ r5
-                case results of
-                  Left x -> return $ Left x
-                  Right rs -> return $
-                                Right $ compileNormalRequestResults rs
+                debugClientCall call
+                -- NOTE: sendOps and recvOps *must* be in separate batches or
+                -- the client hangs when the server can't be reached.
+                let sendOps = [OpSendInitialMetadata meta
+                           , OpSendMessage body
+                           , OpSendCloseFromClient]
+                sendRes <- runClientOps call clientCQ sendOps timeLimit
+                case sendRes of
+                  Left x -> do grpcDebug "clientRegisteredRequest: batch error."
+                               return $ Left x
+                  Right rs -> do
+                    let recvOps = [OpRecvMessage, OpRecvStatusOnClient]
+                    recvRes <- runClientOps call clientCQ recvOps timeLimit
+                    case recvRes of
+                      Left x -> do
+                        grpcDebug "clientRegisteredRequest: batch error."
+                        return $ Left x
+                      Right rs' -> do
+                        return $ Right $ compileNormalRequestResults (rs ++ rs')
     _ -> error "Streaming methods not yet implemented."
 
 -- | Makes a normal (non-streaming) request without needing to register a method
@@ -210,15 +201,15 @@ clientRequest :: Client
                  -- ^ Request metadata.
                  -> IO (Either GRPCIOError NormalRequestResult)
 clientRequest client@(Client{..}) (MethodName method) (Host host)
-              timeLimit body meta = do
+              timeLimit body meta =
+  fmap join $
   withClientCall client (MethodName method) (Host host) timeLimit $ \call -> do
     let ops = clientNormalRequestOps body meta
-    results <- runOps call clientCQ ops timeLimit
+    results <- runClientOps call clientCQ ops timeLimit
     grpcDebug "clientRequest: ops ran."
     case results of
       Left x -> return $ Left x
       Right rs -> return $ Right $ compileNormalRequestResults rs
-
 
 clientNormalRequestOps :: ByteString -> MetadataMap -> [Op]
 clientNormalRequestOps body metadata =
