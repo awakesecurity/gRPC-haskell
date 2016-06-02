@@ -48,7 +48,9 @@ payloadLowLevelServer = TestServer $ \grpc -> do
   withServer grpc conf $ \server -> do
     let method = head (registeredMethods server)
     result <- serverHandleNormalRegisteredCall server method 11 M.empty $
-                \_reqBody _reqMeta ->
+                \reqBody reqMeta -> do
+                  reqMeta M.! "foo_key" @?= "foo_val"
+                  reqBody @?= "Hello!"
                   return ("reply test", dummyMeta, dummyMeta,
                           StatusDetails "details string")
     case result of
@@ -60,13 +62,17 @@ payloadLowLevelClient = TestClient $ \grpc ->
   withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
     method <- clientRegisterMethod client "/foo" "localhost" Normal
     putStrLn "registered method on client."
-    reqResult <- clientRegisteredRequest client method 10 "Hello!" M.empty
+    let reqMeta = M.fromList [("foo_key", "foo_val")]
+    reqResult <- clientRegisteredRequest client method 10 "Hello!" reqMeta
     case reqResult of
       Left x -> error $ "Client got error: " ++ show x
-      Right (NormalRequestResult respBody _initMeta _trailingMeta respCode details) -> do
+      Right (NormalRequestResult respBody (Just initMeta) trailingMeta respCode details) -> do
         details @?= "details string"
         respBody @?= "reply test"
         respCode @?= GrpcStatusOk
+        initMeta M.! "foo" @?= "bar"
+        trailingMeta M.! "foo" @?= "bar"
+      Right (NormalRequestResult _ Nothing _ _ _) -> error $ "got no metadata."
 
 payloadLowLevelClientUnregistered :: TestClient
 payloadLowLevelClientUnregistered = TestClient $ \grpc -> do

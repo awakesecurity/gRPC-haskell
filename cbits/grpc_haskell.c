@@ -343,8 +343,22 @@ grpc_metadata* metadata_array_get_metadata(grpc_metadata_array* arr){
   return arr->metadata;
 }
 
+void metadata_array_set_metadata(grpc_metadata_array* arr, grpc_metadata* meta){
+  arr->metadata = meta;
+  //NOTE: we assume count == capacity because that's how the 'createMetadata'
+  //Haskell function works. It isn't safe to call this function if the
+  //metadata was created in some other way.
+  size_t n = sizeof(meta);
+  arr->count = n;
+  arr->capacity = n;
+}
+
 size_t metadata_array_get_count(grpc_metadata_array* arr){
   return arr->count;
+}
+
+size_t metadata_array_get_capacity(grpc_metadata_array* arr){
+  return arr->capacity;
 }
 
 grpc_call* grpc_channel_create_registered_call_(

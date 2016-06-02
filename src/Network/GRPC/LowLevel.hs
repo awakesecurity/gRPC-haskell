@@ -39,6 +39,8 @@ GRPC
 , ClientConfig(..)
 , Client
 , ClientCall
+, ConnectivityState(..)
+, clientConnectivity
 , withClient
 , clientRegisterMethod
 , clientRegisteredRequest
@@ -62,4 +64,5 @@ import           Network.GRPC.LowLevel.Op
 import           Network.GRPC.LowLevel.Client
 import           Network.GRPC.LowLevel.Call
 
+import Network.GRPC.Unsafe (ConnectivityState(..))
 import Network.GRPC.Unsafe.Op (StatusCode(..))

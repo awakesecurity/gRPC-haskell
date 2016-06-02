@@ -45,6 +45,10 @@ withClient grpc config = bracket (createClient grpc config)
                                  (\c -> grpcDebug "withClient: destroying."
                                         >> destroyClient c)
 
+clientConnectivity :: Client -> IO C.ConnectivityState
+clientConnectivity Client{..} =
+  C.grpcChannelCheckConnectivityState clientChannel False
+
 -- | Register a method on the client so that we can call it with
 -- 'clientRegisteredRequest'.
 clientRegisterMethod :: Client
@@ -137,9 +141,9 @@ compileNormalRequestResults
    OpRecvStatusOnClientResult m2 status details]
     = Right $ NormalRequestResult body Nothing m2 status (StatusDetails details)
 compileNormalRequestResults x =
-  case extractStatus x of
+  case extractStatusInfo x of
     Nothing -> Left GRPCIOUnknownError
-    Just (OpRecvStatusOnClientResult _ status details) ->
+    Just (_meta, status, details) ->
       Left (GRPCIOBadStatusCode status (StatusDetails details))
 
 -- | Make a request of the given method with the given body. Returns the
@@ -176,7 +180,9 @@ clientRegisteredRequest client@(Client{..}) rm@(RegisteredMethod{..})
                   Left x -> do grpcDebug "clientRegisteredRequest: batch error."
                                return $ Left x
                   Right rs -> do
-                    let recvOps = [OpRecvMessage, OpRecvStatusOnClient]
+                    let recvOps = [OpRecvInitialMetadata,
+                                   OpRecvMessage,
+                                   OpRecvStatusOnClient]
                     recvRes <- runClientOps call clientCQ recvOps timeLimit
                     case recvRes of
                       Left x -> do

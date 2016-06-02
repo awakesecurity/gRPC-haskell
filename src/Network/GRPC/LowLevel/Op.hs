@@ -257,7 +257,11 @@ runClientOps :: ClientCall
                 -> IO (Either GRPCIOError [OpRecvResult])
 runClientOps = runOps . internalClientCall
 
-extractStatus :: [OpRecvResult] -> Maybe OpRecvResult
-extractStatus [] = Nothing
-extractStatus (res@(OpRecvStatusOnClientResult _ _ _):_) = Just res
-extractStatus (_:xs) = extractStatus xs
+-- | If response status info is present in the given 'OpRecvResult's, returns
+-- a tuple of trailing metadata, status code, and status details.
+extractStatusInfo :: [OpRecvResult]
+                     -> Maybe (MetadataMap, C.StatusCode, B.ByteString)
+extractStatusInfo [] = Nothing
+extractStatusInfo (res@(OpRecvStatusOnClientResult meta code details):_) =
+  Just (meta, code, details)
+extractStatusInfo (_:xs) = extractStatusInfo xs

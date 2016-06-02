@@ -118,16 +118,18 @@ serverRegisterMethod _ _ _ _ = error "Streaming methods not implemented yet."
 -- | Create a 'Call' with which to wait for the invocation of a registered
 -- method.
 serverCreateRegisteredCall :: Server -> RegisteredMethod -> TimeoutSeconds
+                              -> MetadataMap
                               -> IO (Either GRPCIOError ServerRegCall)
-serverCreateRegisteredCall Server{..} rm timeLimit =
-  serverRequestRegisteredCall internalServer serverCQ timeLimit rm
+serverCreateRegisteredCall Server{..} rm timeLimit initMeta =
+  serverRequestRegisteredCall internalServer serverCQ timeLimit rm initMeta
 
 withServerRegisteredCall :: Server -> RegisteredMethod -> TimeoutSeconds
+                            -> MetadataMap
                             -> (ServerRegCall
                                 -> IO (Either GRPCIOError a))
                             -> IO (Either GRPCIOError a)
-withServerRegisteredCall server regmethod timeout f = do
-  createResult <- serverCreateRegisteredCall server regmethod timeout
+withServerRegisteredCall server regmethod timeout initMeta f = do
+  createResult <- serverCreateRegisteredCall server regmethod timeout initMeta
   case createResult of
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
@@ -204,7 +206,7 @@ serverHandleNormalRegisteredCall s@Server{..} rm timeLimit srvMetadata f = do
   -- Should we just hard-code time limits instead? Not sure if client
   -- programmer cares, since this function will likely just be put in a loop
   -- anyway.
-  withServerRegisteredCall s rm timeLimit $ \call -> do
+  withServerRegisteredCall s rm timeLimit srvMetadata $ \call -> do
     grpcDebug "serverHandleNormalRegisteredCall: starting batch."
     debugServerRegCall call
     payload <- serverRegCallGetPayload call

@@ -116,7 +116,11 @@ void grpc_channel_watch_connectivity_state_(grpc_channel *channel,
 
 grpc_metadata* metadata_array_get_metadata(grpc_metadata_array* arr);
 
+void metadata_array_set_metadata(grpc_metadata_array* arr, grpc_metadata* meta);
+
 size_t metadata_array_get_count(grpc_metadata_array* arr);
+
+size_t metadata_array_get_capacity(grpc_metadata_array* arr);
 
 grpc_call* grpc_channel_create_registered_call_(
   grpc_channel *channel, grpc_call *parent_call, uint32_t propagation_mask,

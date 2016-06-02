@@ -25,8 +25,6 @@ deriving instance Show MetadataKeyValPtr
 -- | Represents a pointer to a grpc_metadata_array. Must be destroyed with
 -- 'metadataArrayDestroy'. This type is intended for receiving metadata.
 -- This can be populated by passing it to e.g. 'grpcServerRequestCall'.
--- TODO: we need a function for getting a 'MetadataKeyValPtr'
--- and length from this type.
 {#pointer *grpc_metadata_array as MetadataArray newtype#}
 
 deriving instance Show MetadataArray
@@ -34,7 +32,15 @@ deriving instance Show MetadataArray
 {#fun metadata_array_get_metadata as ^
   {`MetadataArray'} -> `MetadataKeyValPtr'#}
 
+-- | Overwrites the metadata in the given 'MetadataArray'. The given
+-- 'MetadataKeyValPtr' *must* have been created with 'createMetadata' in this
+-- module.
+{#fun metadata_array_set_metadata as ^
+  {`MetadataArray', `MetadataKeyValPtr'} -> `()'#}
+
 {#fun metadata_array_get_count as ^ {`MetadataArray'} -> `Int'#}
+
+{#fun metadata_array_get_capacity as ^ {`MetadataArray'} -> `Int'#}
 
 instance Storable MetadataArray where
   sizeOf (MetadataArray r) = sizeOf r

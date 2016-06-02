@@ -61,7 +61,10 @@ serverRegCallGetMetadata ServerRegCall{..} = do
 -- | Extract the client request body from the given registered call, if present.
 -- TODO: the reason this returns @Maybe ByteString@ is because the gRPC library
 -- calls the underlying out parameter "optional_payload". I am not sure exactly
--- in what cases it won't be present.
+-- in what cases it won't be present. The C++ library checks a
+-- has_request_payload_ bool and passes in nullptr to request_registered_call
+-- if the bool is false, so we may be able to do the payload present/absent
+-- check earlier.
 serverRegCallGetPayload :: ServerRegCall -> IO (Maybe ByteString)
 serverRegCallGetPayload ServerRegCall{..} = do
   bb@(C.ByteBuffer rawPtr) <- peek optionalPayload
