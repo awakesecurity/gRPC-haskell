@@ -1,2 +1,5 @@
 dist
 .stack-work/
+*.pyc
+*.pyo
+*.o

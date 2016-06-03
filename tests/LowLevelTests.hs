@@ -44,7 +44,7 @@ testClientCreateDestroy =
 
 payloadLowLevelServer :: TestServer
 payloadLowLevelServer = TestServer $ \grpc -> do
-  let conf = (ServerConfig "localhost" 50051 [("/foo", "localhost", Normal)])
+  let conf = (ServerConfig "localhost" 50051 [("/foo", Normal)])
   withServer grpc conf $ \server -> do
     let method = head (registeredMethods server)
     result <- serverHandleNormalRegisteredCall server method 11 M.empty $
@@ -109,7 +109,7 @@ testClientRequestNoServer =
 testServerAwaitNoClient :: TestTree
 testServerAwaitNoClient = testCase "server wait times out when no client " $ do
   withGRPC $ \grpc -> do
-    let conf = (ServerConfig "localhost" 50051 [("/foo", "localhost", Normal)])
+    let conf = (ServerConfig "localhost" 50051 [("/foo", Normal)])
     withServer grpc conf $ \server -> do
       let method = head (registeredMethods server)
       result <- serverHandleNormalRegisteredCall server method 1 M.empty $

@@ -18,6 +18,11 @@ Flag Debug
   Manual:      True
   Default:     False
 
+flag with-examples
+  description: Also build example executables.
+  manual:      True
+  default:     False
+
 library
   build-depends:
       base ==4.8.*
@@ -64,6 +69,35 @@ library
   if flag(debug)
     CPP-Options: -DDEBUG
     CC-Options:  -DGRPC_HASKELL_DEBUG
+
+executable echo-server
+  if flag(with-examples)
+    build-depends:
+      base ==4.8.*
+      , bytestring == 0.10.*
+      , grpc-haskell
+      , containers ==0.5.*
+      , async
+  else
+    buildable: False
+  default-language: Haskell2010
+  ghc-options:      -Wall -g -threaded
+  hs-source-dirs:   examples/echo/echo-server
+  main-is:          Main.hs
+
+executable echo-client
+  if flag(with-examples)
+    build-depends:
+      base ==4.8.*
+      , bytestring == 0.10.*
+      , grpc-haskell
+      , containers ==0.5.*
+  else
+    buildable: False
+  default-language: Haskell2010
+  ghc-options:      -Wall -g -threaded
+  hs-source-dirs:   examples/echo/echo-client
+  main-is:          Main.hs
 
 test-suite test
   build-depends:

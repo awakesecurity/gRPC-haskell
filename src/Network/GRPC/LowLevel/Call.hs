@@ -90,6 +90,10 @@ serverUnregCallGetMethodName :: ServerUnregCall -> IO MethodName
 serverUnregCallGetMethodName ServerUnregCall{..} =
   MethodName <$> C.callDetailsGetMethod callDetails
 
+serverUnregCallGetHost :: ServerUnregCall -> IO Host
+serverUnregCallGetHost ServerUnregCall{..} =
+  Host <$> C.callDetailsGetHost callDetails
+
 debugClientCall :: ClientCall -> IO ()
 {-# INLINE debugClientCall #-}
 #ifdef DEBUG

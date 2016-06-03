@@ -22,6 +22,9 @@ GRPC
 , GRPCMethodType(..)
 , RegisteredMethod
 , NormalRequestResult(..)
+, MetadataMap
+, MethodName(..)
+, StatusDetails(..)
 
 -- * Server
 , ServerConfig(..)
@@ -53,7 +56,6 @@ GRPC
 , runServerUnregOps
 , Op(..)
 , OpRecvResult(..)
-, StatusDetails(..)
 
 ) where
 

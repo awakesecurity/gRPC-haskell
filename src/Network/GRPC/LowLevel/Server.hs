@@ -35,7 +35,7 @@ data ServerConfig =
                 -- how this is used. Setting to "localhost" works fine in tests.
                 port              :: Int,
                 -- ^ Port to listen for requests on.
-                methodsToRegister :: [(MethodName, Host, GRPCMethodType)]
+                methodsToRegister :: [(MethodName, GRPCMethodType)]
                 -- ^ List of (method name, method host, method type) tuples
                 -- specifying all methods to register. You can also handle
                 -- other unregistered methods with `serverHandleNormalCall`.
@@ -51,8 +51,8 @@ startServer grpc ServerConfig{..} = do
   cq <- createCompletionQueue grpc
   serverRegisterCompletionQueue server cq
   methods <- forM methodsToRegister $
-               \(name, host, mtype) ->
-                 serverRegisterMethod server name host mtype
+               \(name, mtype) ->
+                 serverRegisterMethod server name (Host hostPort) mtype
   C.grpcServerStart server
   return $ Server server cq methods
 
@@ -249,6 +249,8 @@ serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
         requestMeta <- serverUnregCallGetMetadata call
         grpcDebug $ "got client metadata: " ++ show requestMeta
         methodName <- serverUnregCallGetMethodName call
+        hostName <- serverUnregCallGetHost call
+        grpcDebug $ "call_details host is: " ++ show hostName
         (respBody, respMetadata, details) <- f body requestMeta methodName
         let status = C.GrpcStatusOk
         let respOps = serverOpsSendNormalResponse
