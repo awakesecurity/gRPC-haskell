@@ -18,18 +18,21 @@ import           Network.GRPC.LowLevel.Op
 
 -- | Represents the context needed to perform client-side gRPC operations.
 data Client = Client {clientChannel :: C.Channel,
-                      clientCQ :: CompletionQueue}
+                      clientCQ :: CompletionQueue,
+                      clientHostPort :: String}
 
 -- | Configuration necessary to set up a client.
 data ClientConfig = ClientConfig {clientServerHost :: Host,
                                   clientServerPort :: Int}
 
 createClient :: GRPC -> ClientConfig -> IO Client
-createClient grpc ClientConfig{..} = do
-  let hostPort = (unHost clientServerHost) ++ ":" ++ (show clientServerPort)
-  chan <- C.grpcInsecureChannelCreate hostPort nullPtr C.reserved
-  cq <- createCompletionQueue grpc
-  return $ Client chan cq
+createClient grpc conf@ClientConfig{..} = do
+  let clientHostPort = (unHost clientServerHost)
+                       ++ ":"
+                       ++ (show clientServerPort)
+  clientChannel <- C.grpcInsecureChannelCreate clientHostPort nullPtr C.reserved
+  clientCQ <- createCompletionQueue grpc
+  return $ Client{..}
 
 destroyClient :: Client -> IO ()
 destroyClient Client{..} = do
@@ -54,15 +57,15 @@ clientConnectivity Client{..} =
 clientRegisterMethod :: Client
                         -> MethodName
                         -- ^ method name, e.g. "/foo"
-                        -> Host
-                        -- ^ host name, e.g. "localhost"
                         -> GRPCMethodType
                         -> IO RegisteredMethod
-clientRegisterMethod Client{..} name host Normal = do
-  handle <- C.grpcChannelRegisterCall clientChannel (unMethodName name)
-                                      (unHost host) C.reserved
-  return $ RegisteredMethod Normal name host handle
-clientRegisterMethod _ _ _ _ = error "Streaming methods not yet implemented."
+clientRegisterMethod Client{..} name Normal = do
+  handle <- C.grpcChannelRegisterCall clientChannel
+                                      (unMethodName name)
+                                      clientHostPort
+                                      C.reserved
+  return $ RegisteredMethod Normal name (Host clientHostPort) handle
+clientRegisterMethod _ _ _ = error "Streaming methods not yet implemented."
 
 -- | Create a new call on the client for a registered method.
 -- Returns 'Left' if the CQ is shutting down or if the job to create a call
