@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module LowLevelTests (lowLevelTests) where
+module LowLevelTests where
 
 import           Control.Concurrent.Async
 import           Control.Monad
@@ -22,6 +22,7 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
    , testClientRequestNoServer
    , testServerAwaitNoClient
    , testPayloadLowLevelUnregistered
+   , testWrongEndpoint
    ]
 
 testGRPCBracket :: TestTree
@@ -60,7 +61,7 @@ payloadLowLevelServer = TestServer $ \grpc -> do
 payloadLowLevelClient :: TestClient
 payloadLowLevelClient = TestClient $ \grpc ->
   withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
-    method <- clientRegisterMethod client "/foo" "localhost" Normal
+    method <- clientRegisterMethod client "/foo" Normal
     putStrLn "registered method on client."
     let reqMeta = M.fromList [("foo_key", "foo_val")]
     reqResult <- clientRegisteredRequest client method 10 "Hello!" reqMeta
@@ -102,7 +103,7 @@ testClientRequestNoServer :: TestTree
 testClientRequestNoServer =
   grpcTest "Client - request timeout when server DNE" $ \grpc -> do
   withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
-    method <- clientRegisterMethod client "/foo" "localhost" Normal
+    method <- clientRegisterMethod client "/foo" Normal
     reqResult <- clientRegisteredRequest client method 1 "Hello" M.empty
     reqResult @?= (Left GRPCIOTimeout)
 
@@ -131,6 +132,20 @@ testServerUnregisteredAwaitNoClient =
 testPayloadLowLevel :: TestTree
 testPayloadLowLevel =
   grpcTest "Client/Server - low-level (registered) request/response" $
+  runClientServer payloadLowLevelClient payloadLowLevelServer
+
+payloadWrongEndpoint :: TestClient
+payloadWrongEndpoint = TestClient $ \grpc ->
+  withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
+    method <- clientRegisterMethod client "/bar" Normal
+    reqResult <- clientRegisteredRequest client method 1 "" M.empty
+    reqResult @?= Left (GRPCIOBadStatusCode GrpcStatusDeadlineExceeded
+                                            (StatusDetails "Deadline Exceeded"))
+
+
+testWrongEndpoint :: TestTree
+testWrongEndpoint =
+  grpcTest "Client/Server - client requests unknown endpoint" $
   runClientServer payloadLowLevelClient payloadLowLevelServer
 
 testPayloadLowLevelUnregistered :: TestTree

@@ -27,7 +27,7 @@ regClient :: IO ()
 regClient = do
   withGRPC $ \grpc ->
     withClient grpc (ClientConfig "localhost" 50051) $ \client -> ntimes 100000 $ do
-      regMethod <- clientRegisterMethod client echoMethod "localhost:50051" Normal
+      regMethod <- clientRegisterMethod client echoMethod Normal
       reqResult <- clientRegisteredRequest client regMethod 1 "hi" M.empty
       case reqResult of
         Left x -> error $ "Got client error: " ++ show x
