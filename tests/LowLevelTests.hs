@@ -78,7 +78,7 @@ payloadLowLevelClient = TestClient $ \grpc ->
 payloadLowLevelClientUnregistered :: TestClient
 payloadLowLevelClientUnregistered = TestClient $ \grpc -> do
   withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
-    reqResult <- clientRequest client "/foo" "localhost" 10 "Hello!" M.empty
+    reqResult <- clientRequest client "/foo" 10 "Hello!" M.empty
     case reqResult of
       Left x -> error $ "Client got error: " ++ show x
       Right (NormalRequestResult
@@ -166,7 +166,7 @@ testWithClientCall =
   grpcTest "Client - Create/destroy call" $ \grpc -> do
   let conf = ClientConfig "localhost" 50051
   withClient grpc conf $ \client -> do
-    result <- withClientCall client "foo" "localhost" 10 $
+    result <- withClientCall client "foo" 10 $
                 const $ return $ Right ()
     case result of
       Left err -> error $ show err

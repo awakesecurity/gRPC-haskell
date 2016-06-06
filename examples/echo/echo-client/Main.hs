@@ -1,37 +1,24 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase                      #-}
+{-# LANGUAGE OverloadedStrings               #-}
+{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+{-# OPTIONS_GHC -fno-warn-unused-binds       #-}
 
-import Control.Concurrent (threadDelay)
-import Control.Monad (forever)
-import Data.ByteString ()
-import qualified Data.Map as M
-import Network.GRPC.LowLevel
+import           Control.Monad
+import           Network.GRPC.LowLevel
 
-echoMethod :: MethodName
 echoMethod = MethodName "/echo.Echo/DoEcho"
 
-ntimes :: Int -> IO () -> IO ()
-ntimes 1 f = f
-ntimes n f = f >> (ntimes (n-1) f)
+unregistered c = do
+  clientRequest c echoMethod 1 "hi" mempty
 
-unregClient :: IO ()
-unregClient = do
-  withGRPC $ \grpc ->
-    withClient grpc (ClientConfig "localhost" 50051) $ \client ->
-    ntimes 100000 $ do
-      reqResult <- clientRequest client echoMethod "localhost:50051" 1 "hi" M.empty
-      case reqResult of
-        Left x -> error $ "Got client error: " ++ show x
-        Right resp -> return ()
+registered c = do
+  meth <- clientRegisterMethod c echoMethod Normal
+  clientRegisteredRequest c meth 1 "hi" mempty
 
-regClient :: IO ()
-regClient = do
-  withGRPC $ \grpc ->
-    withClient grpc (ClientConfig "localhost" 50051) $ \client -> ntimes 100000 $ do
-      regMethod <- clientRegisterMethod client echoMethod Normal
-      reqResult <- clientRegisteredRequest client regMethod 1 "hi" M.empty
-      case reqResult of
-        Left x -> error $ "Got client error: " ++ show x
-        Right resp -> return ()
+run f = withGRPC $ \g -> withClient g (ClientConfig "localhost" 50051) $ \c ->
+  f c >>= \case
+    Left e -> error $ "Got client error: " ++ show e
+    _      -> return ()
 
-main :: IO ()
-main = regClient
+main = replicateM_ 100 $ run $
+  registered

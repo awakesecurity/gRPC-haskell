@@ -28,6 +28,16 @@ newtype MethodName = MethodName {unMethodName :: String}
 newtype Host = Host {unHost :: String}
   deriving (Show, Eq, IsString)
 
+newtype Port = Port {unPort :: Int}
+  deriving (Eq, Num, Show)
+
+newtype Endpoint = Endpoint {unEndpoint :: String}
+  deriving (Show, Eq, IsString)
+
+-- | Given a hostname and port, produces a "host:port" string
+endpoint :: Host -> Port -> Endpoint
+endpoint (Host h) (Port p) = Endpoint (h ++ ":" ++ show p)
+
 -- | Represents a registered method. Methods can optionally be registered in
 -- order to make the C-level request/response code simpler.
 -- Before making or awaiting a registered call, the
@@ -36,7 +46,7 @@ newtype Host = Host {unHost :: String}
 -- Contains state for identifying that method in the underlying gRPC library.
 data RegisteredMethod = RegisteredMethod {methodType :: GRPCMethodType,
                                           methodName :: MethodName,
-                                          methodHost :: Host,
+                                          methodEndpoint :: Endpoint,
                                           methodHandle :: C.CallHandle}
 
 -- | Represents one GRPC call (i.e. request) on the client.

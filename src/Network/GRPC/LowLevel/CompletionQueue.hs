@@ -237,15 +237,18 @@ channelCreateRegisteredCall
                                               handle deadline C.reserved
     return $ Right $ ClientCall call
 
-channelCreateCall :: C.Channel -> C.Call -> C.PropagationMask -> CompletionQueue
-                     -> MethodName -> Host -> C.CTimeSpecPtr
-                     -> IO (Either GRPCIOError ClientCall)
-channelCreateCall
-  chan parent mask cq@CompletionQueue{..} (MethodName methodName) (Host host)
-  deadline =
+channelCreateCall :: C.Channel
+                  -> C.Call
+                  -> C.PropagationMask
+                  -> CompletionQueue
+                  -> MethodName
+                  -> Endpoint
+                  -> C.CTimeSpecPtr
+                  -> IO (Either GRPCIOError ClientCall)
+channelCreateCall chan parent mask cq@CompletionQueue{..} meth endpt deadline =
   withPermission Push cq $ do
-    call <- C.grpcChannelCreateCall chan parent mask unsafeCQ methodName host
-                                    deadline C.reserved
+    call <- C.grpcChannelCreateCall chan parent mask unsafeCQ
+              (unMethodName meth) (unEndpoint endpt) deadline C.reserved
     return $ Right $ ClientCall call
 
 -- | Create the call object to handle a registered call.

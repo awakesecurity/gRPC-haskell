@@ -21,7 +21,7 @@ Flag Debug
 flag with-examples
   description: Also build example executables.
   manual:      True
-  default:     False
+  default:     True
 
 library
   build-depends:

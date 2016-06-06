@@ -24,41 +24,47 @@ import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
 
 -- | Wraps various gRPC state needed to run a server.
-data Server = Server {internalServer :: C.Server, serverCQ :: CompletionQueue,
-                      registeredMethods :: [RegisteredMethod]}
+data Server = Server
+  { internalServer :: C.Server
+  , serverCQ :: CompletionQueue
+  , registeredMethods :: [RegisteredMethod]
+  , serverConfig :: ServerConfig
+  }
 
--- | Configuration needed to start a server. There might be more fields that
--- need to be added to this in the future.
-data ServerConfig =
-  ServerConfig {hostName          :: Host,
-                -- ^ Name of the host the server is running on. Not sure
-                -- how this is used. Setting to "localhost" works fine in tests.
-                port              :: Int,
-                -- ^ Port to listen for requests on.
-                methodsToRegister :: [(MethodName, GRPCMethodType)]
-                -- ^ List of (method name, method host, method type) tuples
-                -- specifying all methods to register. You can also handle
-                -- other unregistered methods with `serverHandleNormalCall`.
-               }
+-- | Configuration needed to start a server.
+data ServerConfig = ServerConfig
+  { host :: Host
+    -- ^ Name of the host the server is running on. Not sure how this is
+    -- used. Setting to "localhost" works fine in tests.
+  , port :: Port
+    -- ^ Port on which to listen for requests.
+  , methodsToRegister :: [(MethodName, GRPCMethodType)]
+    -- ^ List of (method name, method type) tuples specifying all methods to
+    -- register. You can also handle other unregistered methods with
+    -- `serverHandleNormalCall`.
+  }
   deriving (Show, Eq)
 
+serverEndpoint :: ServerConfig -> Endpoint
+serverEndpoint ServerConfig{..} = endpoint host port
+
 startServer :: GRPC -> ServerConfig -> IO Server
-startServer grpc ServerConfig{..} = do
+startServer grpc conf@ServerConfig{..} = do
+  let e = serverEndpoint conf
   server <- C.grpcServerCreate nullPtr C.reserved
-  let hostPort = (unHost hostName) ++ ":" ++ (show port)
-  actualPort <- C.grpcServerAddInsecureHttp2Port server hostPort
-  when (actualPort /= port) (error $ "Unable to bind port: " ++ (show port))
+  actualPort <- C.grpcServerAddInsecureHttp2Port server (unEndpoint e)
+  when (actualPort /= unPort port) $
+    error $ "Unable to bind port: " ++ show port
   cq <- createCompletionQueue grpc
   serverRegisterCompletionQueue server cq
-  methods <- forM methodsToRegister $
-               \(name, mtype) ->
-                 serverRegisterMethod server name (Host hostPort) mtype
+  methods <- forM methodsToRegister $ \(name, mtype) ->
+               serverRegisterMethod server name e mtype
   C.grpcServerStart server
-  return $ Server server cq methods
+  return $ Server server cq methods conf
 
 stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?
-stopServer (Server server cq _) = do
+stopServer (Server server cq _ _) = do
   grpcDebug "stopServer: calling shutdownNotify."
   shutdownNotify
   grpcDebug "stopServer: cancelling all calls."
@@ -94,25 +100,24 @@ withServer grpc cfg f = bracket (startServer grpc cfg) stopServer f
 -- the server is started, so we do it during startup according to the
 -- 'ServerConfig'.
 serverRegisterMethod :: C.Server
-                        -> MethodName
-                        -- ^ method name, e.g. "/foo"
-                        -> Host
-                        -- ^ host name, e.g. "localhost". I have no idea
-                        -- why this is needed since we have to supply a host
-                        -- name to start a server in the first place. It doesn't
-                        -- seem to have any effect, even if it's filled with
-                        -- nonsense.
-                        -> GRPCMethodType
-                        -- ^ Type of method this will be. In the future, this
-                        -- will be used to switch to the correct handling logic.
-                        -- Currently, the only valid choice is 'Normal'.
-                        -> IO RegisteredMethod
-serverRegisterMethod internalServer name host Normal = do
+                     -> MethodName
+                     -- ^ method name, e.g. "/foo"
+                     -> Endpoint
+                     -- ^ Endpoint name name, e.g. "localhost:9999". I have no
+                     -- idea why this is needed since we have to provide these
+                     -- parameters to start a server in the first place. It
+                     -- doesn't seem to have any effect, even if it's filled
+                     -- with nonsense.
+                     -> GRPCMethodType
+                     -- ^ Type of method this will be. In the future, this will
+                     -- be used to switch to the correct handling logic.
+                     -- Currently, the only valid choice is 'Normal'.
+                     -> IO RegisteredMethod
+serverRegisterMethod internalServer meth e Normal = do
   handle <- C.grpcServerRegisterMethod internalServer
-                                       (unMethodName name)
-                                       (unHost host)
+              (unMethodName meth) (unEndpoint e)
   grpcDebug $ "registered method to handle " ++ show handle
-  return $ RegisteredMethod Normal name host handle
+  return $ RegisteredMethod Normal meth e handle
 serverRegisterMethod _ _ _ _ = error "Streaming methods not implemented yet."
 
 -- | Create a 'Call' with which to wait for the invocation of a registered

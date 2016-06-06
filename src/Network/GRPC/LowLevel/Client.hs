@@ -19,20 +19,22 @@ import           Network.GRPC.LowLevel.Op
 -- | Represents the context needed to perform client-side gRPC operations.
 data Client = Client {clientChannel :: C.Channel,
                       clientCQ :: CompletionQueue,
-                      clientHostPort :: String}
+                      clientConfig :: ClientConfig
+                     }
 
 -- | Configuration necessary to set up a client.
-data ClientConfig = ClientConfig {clientServerHost :: Host,
-                                  clientServerPort :: Int}
+data ClientConfig = ClientConfig {serverHost :: Host,
+                                  serverPort :: Port}
+
+clientEndpoint :: ClientConfig -> Endpoint
+clientEndpoint ClientConfig{..} = endpoint serverHost serverPort
 
 createClient :: GRPC -> ClientConfig -> IO Client
-createClient grpc conf@ClientConfig{..} = do
-  let clientHostPort = (unHost clientServerHost)
-                       ++ ":"
-                       ++ (show clientServerPort)
-  clientChannel <- C.grpcInsecureChannelCreate clientHostPort nullPtr C.reserved
+createClient grpc clientConfig = do
+  let Endpoint e = clientEndpoint clientConfig
+  clientChannel <- C.grpcInsecureChannelCreate e nullPtr C.reserved
   clientCQ <- createCompletionQueue grpc
-  return $ Client{..}
+  return Client{..}
 
 destroyClient :: Client -> IO ()
 destroyClient Client{..} = do
@@ -59,12 +61,11 @@ clientRegisterMethod :: Client
                         -- ^ method name, e.g. "/foo"
                         -> GRPCMethodType
                         -> IO RegisteredMethod
-clientRegisterMethod Client{..} name Normal = do
+clientRegisterMethod Client{..} meth Normal = do
+  let e = clientEndpoint clientConfig
   handle <- C.grpcChannelRegisterCall clientChannel
-                                      (unMethodName name)
-                                      clientHostPort
-                                      C.reserved
-  return $ RegisteredMethod Normal name (Host clientHostPort) handle
+              (unMethodName meth) (unEndpoint e) C.reserved
+  return $ RegisteredMethod Normal meth e handle
 clientRegisterMethod _ _ _ = error "Streaming methods not yet implemented."
 
 -- | Create a new call on the client for a registered method.
@@ -97,23 +98,22 @@ withClientRegisteredCall client regmethod timeout f = do
 -- method registration machinery. In practice, we'll probably only use the
 -- registered method version, but we include this for completeness and testing.
 clientCreateCall :: Client
-                    -> MethodName
-                    -- ^ The method name
-                    -> Host
-                    -- ^ The host.
-                    -> TimeoutSeconds
-                    -> IO (Either GRPCIOError ClientCall)
-clientCreateCall Client{..} method host timeout = do
+                 -> MethodName
+                 -> TimeoutSeconds
+                 -> IO (Either GRPCIOError ClientCall)
+clientCreateCall Client{..} meth timeout = do
   let parentCall = C.Call nullPtr
   C.withDeadlineSeconds timeout $ \deadline -> do
     channelCreateCall clientChannel parentCall C.propagateDefaults
-                      clientCQ method host deadline
+                      clientCQ meth (clientEndpoint clientConfig) deadline
 
-withClientCall :: Client -> MethodName -> Host -> TimeoutSeconds
-                  -> (ClientCall -> IO (Either GRPCIOError a))
-                  -> IO (Either GRPCIOError a)
-withClientCall client method host timeout f = do
-  createResult <- clientCreateCall client method host timeout
+withClientCall :: Client
+               -> MethodName
+               -> TimeoutSeconds
+               -> (ClientCall -> IO (Either GRPCIOError a))
+               -> IO (Either GRPCIOError a)
+withClientCall client method timeout f = do
+  createResult <- clientCreateCall client method timeout
   case createResult of
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
@@ -201,18 +201,16 @@ clientRegisteredRequest client@(Client{..}) rm@(RegisteredMethod{..})
 clientRequest :: Client
                  -> MethodName
                  -- ^ Method name, e.g. "/foo"
-                 -> Host
-                 -- ^ Host. Not sure if used.
                  -> TimeoutSeconds
+                 -- ^ "Number of seconds until request times out"
                  -> ByteString
                  -- ^ Request body.
                  -> MetadataMap
                  -- ^ Request metadata.
                  -> IO (Either GRPCIOError NormalRequestResult)
-clientRequest client@(Client{..}) (MethodName method) (Host host)
-              timeLimit body meta =
-  fmap join $
-  withClientCall client (MethodName method) (Host host) timeLimit $ \call -> do
+clientRequest client@Client{..} meth timeLimit body meta =
+  fmap join $ do
+  withClientCall client meth timeLimit $ \call -> do
     let ops = clientNormalRequestOps body meta
     results <- runClientOps call clientCQ ops timeLimit
     grpcDebug "clientRequest: ops ran."
