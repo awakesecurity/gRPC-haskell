@@ -3,6 +3,12 @@
 -- cause race conditions, so we only expose functions that are thread safe.
 -- However, some of the functions we export here can cause memory leaks if used
 -- improperly.
+--
+-- When definition operations which pertain to calls, this module only provides
+-- definitions for registered calls; for unregistered variants, see
+-- `Network.GRPC.LowLevel.CompletionQueue.Unregistered`. Type definitions and
+-- implementation details to both are kept in
+-- `Network.GRPC.LowLevel.CompletionQueue.Internal`.
 
 {-# LANGUAGE RecordWildCards #-}
 

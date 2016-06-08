@@ -1,5 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 
+-- | This module defines data structures and operations pertaining to registered
+-- clients using registered calls; for unregistered support, see
+-- `Network.GRPC.LowLevel.Client.Unregistered`.
 module Network.GRPC.LowLevel.Client where
 
 import           Control.Exception                     (bracket, finally)

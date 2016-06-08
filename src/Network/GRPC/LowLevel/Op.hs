@@ -221,11 +221,10 @@ runOps call cq ops timeLimit =
 
 -- | For a given call, run the given 'Op's on the given completion queue with
 -- the given tag. Blocks until the ops are complete or the given number of
--- seconds have elapsed.
--- TODO: now that 'ServerRegCall' and 'U.ServerCall' are separate types, we
--- could try to limit the input 'Op's more appropriately. E.g., we don't use
--- an 'OpRecvInitialMetadata' when receiving a registered call, because gRPC
--- handles that for us.
+-- seconds have elapsed.  TODO: now that we distinguish between different types
+-- of calls at the type level, we could try to limit the input 'Op's more
+-- appropriately. E.g., we don't use an 'OpRecvInitialMetadata' when receiving a
+-- registered call, because gRPC handles that for us.
 runServerRegOps :: ServerRegCall
                 -- ^ 'Call' that this batch is associated with. One call can be
                 -- associated with many batches.
