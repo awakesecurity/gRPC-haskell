@@ -47,7 +47,7 @@ import qualified Network.GRPC.Unsafe.Time                as C
 import           System.Timeout                          (timeout)
 
 import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.Call.Unregistered
+import qualified Network.GRPC.LowLevel.Call.Unregistered as U
 import           Network.GRPC.LowLevel.GRPC
 
 -- NOTE: the concurrency requirements for a CompletionQueue are a little
@@ -310,7 +310,7 @@ serverRequestRegisteredCall
               free bbPtr
 
 serverRequestCall :: C.Server -> CompletionQueue -> TimeoutSeconds
-                     -> IO (Either GRPCIOError ServerUnregCall)
+                     -> IO (Either GRPCIOError U.ServerCall)
 serverRequestCall server cq@CompletionQueue{..} timeLimit =
   withPermission Push cq $ do
     callPtr <- malloc
@@ -337,10 +337,10 @@ serverRequestCall server cq@CompletionQueue{..} timeLimit =
                    return $ Left x
                  Right () -> do
                    rawCall <- peek callPtr
-                   let call = ServerUnregCall rawCall
-                                              metadataArrayPtr
-                                              Nothing
-                                              callDetails
+                   let call = U.ServerCall rawCall
+                                           metadataArrayPtr
+                                           Nothing
+                                           callDetails
                    return $ Right call
 
       --TODO: the gRPC library appears to hold onto these pointers for a random

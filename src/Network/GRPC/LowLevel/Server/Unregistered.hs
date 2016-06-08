@@ -2,35 +2,24 @@
 
 module Network.GRPC.LowLevel.Server.Unregistered where
 
-import           Control.Exception                       (bracket, finally)
-import           Control.Monad
+import           Control.Exception                       (finally)
 import           Data.ByteString                         (ByteString)
-import           Foreign.Ptr                             (nullPtr)
-import qualified Network.GRPC.Unsafe                     as C
-import qualified Network.GRPC.Unsafe.Op                  as C
-
-import           Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.Call              (MethodName)
 import           Network.GRPC.LowLevel.Call.Unregistered
-import           Network.GRPC.LowLevel.CompletionQueue   (CompletionQueue,
-                                                          TimeoutSeconds,
-                                                          createCompletionQueue,
-                                                          pluck,
-                                                          serverRegisterCompletionQueue,
-                                                          serverRequestCall,
-                                                          serverRequestRegisteredCall,
-                                                          serverShutdownAndNotify,
-                                                          shutdownCompletionQueue)
+import           Network.GRPC.LowLevel.CompletionQueue   (TimeoutSeconds,
+                                                          serverRequestCall)
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
 import           Network.GRPC.LowLevel.Server
+import qualified Network.GRPC.Unsafe.Op                  as C
 
 serverCreateUnregCall :: Server -> TimeoutSeconds
-                    -> IO (Either GRPCIOError ServerUnregCall)
+                    -> IO (Either GRPCIOError ServerCall)
 serverCreateUnregCall Server{..} timeLimit =
   serverRequestCall internalServer serverCQ timeLimit
 
 withServerUnregCall :: Server -> TimeoutSeconds
-                  -> (ServerUnregCall -> IO (Either GRPCIOError a))
+                  -> (ServerCall -> IO (Either GRPCIOError a))
                   -> IO (Either GRPCIOError a)
 withServerUnregCall server timeout f = do
   createResult <- serverCreateUnregCall server timeout
@@ -38,7 +27,7 @@ withServerUnregCall server timeout f = do
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
       where logDestroy c = grpcDebug "withServerCall: destroying."
-                           >> destroyServerUnregCall c
+                           >> destroyServerCall c
 
 --  TODO: This is preliminary.
 -- We still need to provide the method name to the handler.
@@ -60,10 +49,10 @@ serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
       Left x -> do grpcDebug "serverHandleNormalCall: ops failed; aborting"
                    return $ Left x
       Right [OpRecvMessageResult (Just body)] -> do
-        requestMeta <- serverUnregCallGetMetadata call
+        requestMeta <- serverCallGetMetadata call
         grpcDebug $ "got client metadata: " ++ show requestMeta
-        methodName <- serverUnregCallGetMethodName call
-        hostName <- serverUnregCallGetHost call
+        methodName <- serverCallGetMethodName call
+        hostName <- serverCallGetHost call
         grpcDebug $ "call_details host is: " ++ show hostName
         (respBody, respMetadata, details) <- f body requestMeta methodName
         let status = C.GrpcStatusOk

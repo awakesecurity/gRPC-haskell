@@ -20,7 +20,7 @@ import qualified Network.GRPC.Unsafe.Metadata            as C
 import qualified Network.GRPC.Unsafe.Op                  as C
 
 import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.Call.Unregistered
+import           Network.GRPC.LowLevel.Call.Unregistered as U
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.GRPC
 
@@ -243,12 +243,12 @@ runServerRegOps :: ServerRegCall
                 -> IO (Either GRPCIOError [OpRecvResult])
 runServerRegOps = runOps . internalServerRegCall
 
-runServerUnregOps :: ServerUnregCall
+runServerUnregOps :: U.ServerCall
                      -> CompletionQueue
                      -> [Op]
                      -> TimeoutSeconds
                      -> IO (Either GRPCIOError [OpRecvResult])
-runServerUnregOps = runOps . internalServerUnregCall
+runServerUnregOps = runOps . U.internalServerCall
 
 -- | Like 'runServerOps', but for client-side calls.
 runClientOps :: ClientCall

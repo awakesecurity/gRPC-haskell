@@ -1,18 +1,20 @@
+{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+{-# OPTIONS_GHC -fno-warn-unused-binds       #-}
 
-import Control.Concurrent.Async (async, wait)
-import Control.Monad (forever)
-import Data.ByteString (ByteString)
-import qualified Data.Map as M
-import Network.GRPC.LowLevel
-
+import           Control.Concurrent.Async                  (async, wait)
+import           Control.Monad                             (forever)
+import           Data.ByteString                           (ByteString)
+import           Network.GRPC.LowLevel
+import qualified Network.GRPC.LowLevel.Server.Unregistered as U
 
 serverMeta :: MetadataMap
-serverMeta = M.fromList [("test_meta", "test_meta_value")]
+serverMeta = [("test_meta", "test_meta_value")]
 
 handler :: ByteString -> MetadataMap -> MethodName
            -> IO (ByteString, MetadataMap, StatusDetails)
-handler reqBody reqMeta method = do
+handler reqBody _reqMeta _method = do
   --putStrLn $ "Got request for method: " ++ show method
   --putStrLn $ "Got metadata: " ++ show reqMeta
   return (reqBody, serverMeta, StatusDetails "")
@@ -20,7 +22,7 @@ handler reqBody reqMeta method = do
 unregMain :: IO ()
 unregMain = withGRPC $ \grpc -> do
   withServer grpc (ServerConfig "localhost" 50051 []) $ \server -> forever $ do
-    result <- serverHandleNormalCall server 15 serverMeta handler
+    result <- U.serverHandleNormalCall server 15 serverMeta handler
     case result of
       Left x -> putStrLn $ "handle call result error: " ++ show x
       Right _ -> return ()

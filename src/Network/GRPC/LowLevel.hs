@@ -30,12 +30,9 @@ GRPC
 , ServerConfig(..)
 , Server
 , ServerRegCall
-, ServerUnregCall
 , registeredMethods
 , withServer
 , serverHandleNormalRegisteredCall
-, serverHandleNormalCall
-, withServerUnregCall
 , withServerRegisteredCall
 
 -- * Client
@@ -61,7 +58,6 @@ GRPC
 
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Server
-import           Network.GRPC.LowLevel.Server.Unregistered
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.Op
 import           Network.GRPC.LowLevel.Client
