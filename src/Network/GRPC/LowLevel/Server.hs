@@ -2,41 +2,40 @@
 
 module Network.GRPC.LowLevel.Server where
 
-import           Control.Concurrent                    (threadDelay)
-import           Control.Exception                     (bracket, finally)
+import           Control.Exception                       (bracket, finally)
 import           Control.Monad
-import           Data.ByteString                       (ByteString)
-import           Foreign.Ptr                           (nullPtr)
-import qualified Network.GRPC.Unsafe                   as C
-import qualified Network.GRPC.Unsafe.Op                as C
+import           Data.ByteString                         (ByteString)
+import           Foreign.Ptr                             (nullPtr)
+import qualified Network.GRPC.Unsafe                     as C
+import qualified Network.GRPC.Unsafe.Op                  as C
 
 import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
-                                                        TimeoutSeconds,
-                                                        createCompletionQueue,
-                                                        pluck,
-                                                        serverRegisterCompletionQueue,
-                                                        serverRequestCall,
-                                                        serverRequestRegisteredCall,
-                                                        serverShutdownAndNotify,
-                                                        shutdownCompletionQueue)
+import           Network.GRPC.LowLevel.CompletionQueue   (CompletionQueue,
+                                                          TimeoutSeconds,
+                                                          createCompletionQueue,
+                                                          pluck,
+                                                          serverRegisterCompletionQueue,
+                                                          serverRequestCall,
+                                                          serverRequestRegisteredCall,
+                                                          serverShutdownAndNotify,
+                                                          shutdownCompletionQueue)
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
 
 -- | Wraps various gRPC state needed to run a server.
 data Server = Server
-  { internalServer :: C.Server
-  , serverCQ :: CompletionQueue
+  { internalServer    :: C.Server
+  , serverCQ          :: CompletionQueue
   , registeredMethods :: [RegisteredMethod]
-  , serverConfig :: ServerConfig
+  , serverConfig      :: ServerConfig
   }
 
 -- | Configuration needed to start a server.
 data ServerConfig = ServerConfig
-  { host :: Host
+  { host              :: Host
     -- ^ Name of the host the server is running on. Not sure how this is
     -- used. Setting to "localhost" works fine in tests.
-  , port :: Port
+  , port              :: Port
     -- ^ Port on which to listen for requests.
   , methodsToRegister :: [(MethodName, GRPCMethodType)]
     -- ^ List of (method name, method type) tuples specifying all methods to
@@ -141,22 +140,6 @@ withServerRegisteredCall server regmethod timeout initMeta f = do
       where logDestroy c = grpcDebug "withServerRegisteredCall: destroying."
                            >> destroyServerRegCall c
 
-serverCreateUnregCall :: Server -> TimeoutSeconds
-                    -> IO (Either GRPCIOError ServerUnregCall)
-serverCreateUnregCall Server{..} timeLimit =
-  serverRequestCall internalServer serverCQ timeLimit
-
-withServerUnregCall :: Server -> TimeoutSeconds
-                  -> (ServerUnregCall -> IO (Either GRPCIOError a))
-                  -> IO (Either GRPCIOError a)
-withServerUnregCall server timeout f = do
-  createResult <- serverCreateUnregCall server timeout
-  case createResult of
-    Left x -> return $ Left x
-    Right call -> f call `finally` logDestroy call
-      where logDestroy c = grpcDebug "withServerCall: destroying."
-                           >> destroyServerUnregCall c
-
 -- | Sequence of 'Op's needed to receive a normal (non-streaming) call.
 serverOpsGetNormalCall :: MetadataMap -> [Op]
 serverOpsGetNormalCall initMetadata =
@@ -230,43 +213,3 @@ serverHandleNormalRegisteredCall s@Server{..} rm timeLimit srvMetadata f = do
         case respOpsResults of
           Left x -> return $ Left x
           Right _ -> return $ Right ()
-
---  TODO: This is preliminary.
--- We still need to provide the method name to the handler.
--- | Handle one unregistered call.
-serverHandleNormalCall :: Server -> TimeoutSeconds
-                          -> MetadataMap
-                          -- ^ Initial server metadata.
-                          -> (ByteString -> MetadataMap -> MethodName
-                              -> IO (ByteString, MetadataMap, StatusDetails))
-                          -- ^ Handler function takes a request body and
-                          -- metadata and returns a response body and metadata.
-                          -> IO (Either GRPCIOError ())
-serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
-  withServerUnregCall s timeLimit $ \call -> do
-    grpcDebug "serverHandleNormalCall: starting batch."
-    let recvOps = serverOpsGetNormalCall srvMetadata
-    opResults <- runServerUnregOps call serverCQ recvOps timeLimit
-    case opResults of
-      Left x -> do grpcDebug "serverHandleNormalCall: ops failed; aborting"
-                   return $ Left x
-      Right [OpRecvMessageResult (Just body)] -> do
-        requestMeta <- serverUnregCallGetMetadata call
-        grpcDebug $ "got client metadata: " ++ show requestMeta
-        methodName <- serverUnregCallGetMethodName call
-        hostName <- serverUnregCallGetHost call
-        grpcDebug $ "call_details host is: " ++ show hostName
-        (respBody, respMetadata, details) <- f body requestMeta methodName
-        let status = C.GrpcStatusOk
-        let respOps = serverOpsSendNormalResponse
-                        respBody respMetadata status details
-        respOpsResults <- runServerUnregOps call serverCQ respOps timeLimit
-        case respOpsResults of
-          Left x -> do grpcDebug "serverHandleNormalCall: resp failed."
-                       return $ Left x
-          Right _ -> grpcDebug "serverHandleNormalCall: ops done."
-                     >> return (Right ())
-      x -> error $ "impossible pattern match: " ++ show x
-
-_nowarn_unused :: a
-_nowarn_unused = undefined threadDelay

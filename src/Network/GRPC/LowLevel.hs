@@ -61,10 +61,13 @@ GRPC
 
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Server
+import           Network.GRPC.LowLevel.Server.Unregistered
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.Op
 import           Network.GRPC.LowLevel.Client
+import           Network.GRPC.LowLevel.Client.Unregistered
 import           Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.Call.Unregistered
 
 import Network.GRPC.Unsafe (ConnectivityState(..))
 import Network.GRPC.Unsafe.Op (StatusCode(..))

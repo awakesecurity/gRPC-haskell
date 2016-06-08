@@ -2,24 +2,24 @@
 
 module Network.GRPC.LowLevel.Client where
 
-import           Control.Exception (bracket, finally)
-import           Control.Monad (join)
-import           Data.ByteString (ByteString)
-import           Foreign.Ptr (nullPtr)
-import qualified Network.GRPC.Unsafe as C
-import qualified Network.GRPC.Unsafe.Time as C
-import qualified Network.GRPC.Unsafe.Constants as C
-import qualified Network.GRPC.Unsafe.Op as C
+import           Control.Exception                     (bracket, finally)
+import           Control.Monad                         (join)
+import           Data.ByteString                       (ByteString)
+import           Foreign.Ptr                           (nullPtr)
+import qualified Network.GRPC.Unsafe                   as C
+import qualified Network.GRPC.Unsafe.Constants         as C
+import qualified Network.GRPC.Unsafe.Op                as C
+import qualified Network.GRPC.Unsafe.Time              as C
 
-import           Network.GRPC.LowLevel.GRPC
-import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.CompletionQueue
+import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
 
 -- | Represents the context needed to perform client-side gRPC operations.
 data Client = Client {clientChannel :: C.Channel,
-                      clientCQ :: CompletionQueue,
-                      clientConfig :: ClientConfig
+                      clientCQ      :: CompletionQueue,
+                      clientConfig  :: ClientConfig
                      }
 
 -- | Configuration necessary to set up a client.
@@ -93,32 +93,6 @@ withClientRegisteredCall client regmethod timeout f = do
     Right call -> f call `finally` logDestroy call
       where logDestroy c = grpcDebug "withClientRegisteredCall: destroying."
                            >> destroyClientCall c
-
--- | Create a call on the client for an endpoint without using the
--- method registration machinery. In practice, we'll probably only use the
--- registered method version, but we include this for completeness and testing.
-clientCreateCall :: Client
-                 -> MethodName
-                 -> TimeoutSeconds
-                 -> IO (Either GRPCIOError ClientCall)
-clientCreateCall Client{..} meth timeout = do
-  let parentCall = C.Call nullPtr
-  C.withDeadlineSeconds timeout $ \deadline -> do
-    channelCreateCall clientChannel parentCall C.propagateDefaults
-                      clientCQ meth (clientEndpoint clientConfig) deadline
-
-withClientCall :: Client
-               -> MethodName
-               -> TimeoutSeconds
-               -> (ClientCall -> IO (Either GRPCIOError a))
-               -> IO (Either GRPCIOError a)
-withClientCall client method timeout f = do
-  createResult <- clientCreateCall client method timeout
-  case createResult of
-    Left x -> return $ Left x
-    Right call -> f call `finally` logDestroy call
-                    where logDestroy c = grpcDebug "withClientCall: destroying."
-                                         >> destroyClientCall c
 
 data NormalRequestResult = NormalRequestResult
   { rspBody :: ByteString
@@ -195,29 +169,6 @@ clientRegisteredRequest client@(Client{..}) rm@(RegisteredMethod{..})
                       Right rs' -> do
                         return $ Right $ compileNormalRequestResults (rs ++ rs')
     _ -> error "Streaming methods not yet implemented."
-
--- | Makes a normal (non-streaming) request without needing to register a method
--- first. Probably only useful for testing. TODO: This is preliminary, like
--- 'clientRegisteredRequest'.
-clientRequest :: Client
-                 -> MethodName
-                 -- ^ Method name, e.g. "/foo"
-                 -> TimeoutSeconds
-                 -- ^ "Number of seconds until request times out"
-                 -> ByteString
-                 -- ^ Request body.
-                 -> MetadataMap
-                 -- ^ Request metadata.
-                 -> IO (Either GRPCIOError NormalRequestResult)
-clientRequest client@Client{..} meth timeLimit body meta =
-  fmap join $ do
-  withClientCall client meth timeLimit $ \call -> do
-    let ops = clientNormalRequestOps body meta
-    results <- runClientOps call clientCQ ops timeLimit
-    grpcDebug "clientRequest: ops ran."
-    case results of
-      Left x -> return $ Left x
-      Right rs -> return $ Right $ compileNormalRequestResults rs
 
 clientNormalRequestOps :: ByteString -> MetadataMap -> [Op]
 clientNormalRequestOps body metadata =

@@ -47,8 +47,11 @@ library
     Network.GRPC.LowLevel.GRPC
     Network.GRPC.LowLevel.Op
     Network.GRPC.LowLevel.Server
+    Network.GRPC.LowLevel.Server.Unregistered
     Network.GRPC.LowLevel.Call
+    Network.GRPC.LowLevel.Call.Unregistered
     Network.GRPC.LowLevel.Client
+    Network.GRPC.LowLevel.Client.Unregistered
   extra-libraries:
     grpc
   includes:

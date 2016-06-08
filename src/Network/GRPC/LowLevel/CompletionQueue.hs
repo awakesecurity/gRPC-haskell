@@ -25,25 +25,29 @@ module Network.GRPC.LowLevel.CompletionQueue
   )
 where
 
-import           Control.Concurrent            (forkIO, threadDelay)
-import           Control.Concurrent.STM        (atomically, check, retry)
-import           Control.Concurrent.STM.TVar   (TVar, modifyTVar', newTVarIO,
-                                                readTVar, writeTVar)
-import           Control.Exception             (bracket)
-import           Data.IORef                    (IORef, atomicModifyIORef',
-                                                newIORef)
-import           Data.List                     (intersperse)
-import           Foreign.Marshal.Alloc         (free, malloc)
-import           Foreign.Ptr                   (nullPtr, plusPtr)
-import           Foreign.Storable              (peek)
-import qualified Network.GRPC.Unsafe           as C
-import qualified Network.GRPC.Unsafe.Constants as C
-import qualified Network.GRPC.Unsafe.Metadata  as C
-import qualified Network.GRPC.Unsafe.Op        as C
-import qualified Network.GRPC.Unsafe.Time      as C
-import           System.Timeout                (timeout)
+import           Control.Concurrent                      (forkIO, threadDelay)
+import           Control.Concurrent.STM                  (atomically, check,
+                                                          retry)
+import           Control.Concurrent.STM.TVar             (TVar, modifyTVar',
+                                                          newTVarIO, readTVar,
+                                                          writeTVar)
+import           Control.Exception                       (bracket)
+import           Data.IORef                              (IORef,
+                                                          atomicModifyIORef',
+                                                          newIORef)
+import           Data.List                               (intersperse)
+import           Foreign.Marshal.Alloc                   (free, malloc)
+import           Foreign.Ptr                             (nullPtr, plusPtr)
+import           Foreign.Storable                        (peek)
+import qualified Network.GRPC.Unsafe                     as C
+import qualified Network.GRPC.Unsafe.Constants           as C
+import qualified Network.GRPC.Unsafe.Metadata            as C
+import qualified Network.GRPC.Unsafe.Op                  as C
+import qualified Network.GRPC.Unsafe.Time                as C
+import           System.Timeout                          (timeout)
 
 import           Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.Call.Unregistered
 import           Network.GRPC.LowLevel.GRPC
 
 -- NOTE: the concurrency requirements for a CompletionQueue are a little

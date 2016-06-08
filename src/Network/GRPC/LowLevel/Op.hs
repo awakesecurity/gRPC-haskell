@@ -4,22 +4,23 @@
 module Network.GRPC.LowLevel.Op where
 
 import           Control.Exception
-import qualified Data.ByteString                       as B
-import qualified Data.Map.Strict                       as M
-import           Data.Maybe                            (catMaybes)
-import           Data.String                           (IsString)
-import           Foreign.C.String                      (CString)
-import           Foreign.C.Types                       (CInt)
-import           Foreign.Marshal.Alloc                 (free, malloc,
-                                                        mallocBytes)
-import           Foreign.Ptr                           (Ptr, nullPtr)
-import           Foreign.Storable                      (peek, poke)
-import qualified Network.GRPC.Unsafe                   as C (Call)
-import qualified Network.GRPC.Unsafe.ByteBuffer        as C
-import qualified Network.GRPC.Unsafe.Metadata          as C
-import qualified Network.GRPC.Unsafe.Op                as C
+import qualified Data.ByteString                         as B
+import qualified Data.Map.Strict                         as M
+import           Data.Maybe                              (catMaybes)
+import           Data.String                             (IsString)
+import           Foreign.C.String                        (CString)
+import           Foreign.C.Types                         (CInt)
+import           Foreign.Marshal.Alloc                   (free, malloc,
+                                                          mallocBytes)
+import           Foreign.Ptr                             (Ptr, nullPtr)
+import           Foreign.Storable                        (peek, poke)
+import qualified Network.GRPC.Unsafe                     as C (Call)
+import qualified Network.GRPC.Unsafe.ByteBuffer          as C
+import qualified Network.GRPC.Unsafe.Metadata            as C
+import qualified Network.GRPC.Unsafe.Op                  as C
 
 import           Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.Call.Unregistered
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.GRPC
 
