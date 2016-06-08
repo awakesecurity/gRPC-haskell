@@ -1,19 +1,20 @@
-{-# LANGUAGE LambdaCase                      #-}
-{-# LANGUAGE OverloadedStrings               #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds       #-}
 
 import           Control.Monad
 import           Network.GRPC.LowLevel
+import qualified Network.GRPC.LowLevel.Client.Unregistered as U
 
 echoMethod = MethodName "/echo.Echo/DoEcho"
 
 unregistered c = do
-  clientRequest c echoMethod 1 "hi" mempty
+  U.clientRequest c echoMethod 1 "hi" mempty
 
 registered c = do
   meth <- clientRegisterMethod c echoMethod Normal
-  clientRegisteredRequest c meth 1 "hi" mempty
+  clientRequest c meth 1 "hi" mempty
 
 run f = withGRPC $ \g -> withClient g (ClientConfig "localhost" 50051) $ \c ->
   f c >>= \case

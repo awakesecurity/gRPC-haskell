@@ -7,21 +7,19 @@ import           Control.Exception
 import qualified Data.ByteString                       as B
 import qualified Data.Map.Strict                       as M
 import           Data.Maybe                            (catMaybes)
-import           Data.String                           (IsString)
 import           Foreign.C.String                      (CString)
 import           Foreign.C.Types                       (CInt)
 import           Foreign.Marshal.Alloc                 (free, malloc,
                                                         mallocBytes)
 import           Foreign.Ptr                           (Ptr, nullPtr)
 import           Foreign.Storable                      (peek, poke)
+import           Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.CompletionQueue
+import           Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe                   as C (Call)
 import qualified Network.GRPC.Unsafe.ByteBuffer        as C
 import qualified Network.GRPC.Unsafe.Metadata          as C
 import qualified Network.GRPC.Unsafe.Op                as C
-
-import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.CompletionQueue
-import           Network.GRPC.LowLevel.GRPC
 
 -- | Sum describing all possible send and receive operations that can be batched
 -- and executed by gRPC. Usually these are processed in a handful of
@@ -183,21 +181,37 @@ resultFromOpContext _ = do
   grpcDebug "resultFromOpContext: saw non-result op type."
   return Nothing
 
---TODO: the list of 'Op's type is less specific than it could be. There are only
--- a few different sequences of 'Op's we will see in practice. Once we figure
--- out what those are, we should create a more specific sum type. However, since
--- ops can fail, the list of 'OpRecvResult' returned by 'runOps' can vary in
--- their contents and are perhaps less amenable to simplification.
--- In the meantime, from looking at the core tests, it looks like it is safe to
--- say that we always get a GRPC_CALL_ERROR_TOO_MANY_OPERATIONS error if we use
--- the same 'Op' twice in the same batch, so we might want to change the list to
--- a set. I don't think order matters within a batch. Need to check.
+-- | For a given call, run the given 'Op's on the given completion queue with
+-- the given tag. Blocks until the ops are complete or the given number of
+-- seconds have elapsed.  TODO: now that we distinguish between different types
+-- of calls at the type level, we could try to limit the input 'Op's more
+-- appropriately. E.g., we don't use an 'OpRecvInitialMetadata' when receiving a
+-- registered call, because gRPC handles that for us.
+
+-- TODO: the list of 'Op's type is less specific than it could be. There are
+-- only a few different sequences of 'Op's we will see in practice. Once we
+-- figure out what those are, we should create a more specific sum
+-- type. However, since ops can fail, the list of 'OpRecvResult' returned by
+-- 'runOps' can vary in their contents and are perhaps less amenable to
+-- simplification.  In the meantime, from looking at the core tests, it looks
+-- like it is safe to say that we always get a
+-- GRPC_CALL_ERROR_TOO_MANY_OPERATIONS error if we use the same 'Op' twice in
+-- the same batch, so we might want to change the list to a set. I don't think
+-- order matters within a batch. Need to check.
 
 runOps :: C.Call
-          -> CompletionQueue
-          -> [Op]
-          -> TimeoutSeconds
-          -> IO (Either GRPCIOError [OpRecvResult])
+          -- ^ 'Call' that this batch is associated with. One call can be
+          -- associated with many batches.
+       -> CompletionQueue
+          -- ^ Queue on which our tag will be placed once our ops are done
+          -- running.
+       -> [Op]
+          -- ^ The list of 'Op's to execute.
+       -> TimeoutSeconds
+          -- ^ How long to block waiting for the tag to appear on the queue. If
+          -- we time out, the result of this action will be @CallBatchError
+          -- BatchTimeout@.
+       -> IO (Either GRPCIOError [OpRecvResult])
 runOps call cq ops timeLimit =
   let l = length ops in
     withOpArray l $ \opArray -> do
@@ -220,48 +234,11 @@ runOps call cq ops timeLimit =
                 fmap (Right . catMaybes) $ mapM resultFromOpContext contexts
               Left err -> return $ Left err
 
--- | For a given call, run the given 'Op's on the given completion queue with
--- the given tag. Blocks until the ops are complete or the given number of
--- seconds have elapsed.
--- TODO: now that 'ServerRegCall' and 'ServerUnregCall' are separate types, we
--- could try to limit the input 'Op's more appropriately. E.g., we don't use
--- an 'OpRecvInitialMetadata' when receiving a registered call, because gRPC
--- handles that for us.
-runServerRegOps :: ServerRegCall
-                -- ^ 'Call' that this batch is associated with. One call can be
-                -- associated with many batches.
-                -> CompletionQueue
-                -- ^ Queue on which our tag will be placed once our ops are done
-                -- running.
-                -> [Op]
-                -- ^ The list of 'Op's to execute.
-                -> TimeoutSeconds
-                -- ^ How long to block waiting for the tag to appear on the
-                --queue. If we time out, the result of this action will be
-                -- @CallBatchError BatchTimeout@.
-                -> IO (Either GRPCIOError [OpRecvResult])
-runServerRegOps = runOps . internalServerRegCall
-
-runServerUnregOps :: ServerUnregCall
-                     -> CompletionQueue
-                     -> [Op]
-                     -> TimeoutSeconds
-                     -> IO (Either GRPCIOError [OpRecvResult])
-runServerUnregOps = runOps . internalServerUnregCall
-
--- | Like 'runServerOps', but for client-side calls.
-runClientOps :: ClientCall
-                -> CompletionQueue
-                -> [Op]
-                -> TimeoutSeconds
-                -> IO (Either GRPCIOError [OpRecvResult])
-runClientOps = runOps . internalClientCall
-
 -- | If response status info is present in the given 'OpRecvResult's, returns
 -- a tuple of trailing metadata, status code, and status details.
 extractStatusInfo :: [OpRecvResult]
                      -> Maybe (MetadataMap, C.StatusCode, B.ByteString)
 extractStatusInfo [] = Nothing
-extractStatusInfo (res@(OpRecvStatusOnClientResult meta code details):_) =
+extractStatusInfo (OpRecvStatusOnClientResult meta code details:_) =
   Just (meta, code, details)
 extractStatusInfo (_:xs) = extractStatusInfo xs

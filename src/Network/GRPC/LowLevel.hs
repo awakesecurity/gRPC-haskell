@@ -29,14 +29,11 @@ GRPC
 -- * Server
 , ServerConfig(..)
 , Server
-, ServerRegCall
-, ServerUnregCall
+, ServerCall
 , registeredMethods
 , withServer
-, serverHandleNormalRegisteredCall
 , serverHandleNormalCall
-, withServerUnregCall
-, withServerRegisteredCall
+, withServerCall
 
 -- * Client
 , ClientConfig(..)
@@ -46,14 +43,10 @@ GRPC
 , clientConnectivity
 , withClient
 , clientRegisterMethod
-, clientRegisteredRequest
 , clientRequest
 , withClientCall
 
 -- * Ops
-, runClientOps
-, runServerRegOps
-, runServerUnregOps
 , Op(..)
 , OpRecvResult(..)
 

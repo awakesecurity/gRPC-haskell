@@ -1,15 +1,14 @@
 {-# LANGUAGE RecordWildCards #-}
 
+-- | This module defines data structures and operations pertaining to registered
+-- servers using registered calls; for unregistered support, see
+-- `Network.GRPC.LowLevel.Server.Unregistered`.
 module Network.GRPC.LowLevel.Server where
 
-import           Control.Concurrent                    (threadDelay)
 import           Control.Exception                     (bracket, finally)
 import           Control.Monad
 import           Data.ByteString                       (ByteString)
 import           Foreign.Ptr                           (nullPtr)
-import qualified Network.GRPC.Unsafe                   as C
-import qualified Network.GRPC.Unsafe.Op                as C
-
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
                                                         TimeoutSeconds,
@@ -17,26 +16,27 @@ import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
                                                         pluck,
                                                         serverRegisterCompletionQueue,
                                                         serverRequestCall,
-                                                        serverRequestRegisteredCall,
                                                         serverShutdownAndNotify,
                                                         shutdownCompletionQueue)
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
+import qualified Network.GRPC.Unsafe                   as C
+import qualified Network.GRPC.Unsafe.Op                as C
 
 -- | Wraps various gRPC state needed to run a server.
 data Server = Server
-  { internalServer :: C.Server
-  , serverCQ :: CompletionQueue
+  { internalServer    :: C.Server
+  , serverCQ          :: CompletionQueue
   , registeredMethods :: [RegisteredMethod]
-  , serverConfig :: ServerConfig
+  , serverConfig      :: ServerConfig
   }
 
 -- | Configuration needed to start a server.
 data ServerConfig = ServerConfig
-  { host :: Host
+  { host              :: Host
     -- ^ Name of the host the server is running on. Not sure how this is
     -- used. Setting to "localhost" works fine in tests.
-  , port :: Port
+  , port              :: Port
     -- ^ Port on which to listen for requests.
   , methodsToRegister :: [(MethodName, GRPCMethodType)]
     -- ^ List of (method name, method type) tuples specifying all methods to
@@ -122,40 +122,27 @@ serverRegisterMethod _ _ _ _ = error "Streaming methods not implemented yet."
 
 -- | Create a 'Call' with which to wait for the invocation of a registered
 -- method.
-serverCreateRegisteredCall :: Server -> RegisteredMethod -> TimeoutSeconds
-                              -> MetadataMap
-                              -> IO (Either GRPCIOError ServerRegCall)
-serverCreateRegisteredCall Server{..} rm timeLimit initMeta =
-  serverRequestRegisteredCall internalServer serverCQ timeLimit rm initMeta
+serverCreateCall :: Server
+                 -> RegisteredMethod
+                 -> TimeoutSeconds
+                 -> MetadataMap
+                 -> IO (Either GRPCIOError ServerCall)
+serverCreateCall Server{..} rm timeLimit initMeta =
+  serverRequestCall internalServer serverCQ timeLimit rm initMeta
 
-withServerRegisteredCall :: Server -> RegisteredMethod -> TimeoutSeconds
-                            -> MetadataMap
-                            -> (ServerRegCall
-                                -> IO (Either GRPCIOError a))
-                            -> IO (Either GRPCIOError a)
-withServerRegisteredCall server regmethod timeout initMeta f = do
-  createResult <- serverCreateRegisteredCall server regmethod timeout initMeta
+withServerCall :: Server
+               -> RegisteredMethod
+               -> TimeoutSeconds
+               -> MetadataMap
+               -> (ServerCall -> IO (Either GRPCIOError a))
+               -> IO (Either GRPCIOError a)
+withServerCall server regmethod timeout initMeta f = do
+  createResult <- serverCreateCall server regmethod timeout initMeta
   case createResult of
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
       where logDestroy c = grpcDebug "withServerRegisteredCall: destroying."
-                           >> destroyServerRegCall c
-
-serverCreateUnregCall :: Server -> TimeoutSeconds
-                    -> IO (Either GRPCIOError ServerUnregCall)
-serverCreateUnregCall Server{..} timeLimit =
-  serverRequestCall internalServer serverCQ timeLimit
-
-withServerUnregCall :: Server -> TimeoutSeconds
-                  -> (ServerUnregCall -> IO (Either GRPCIOError a))
-                  -> IO (Either GRPCIOError a)
-withServerUnregCall server timeout f = do
-  createResult <- serverCreateUnregCall server timeout
-  case createResult of
-    Left x -> return $ Left x
-    Right call -> f call `finally` logDestroy call
-      where logDestroy c = grpcDebug "withServerCall: destroying."
-                           >> destroyServerUnregCall c
+                           >> destroyServerCall c
 
 -- | Sequence of 'Op's needed to receive a normal (non-streaming) call.
 serverOpsGetNormalCall :: MetadataMap -> [Op]
@@ -189,84 +176,49 @@ serverOpsSendNormalRegisteredResponse
    OpSendMessage body,
    OpSendStatusFromServer trailingMeta code details]
 
+-- | A handler for an registered server call; bytestring parameter is request
+-- body, with the bytestring response body in the result tuple. The first
+-- metadata parameter refers to the request metadata, with the two metadata
+-- values in the result tuple being the initial and trailing metadata
+-- respectively.
+
+-- TODO: make a more rigid type for this with a Maybe MetadataMap for the
+-- trailing meta, and use it for both kinds of call handlers.
+type ServerHandler
+  =  ByteString -> MetadataMap
+  -> IO (ByteString, MetadataMap, MetadataMap, StatusDetails)
+
 -- TODO: we will want to replace this with some more general concept that also
 -- works with streaming calls in the future.
 -- | Wait for and then handle a normal (non-streaming) call.
-serverHandleNormalRegisteredCall :: Server
-                          -> RegisteredMethod
-                          -> TimeoutSeconds
-                          -> MetadataMap
-                          -- ^ Initial server metadata
-                          -> (ByteString -> MetadataMap
-                              -> IO (ByteString,
-                                     MetadataMap,
-                                     MetadataMap,
-                                     StatusDetails))
-                             -- ^ Handler function takes a request body and
-                             -- metadata and returns a response body and
-                             -- metadata.
-                          -> IO (Either GRPCIOError ())
-serverHandleNormalRegisteredCall s@Server{..} rm timeLimit srvMetadata f = do
+serverHandleNormalCall :: Server
+                       -> RegisteredMethod
+                       -> TimeoutSeconds
+                       -> MetadataMap
+                       -- ^ Initial server metadata
+                       -> ServerHandler
+                       -> IO (Either GRPCIOError ())
+serverHandleNormalCall s@Server{..} rm timeLimit srvMetadata f = do
   -- TODO: we use this timeLimit twice, so the max time spent is 2*timeLimit.
   -- Should we just hard-code time limits instead? Not sure if client
   -- programmer cares, since this function will likely just be put in a loop
   -- anyway.
-  withServerRegisteredCall s rm timeLimit srvMetadata $ \call -> do
-    grpcDebug "serverHandleNormalRegisteredCall: starting batch."
-    debugServerRegCall call
-    payload <- serverRegCallGetPayload call
+  withServerCall s rm timeLimit srvMetadata $ \call -> do
+    grpcDebug "serverHandleNormalCall(R): starting batch."
+    debugServerCall call
+    payload <- serverCallGetPayload call
     case payload of
       --TODO: what should we do with an empty payload? Have the handler take
       -- @Maybe ByteString@? Need to figure out when/why payload would be empty.
-      Nothing -> error "serverHandleNormalRegisteredCall: payload empty."
+      Nothing -> error "serverHandleNormalCall(R): payload empty."
       Just requestBody -> do
-        requestMeta <- serverRegCallGetMetadata call
+        requestMeta <- serverCallGetMetadata call
         (respBody, initMeta, trailingMeta, details) <- f requestBody requestMeta
         let status = C.GrpcStatusOk
         let respOps = serverOpsSendNormalRegisteredResponse
                         respBody initMeta trailingMeta status details
-        respOpsResults <- runServerRegOps call serverCQ respOps timeLimit
-        grpcDebug "serverHandleNormalRegisteredCall: finished response ops."
+        respOpsResults <- runOps (unServerCall call) serverCQ respOps timeLimit
+        grpcDebug "serverHandleNormalCall(R): finished response ops."
         case respOpsResults of
           Left x -> return $ Left x
           Right _ -> return $ Right ()
-
---  TODO: This is preliminary.
--- We still need to provide the method name to the handler.
--- | Handle one unregistered call.
-serverHandleNormalCall :: Server -> TimeoutSeconds
-                          -> MetadataMap
-                          -- ^ Initial server metadata.
-                          -> (ByteString -> MetadataMap -> MethodName
-                              -> IO (ByteString, MetadataMap, StatusDetails))
-                          -- ^ Handler function takes a request body and
-                          -- metadata and returns a response body and metadata.
-                          -> IO (Either GRPCIOError ())
-serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
-  withServerUnregCall s timeLimit $ \call -> do
-    grpcDebug "serverHandleNormalCall: starting batch."
-    let recvOps = serverOpsGetNormalCall srvMetadata
-    opResults <- runServerUnregOps call serverCQ recvOps timeLimit
-    case opResults of
-      Left x -> do grpcDebug "serverHandleNormalCall: ops failed; aborting"
-                   return $ Left x
-      Right [OpRecvMessageResult (Just body)] -> do
-        requestMeta <- serverUnregCallGetMetadata call
-        grpcDebug $ "got client metadata: " ++ show requestMeta
-        methodName <- serverUnregCallGetMethodName call
-        hostName <- serverUnregCallGetHost call
-        grpcDebug $ "call_details host is: " ++ show hostName
-        (respBody, respMetadata, details) <- f body requestMeta methodName
-        let status = C.GrpcStatusOk
-        let respOps = serverOpsSendNormalResponse
-                        respBody respMetadata status details
-        respOpsResults <- runServerUnregOps call serverCQ respOps timeLimit
-        case respOpsResults of
-          Left x -> do grpcDebug "serverHandleNormalCall: resp failed."
-                       return $ Left x
-          Right _ -> grpcDebug "serverHandleNormalCall: ops done."
-                     >> return (Right ())
-      x -> error $ "impossible pattern match: " ++ show x
-
-_nowarn_unused :: a
-_nowarn_unused = undefined threadDelay
