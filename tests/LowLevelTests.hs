@@ -5,15 +5,19 @@
 
 module LowLevelTests (lowLevelTests) where
 
-import           Control.Concurrent       (threadDelay)
+import           Control.Concurrent                        (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Monad
-import           Data.ByteString          (ByteString)
-import qualified Data.Map                 as M
+import           Data.ByteString                           (ByteString)
+import qualified Data.Map                                  as M
 import           Network.GRPC.LowLevel
+import           Network.GRPC.LowLevel.Server.Unregistered as U
 import           Test.Tasty
-import           Test.Tasty.HUnit         as HU (Assertion, assertEqual,
-                                                 assertFailure, testCase, (@?=))
+import           Test.Tasty.HUnit                          as HU (Assertion,
+                                                                  assertEqual,
+                                                                  assertFailure,
+                                                                  testCase,
+                                                                  (@?=))
 
 lowLevelTests :: TestTree
 lowLevelTests = testGroup "Unit tests of low-level Haskell library"
@@ -63,7 +67,7 @@ testServerCreateDestroy =
 testServerCall :: TestTree
 testServerCall =
   serverOnlyTest "create/destroy call" [] $ \s -> do
-    r <- withServerUnregCall s 1 $ const $ return $ Right ()
+    r <- U.withServerCall s 1 $ const $ return $ Right ()
     r @?= Left GRPCIOTimeout
 
 testServerTimeoutNoClient :: TestTree

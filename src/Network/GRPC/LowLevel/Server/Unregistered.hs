@@ -13,40 +13,41 @@ import           Network.GRPC.LowLevel.Op
 import           Network.GRPC.LowLevel.Server
 import qualified Network.GRPC.Unsafe.Op                  as C
 
-serverCreateUnregCall :: Server -> TimeoutSeconds
+serverCreateCall :: Server -> TimeoutSeconds
                     -> IO (Either GRPCIOError ServerCall)
-serverCreateUnregCall Server{..} timeLimit =
+serverCreateCall Server{..} timeLimit =
   serverRequestCall internalServer serverCQ timeLimit
 
-withServerUnregCall :: Server -> TimeoutSeconds
+withServerCall :: Server -> TimeoutSeconds
                   -> (ServerCall -> IO (Either GRPCIOError a))
                   -> IO (Either GRPCIOError a)
-withServerUnregCall server timeout f = do
-  createResult <- serverCreateUnregCall server timeout
+withServerCall server timeout f = do
+  createResult <- serverCreateCall server timeout
   case createResult of
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
       where logDestroy c = grpcDebug "withServerCall: destroying."
                            >> destroyServerCall c
 
---  TODO: This is preliminary.
--- We still need to provide the method name to the handler.
+-- | A handler for an unregistered server call; bytestring arguments are the
+-- request body and response body respectively.
+type ServerHandler
+  =  ByteString -> MetadataMap -> MethodName
+  -> IO (ByteString, MetadataMap, StatusDetails)
+
 -- | Handle one unregistered call.
-serverHandleNormalCall :: Server -> TimeoutSeconds
-                          -> MetadataMap
-                          -- ^ Initial server metadata.
-                          -> (ByteString -> MetadataMap -> MethodName
-                              -> IO (ByteString, MetadataMap, StatusDetails))
-                          -- ^ Handler function takes a request body and
-                          -- metadata and returns a response body and metadata.
-                          -> IO (Either GRPCIOError ())
+serverHandleNormalCall :: Server
+                       -> TimeoutSeconds
+                       -> MetadataMap -- ^ Initial server metadata.
+                       -> ServerHandler
+                       -> IO (Either GRPCIOError ())
 serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
-  withServerUnregCall s timeLimit $ \call -> do
-    grpcDebug "serverHandleNormalCall: starting batch."
+  withServerCall s timeLimit $ \call -> do
+    grpcDebug "serverHandleCall(U): starting batch."
     let recvOps = serverOpsGetNormalCall srvMetadata
     opResults <- runServerUnregOps call serverCQ recvOps timeLimit
     case opResults of
-      Left x -> do grpcDebug "serverHandleNormalCall: ops failed; aborting"
+      Left x -> do grpcDebug "serverHandleNormalCall(U): ops failed; aborting"
                    return $ Left x
       Right [OpRecvMessageResult (Just body)] -> do
         requestMeta <- serverCallGetMetadata call
@@ -60,8 +61,8 @@ serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
                         respBody respMetadata status details
         respOpsResults <- runServerUnregOps call serverCQ respOps timeLimit
         case respOpsResults of
-          Left x -> do grpcDebug "serverHandleNormalCall: resp failed."
+          Left x -> do grpcDebug "serverHandleNormalCall(U): resp failed."
                        return $ Left x
-          Right _ -> grpcDebug "serverHandleNormalCall: ops done."
+          Right _ -> grpcDebug "serverHandleNormalCall(U): ops done."
                      >> return (Right ())
       x -> error $ "impossible pattern match: " ++ show x
