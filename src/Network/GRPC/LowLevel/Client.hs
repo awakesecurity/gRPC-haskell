@@ -58,7 +58,7 @@ clientConnectivity Client{..} =
   C.grpcChannelCheckConnectivityState clientChannel False
 
 -- | Register a method on the client so that we can call it with
--- 'clientRegisteredRequest'.
+-- 'clientRequest'.
 clientRegisterMethod :: Client
                         -> MethodName
                         -- ^ method name, e.g. "/foo"
@@ -74,27 +74,30 @@ clientRegisterMethod _ _ _ = error "Streaming methods not yet implemented."
 -- | Create a new call on the client for a registered method.
 -- Returns 'Left' if the CQ is shutting down or if the job to create a call
 -- timed out.
-clientCreateRegisteredCall :: Client -> RegisteredMethod -> TimeoutSeconds
-                    -> IO (Either GRPCIOError ClientCall)
-clientCreateRegisteredCall Client{..} RegisteredMethod{..} timeout = do
+clientCreateCall :: Client
+                 -> RegisteredMethod
+                 -> TimeoutSeconds
+                 -> IO (Either GRPCIOError ClientCall)
+clientCreateCall Client{..} RegisteredMethod{..} timeout = do
   let parentCall = C.Call nullPtr --Unsure what this does. null is safe, though.
   C.withDeadlineSeconds timeout $ \deadline -> do
-    channelCreateRegisteredCall clientChannel parentCall C.propagateDefaults
-                                clientCQ methodHandle deadline
+    channelCreateCall clientChannel parentCall C.propagateDefaults
+      clientCQ methodHandle deadline
 
 -- TODO: the error-handling refactor made this quite ugly. It could be fixed
 -- by switching to ExceptT IO.
 -- | Handles safe creation and cleanup of a client call
-withClientRegisteredCall :: Client -> RegisteredMethod -> TimeoutSeconds
-                            -> (ClientCall
-                                -> IO (Either GRPCIOError a))
-                            -> IO (Either GRPCIOError a)
-withClientRegisteredCall client regmethod timeout f = do
-  createResult <- clientCreateRegisteredCall client regmethod timeout
+withClientCall :: Client
+               -> RegisteredMethod
+               -> TimeoutSeconds
+               -> (ClientCall -> IO (Either GRPCIOError a))
+               -> IO (Either GRPCIOError a)
+withClientCall client regmethod timeout f = do
+  createResult <- clientCreateCall client regmethod timeout
   case createResult of
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
-      where logDestroy c = grpcDebug "withClientRegisteredCall: destroying."
+      where logDestroy c = grpcDebug "withClientCall(R): destroying."
                            >> destroyClientCall c
 
 data NormalRequestResult = NormalRequestResult
@@ -131,25 +134,24 @@ compileNormalRequestResults x =
 -- server's response. TODO: This is preliminary until we figure out how many
 -- different variations on sending request ops will be needed for full gRPC
 -- functionality.
-clientRegisteredRequest :: Client
-                           -> RegisteredMethod
-                           -> TimeoutSeconds
-                           -- ^ Timeout of both the grpc_call and the
-                           -- max time to wait for the completion of the batch.
-                           -- TODO: I think we will need to decouple the
-                           -- lifetime of the call from the queue deadline once
-                           -- we expose functionality for streaming calls, where
-                           -- one call object persists across many batches.
-                           -> ByteString
-                           -- ^ The body of the request.
-                           -> MetadataMap
-                           -- ^ Metadata to send with the request.
-                           -> IO (Either GRPCIOError NormalRequestResult)
-clientRegisteredRequest client@(Client{..}) rm@(RegisteredMethod{..})
-                        timeLimit body meta =
+clientRequest :: Client
+              -> RegisteredMethod
+              -> TimeoutSeconds
+              -- ^ Timeout of both the grpc_call and the max time to wait for
+              -- the completion of the batch. TODO: I think we will need to
+              -- decouple the lifetime of the call from the queue deadline once
+              -- we expose functionality for streaming calls, where one call
+              -- object persists across many batches.
+              -> ByteString
+              -- ^ The body of the request
+              -> MetadataMap
+              -- ^ Metadata to send with the request
+              -> IO (Either GRPCIOError NormalRequestResult)
+clientRequest client@(Client{..}) rm@(RegisteredMethod{..})
+              timeLimit body meta =
   fmap join $ case methodType of
-    Normal -> withClientRegisteredCall client rm timeLimit $ \call -> do
-                grpcDebug "clientRegisteredRequest: created call."
+    Normal -> withClientCall client rm timeLimit $ \call -> do
+                grpcDebug "clientRequest(R): created call."
                 debugClientCall call
                 -- NOTE: sendOps and recvOps *must* be in separate batches or
                 -- the client hangs when the server can't be reached.
@@ -158,7 +160,7 @@ clientRegisteredRequest client@(Client{..}) rm@(RegisteredMethod{..})
                            , OpSendCloseFromClient]
                 sendRes <- runClientOps call clientCQ sendOps timeLimit
                 case sendRes of
-                  Left x -> do grpcDebug "clientRegisteredRequest: batch error."
+                  Left x -> do grpcDebug "clientRequest(R) : batch error."
                                return $ Left x
                   Right rs -> do
                     let recvOps = [OpRecvInitialMetadata,
@@ -167,7 +169,7 @@ clientRegisteredRequest client@(Client{..}) rm@(RegisteredMethod{..})
                     recvRes <- runClientOps call clientCQ recvOps timeLimit
                     case recvRes of
                       Left x -> do
-                        grpcDebug "clientRegisteredRequest: batch error."
+                        grpcDebug "clientRequest(R): batch error."
                         return $ Left x
                       Right rs' -> do
                         return $ Right $ compileNormalRequestResults (rs ++ rs')

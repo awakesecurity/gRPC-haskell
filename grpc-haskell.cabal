@@ -43,6 +43,7 @@ library
     Network.GRPC.Unsafe
     Network.GRPC.LowLevel
     Network.GRPC.LowLevel.Server.Unregistered
+    Network.GRPC.LowLevel.Client.Unregistered
   other-modules:
     Network.GRPC.LowLevel.CompletionQueue
     Network.GRPC.LowLevel.CompletionQueue.Internal
@@ -54,7 +55,6 @@ library
     Network.GRPC.LowLevel.Call
     Network.GRPC.LowLevel.Call.Unregistered
     Network.GRPC.LowLevel.Client
-    Network.GRPC.LowLevel.Client.Unregistered
   extra-libraries:
     grpc
   includes:

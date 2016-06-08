@@ -33,7 +33,7 @@ regMain = withGRPC $ \grpc -> do
   withServer grpc (ServerConfig "localhost" 50051 methods) $ \server ->
     forever $ do
       let method = head (registeredMethods server)
-      result <- serverHandleNormalRegisteredCall server method 15 serverMeta $
+      result <- serverHandleNormalCall server method 15 serverMeta $
         \reqBody _reqMeta -> return (reqBody, serverMeta, serverMeta,
                                      StatusDetails "")
       case result of
@@ -43,7 +43,7 @@ regMain = withGRPC $ \grpc -> do
 -- | loop to fork n times
 regLoop :: Server -> RegisteredMethod -> IO ()
 regLoop server method = forever $ do
-  result <- serverHandleNormalRegisteredCall server method 15 serverMeta $
+  result <- serverHandleNormalCall server method 15 serverMeta $
     \reqBody _reqMeta -> return (reqBody, serverMeta, serverMeta,
                                  StatusDetails "")
   case result of

@@ -11,7 +11,11 @@ import qualified Network.GRPC.Unsafe.Constants                      as C
 import qualified Network.GRPC.Unsafe.Time                           as C
 
 import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.Client
+import           Network.GRPC.LowLevel.Client                       (Client (..),
+                                                                     NormalRequestResult (..),
+                                                                     clientEndpoint,
+                                                                     clientNormalRequestOps,
+                                                                     compileNormalRequestResults)
 import           Network.GRPC.LowLevel.CompletionQueue              (TimeoutSeconds)
 import qualified Network.GRPC.LowLevel.CompletionQueue.Unregistered as U
 import           Network.GRPC.LowLevel.GRPC
@@ -40,7 +44,7 @@ withClientCall client method timeout f = do
   case createResult of
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
-                    where logDestroy c = grpcDebug "withClientCall: destroying."
+                    where logDestroy c = grpcDebug "withClientCall(U): destroying."
                                          >> destroyClientCall c
 
 -- | Makes a normal (non-streaming) request without needing to register a method
@@ -61,7 +65,7 @@ clientRequest client@Client{..} meth timeLimit body meta =
   withClientCall client meth timeLimit $ \call -> do
     let ops = clientNormalRequestOps body meta
     results <- runClientOps call clientCQ ops timeLimit
-    grpcDebug "clientRequest: ops ran."
+    grpcDebug "clientRequest(U): ops ran."
     case results of
       Left x -> return $ Left x
       Right rs -> return $ Right $ compileNormalRequestResults rs

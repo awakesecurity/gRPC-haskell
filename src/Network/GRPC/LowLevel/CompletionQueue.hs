@@ -19,12 +19,12 @@ module Network.GRPC.LowLevel.CompletionQueue
   , shutdownCompletionQueue
   , pluck
   , startBatch
-  , channelCreateRegisteredCall
+  , channelCreateCall
   , TimeoutSeconds
   , isEventSuccessful
   , serverRegisterCompletionQueue
   , serverShutdownAndNotify
-  , serverRequestRegisteredCall
+  , serverRequestCall
   , newTag
   )
 where
@@ -104,14 +104,17 @@ shutdownCompletionQueue (CompletionQueue{..}) = do
             C.QueueTimeout -> drainLoop
             C.OpComplete -> drainLoop
 
-channelCreateRegisteredCall :: C.Channel -> C.Call -> C.PropagationMask
-                               -> CompletionQueue -> C.CallHandle
-                               -> C.CTimeSpecPtr
-                               -> IO (Either GRPCIOError ClientCall)
-channelCreateRegisteredCall
+channelCreateCall :: C.Channel
+                  -> C.Call
+                  -> C.PropagationMask
+                  -> CompletionQueue
+                  -> C.CallHandle
+                  -> C.CTimeSpecPtr
+                  -> IO (Either GRPCIOError ClientCall)
+channelCreateCall
   chan parent mask cq@CompletionQueue{..} handle deadline =
   withPermission Push cq $ do
-    grpcDebug $ "channelCreateRegisteredCall: call with "
+    grpcDebug $ "channelCreateCall: call with "
                 ++ concat (intersperse " " [show chan, show parent, show mask,
                                             show unsafeCQ, show handle,
                                             show deadline])
@@ -120,10 +123,13 @@ channelCreateRegisteredCall
     return $ Right $ ClientCall call
 
 -- | Create the call object to handle a registered call.
-serverRequestRegisteredCall :: C.Server -> CompletionQueue -> TimeoutSeconds
-                               -> RegisteredMethod -> MetadataMap
-                               -> IO (Either GRPCIOError ServerRegCall)
-serverRequestRegisteredCall
+serverRequestCall :: C.Server
+                  -> CompletionQueue
+                  -> TimeoutSeconds
+                  -> RegisteredMethod
+                  -> MetadataMap
+                  -> IO (Either GRPCIOError ServerCall)
+serverRequestCall
   server cq@CompletionQueue{..} timeLimit RegisteredMethod{..} initMeta =
     withPermission Push cq $ do
       -- TODO: Is gRPC supposed to populate this deadline?
@@ -146,28 +152,28 @@ serverRequestRegisteredCall
       callError <- C.grpcServerRequestRegisteredCall
                      server methodHandle callPtr deadline
                      metadataArray bbPtr unsafeCQ unsafeCQ tag
-      grpcDebug $ "serverRequestRegisteredCall: callError: "
+      grpcDebug $ "serverRequestCall(R): callError: "
                    ++ show callError
       if callError /= C.CallOk
-         then do grpcDebug "serverRequestRegisteredCall: callError. cleaning up"
+         then do grpcDebug "serverRequestCall(R): callError. cleaning up"
                  failureCleanup deadline callPtr metadataArrayPtr bbPtr
                  return $ Left $ GRPCIOCallError callError
          else do pluckResult <- pluck cq tag timeLimit
-                 grpcDebug "serverRequestRegisteredCall: finished pluck."
+                 grpcDebug "serverRequestCall(R): finished pluck."
                  case pluckResult of
                    Left x -> do
-                     grpcDebug "serverRequestRegisteredCall: cleanup pluck err"
+                     grpcDebug "serverRequestCall(R): cleanup pluck err"
                      failureCleanup deadline callPtr metadataArrayPtr bbPtr
                      return $ Left x
                    Right () -> do
                      rawCall <- peek callPtr
-                     let assembledCall = ServerRegCall rawCall metadataArrayPtr
-                                                       bbPtr Nothing deadline
+                     let assembledCall = ServerCall rawCall metadataArrayPtr
+                                           bbPtr Nothing deadline
                      return $ Right assembledCall
       -- TODO: see TODO for failureCleanup in serverRequestCall.
       where failureCleanup deadline callPtr metadataArrayPtr bbPtr = forkIO $ do
               threadDelaySecs 30
-              grpcDebug "serverRequestRegisteredCall: doing delayed cleanup."
+              grpcDebug "serverRequestCall(R): doing delayed cleanup."
               C.timespecDestroy deadline
               free callPtr
               C.metadataArrayDestroy metadataArrayPtr

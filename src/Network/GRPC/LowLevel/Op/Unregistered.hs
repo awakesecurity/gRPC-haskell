@@ -10,4 +10,4 @@ runServerOps :: U.ServerCall
              -> [Op]
              -> TimeoutSeconds
              -> IO (Either GRPCIOError [OpRecvResult])
-runServerOps = runOps . U.internalServerCall
+runServerOps = runOps . U.unServerCall

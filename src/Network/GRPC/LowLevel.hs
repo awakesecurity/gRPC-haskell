@@ -29,11 +29,11 @@ GRPC
 -- * Server
 , ServerConfig(..)
 , Server
-, ServerRegCall
+, ServerCall
 , registeredMethods
 , withServer
-, serverHandleNormalRegisteredCall
-, withServerRegisteredCall
+, serverHandleNormalCall
+, withServerCall
 
 -- * Client
 , ClientConfig(..)
@@ -43,13 +43,12 @@ GRPC
 , clientConnectivity
 , withClient
 , clientRegisterMethod
-, clientRegisteredRequest
 , clientRequest
 , withClientCall
 
 -- * Ops
 , runClientOps
-, runServerRegOps
+, runServerOps
 , Op(..)
 , OpRecvResult(..)
 
@@ -60,7 +59,6 @@ import           Network.GRPC.LowLevel.Server
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.Op
 import           Network.GRPC.LowLevel.Client
-import           Network.GRPC.LowLevel.Client.Unregistered
 import           Network.GRPC.LowLevel.Call
 
 import Network.GRPC.Unsafe (ConnectivityState(..))

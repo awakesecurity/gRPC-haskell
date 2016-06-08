@@ -11,7 +11,8 @@ import           Control.Monad
 import           Data.ByteString                           (ByteString)
 import qualified Data.Map                                  as M
 import           Network.GRPC.LowLevel
-import           Network.GRPC.LowLevel.Server.Unregistered as U
+import qualified Network.GRPC.LowLevel.Client.Unregistered as U
+import qualified Network.GRPC.LowLevel.Server.Unregistered as U
 import           Test.Tasty
 import           Test.Tasty.HUnit                          as HU (Assertion,
                                                                   assertEqual,
@@ -50,14 +51,14 @@ testClientCreateDestroy =
 testClientCall :: TestTree
 testClientCall =
   clientOnlyTest "create/destroy call" $ \c -> do
-    r <- withClientCall c "foo" 10 $ const $ return $ Right ()
+    r <- U.withClientCall c "/foo" 10 $ const $ return $ Right ()
     r @?= Right ()
 
 testClientTimeoutNoServer :: TestTree
 testClientTimeoutNoServer =
   clientOnlyTest "request timeout when server DNE" $ \c -> do
     rm <- clientRegisterMethod c "/foo" Normal
-    r  <- clientRegisteredRequest c rm 1 "Hello" mempty
+    r  <- clientRequest c rm 1 "Hello" mempty
     r @?= Left GRPCIOTimeout
 
 testServerCreateDestroy :: TestTree
@@ -74,7 +75,7 @@ testServerTimeoutNoClient :: TestTree
 testServerTimeoutNoClient =
   serverOnlyTest "wait timeout when client DNE" [("/foo", Normal)] $ \s -> do
     let rm = head (registeredMethods s)
-    r <- serverHandleNormalRegisteredCall s rm 1 mempty $ \_ _ ->
+    r <- serverHandleNormalCall s rm 1 mempty $ \_ _ ->
            return ("", mempty, mempty, StatusDetails "details")
     r @?= Left GRPCIOTimeout
 
@@ -89,13 +90,13 @@ testWrongEndpoint =
     -- further
     client c = do
       rm <- clientRegisterMethod c "/bar" Normal
-      r  <- clientRegisteredRequest c rm 1 "Hello!" mempty
+      r  <- clientRequest c rm 1 "Hello!" mempty
       r @?= Left (GRPCIOBadStatusCode GrpcStatusDeadlineExceeded
                     (StatusDetails "Deadline Exceeded"))
     server s = do
       length (registeredMethods s) @?= 1
       let rm = head (registeredMethods s)
-      r <- serverHandleNormalRegisteredCall s rm 10 mempty $ \_ _ -> do
+      r <- serverHandleNormalCall s rm 10 mempty $ \_ _ -> do
         return ("reply test", dummyMeta, dummyMeta, StatusDetails "details string")
       r @?= Right ()
 
@@ -112,7 +113,7 @@ testPayload =
     clientMD = [("foo_key", "foo_val"), ("bar_key", "bar_val")]
     client c = do
       rm <- clientRegisterMethod c "/foo" Normal
-      clientRegisteredRequest c rm 10 "Hello!" clientMD >>= do
+      clientRequest c rm 10 "Hello!" clientMD >>= do
         checkReqRslt $ \NormalRequestResult{..} -> do
           rspCode @?= GrpcStatusOk
           rspBody @?= "reply test"
@@ -122,7 +123,7 @@ testPayload =
     server s = do
       length (registeredMethods s) @?= 1
       let rm = head (registeredMethods s)
-      r <- serverHandleNormalRegisteredCall s rm 11 mempty $ \reqBody reqMD -> do
+      r <- serverHandleNormalCall s rm 11 mempty $ \reqBody reqMD -> do
         reqBody @?= "Hello!"
         checkMD "Server metadata mismatch" clientMD reqMD
         return ("reply test", dummyMeta, dummyMeta, StatusDetails "details string")
@@ -133,13 +134,13 @@ testPayloadUnregistered =
   csTest "unregistered normal request/response" client server []
   where
     client c = do
-      clientRequest c "/foo" 10 "Hello!" mempty >>= do
+      U.clientRequest c "/foo" 10 "Hello!" mempty >>= do
         checkReqRslt $ \NormalRequestResult{..} -> do
           rspCode @?= GrpcStatusOk
           rspBody @?= "reply test"
           details @?= "details string"
     server s = do
-      r <- serverHandleNormalCall s 11 mempty $ \body _md meth -> do
+      r <- U.serverHandleNormalCall s 11 mempty $ \body _md meth -> do
              body @?= "Hello!"
              meth @?= "/foo"
              return ("reply test", mempty, "details string")

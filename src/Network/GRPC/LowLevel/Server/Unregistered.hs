@@ -11,7 +11,9 @@ import qualified Network.GRPC.LowLevel.CompletionQueue.Unregistered as U
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op                           (OpRecvResult (..))
 import qualified Network.GRPC.LowLevel.Op.Unregistered              as U
-import           Network.GRPC.LowLevel.Server
+import           Network.GRPC.LowLevel.Server                       (Server (..),
+                                                                     serverOpsGetNormalCall,
+                                                                     serverOpsSendNormalResponse)
 import qualified Network.GRPC.Unsafe.Op                             as C
 
 serverCreateCall :: Server -> TimeoutSeconds
@@ -44,7 +46,7 @@ serverHandleNormalCall :: Server
                        -> IO (Either GRPCIOError ())
 serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
   withServerCall s timeLimit $ \call -> do
-    grpcDebug "serverHandleCall(U): starting batch."
+    grpcDebug "serverHandleNormalCall(U): starting batch."
     let recvOps = serverOpsGetNormalCall srvMetadata
     opResults <- U.runServerOps call serverCQ recvOps timeLimit
     case opResults of

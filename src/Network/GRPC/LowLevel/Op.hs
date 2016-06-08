@@ -4,23 +4,22 @@
 module Network.GRPC.LowLevel.Op where
 
 import           Control.Exception
-import qualified Data.ByteString                         as B
-import qualified Data.Map.Strict                         as M
-import           Data.Maybe                              (catMaybes)
-import           Foreign.C.String                        (CString)
-import           Foreign.C.Types                         (CInt)
-import           Foreign.Marshal.Alloc                   (free, malloc,
-                                                          mallocBytes)
-import           Foreign.Ptr                             (Ptr, nullPtr)
-import           Foreign.Storable                        (peek, poke)
-import qualified Network.GRPC.Unsafe                     as C (Call)
-import qualified Network.GRPC.Unsafe.ByteBuffer          as C
-import qualified Network.GRPC.Unsafe.Metadata            as C
-import qualified Network.GRPC.Unsafe.Op                  as C
-
+import qualified Data.ByteString                       as B
+import qualified Data.Map.Strict                       as M
+import           Data.Maybe                            (catMaybes)
+import           Foreign.C.String                      (CString)
+import           Foreign.C.Types                       (CInt)
+import           Foreign.Marshal.Alloc                 (free, malloc,
+                                                        mallocBytes)
+import           Foreign.Ptr                           (Ptr, nullPtr)
+import           Foreign.Storable                      (peek, poke)
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.GRPC
+import qualified Network.GRPC.Unsafe                   as C (Call)
+import qualified Network.GRPC.Unsafe.ByteBuffer        as C
+import qualified Network.GRPC.Unsafe.Metadata          as C
+import qualified Network.GRPC.Unsafe.Op                as C
 
 -- | Sum describing all possible send and receive operations that can be batched
 -- and executed by gRPC. Usually these are processed in a handful of
@@ -219,26 +218,26 @@ runOps call cq ops timeLimit =
                 fmap (Right . catMaybes) $ mapM resultFromOpContext contexts
               Left err -> return $ Left err
 
--- | For a given call, run the given 'Op's on the given completion queue with
--- the given tag. Blocks until the ops are complete or the given number of
+-- | For a given server call, run the given 'Op's on the given completion queue
+-- with the given tag. Blocks until the ops are complete or the given number of
 -- seconds have elapsed.  TODO: now that we distinguish between different types
 -- of calls at the type level, we could try to limit the input 'Op's more
 -- appropriately. E.g., we don't use an 'OpRecvInitialMetadata' when receiving a
 -- registered call, because gRPC handles that for us.
-runServerRegOps :: ServerRegCall
-                -- ^ 'Call' that this batch is associated with. One call can be
-                -- associated with many batches.
-                -> CompletionQueue
-                -- ^ Queue on which our tag will be placed once our ops are done
-                -- running.
-                -> [Op]
+runServerOps :: ServerCall
+             -- ^ 'Call' that this batch is associated with. One call can be
+             -- associated with many batches.
+             -> CompletionQueue
+             -- ^ Queue on which our tag will be placed once our ops are done
+             -- running.
+             -> [Op]
                 -- ^ The list of 'Op's to execute.
-                -> TimeoutSeconds
+             -> TimeoutSeconds
                 -- ^ How long to block waiting for the tag to appear on the
-                --queue. If we time out, the result of this action will be
+                -- queue. If we time out, the result of this action will be
                 -- @CallBatchError BatchTimeout@.
-                -> IO (Either GRPCIOError [OpRecvResult])
-runServerRegOps = runOps . internalServerRegCall
+             -> IO (Either GRPCIOError [OpRecvResult])
+runServerOps = runOps . unServerCall
 
 -- | Like 'runServerOps', but for client-side calls.
 runClientOps :: ClientCall
@@ -246,7 +245,7 @@ runClientOps :: ClientCall
                 -> [Op]
                 -> TimeoutSeconds
                 -> IO (Either GRPCIOError [OpRecvResult])
-runClientOps = runOps . internalClientCall
+runClientOps = runOps . unClientCall
 
 -- | If response status info is present in the given 'OpRecvResult's, returns
 -- a tuple of trailing metadata, status code, and status details.

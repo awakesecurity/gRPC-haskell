@@ -3,21 +3,19 @@
 module Network.GRPC.LowLevel.Call.Unregistered where
 
 import           Control.Monad
-import           Foreign.Marshal.Alloc          (free)
-import           Foreign.Ptr                    (Ptr)
-import           Foreign.Storable               (peek)
-
-import qualified Network.GRPC.Unsafe            as C
-import qualified Network.GRPC.Unsafe.Metadata   as C
-
-import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.GRPC     (MetadataMap, grpcDebug)
+import           Foreign.Marshal.Alloc        (free)
+import           Foreign.Ptr                  (Ptr)
+import           Foreign.Storable             (peek)
+import           Network.GRPC.LowLevel.Call   (Host (..), MethodName (..))
+import           Network.GRPC.LowLevel.GRPC   (MetadataMap, grpcDebug)
+import qualified Network.GRPC.Unsafe          as C
+import qualified Network.GRPC.Unsafe.Metadata as C
 
 -- | Represents one unregistered GRPC call on the server.
 -- Contains pointers to all the C state needed to respond to an unregistered
 -- call.
 data ServerCall = ServerCall
-  { internalServerCall  :: C.Call
+  { unServerCall        :: C.Call
   , requestMetadataRecv :: Ptr C.MetadataArray
   , parentPtr           :: Maybe (Ptr C.Call)
   , callDetails         :: C.CallDetails
@@ -61,9 +59,8 @@ destroyServerCall :: ServerCall -> IO ()
 destroyServerCall call@ServerCall{..} = do
   grpcDebug "destroyServerCall(U): entered."
   debugServerCall call
-  grpcDebug $ "Destroying server-side call object: "
-              ++ show internalServerCall
-  C.grpcCallDestroy internalServerCall
+  grpcDebug $ "Destroying server-side call object: " ++ show unServerCall
+  C.grpcCallDestroy unServerCall
   grpcDebug $ "destroying metadata array: " ++ show requestMetadataRecv
   C.metadataArrayDestroy requestMetadataRecv
   grpcDebug $ "freeing parentPtr: " ++ show parentPtr

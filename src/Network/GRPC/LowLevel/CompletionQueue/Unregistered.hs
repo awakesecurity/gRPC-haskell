@@ -29,8 +29,10 @@ channelCreateCall chan parent mask cq@CompletionQueue{..} meth endpt deadline =
     return $ Right $ ClientCall call
 
 
-serverRequestCall :: C.Server -> CompletionQueue -> TimeoutSeconds
-                     -> IO (Either GRPCIOError U.ServerCall)
+serverRequestCall :: C.Server
+                  -> CompletionQueue
+                  -> TimeoutSeconds
+                  -> IO (Either GRPCIOError U.ServerCall)
 serverRequestCall server cq@CompletionQueue{..} timeLimit =
   withPermission Push cq $ do
     callPtr <- malloc
