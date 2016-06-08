@@ -1,195 +1,215 @@
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
-module LowLevelTests where
+module LowLevelTests (lowLevelTests) where
 
+import           Control.Concurrent       (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Monad
-import           Data.ByteString                (ByteString)
-import qualified Data.Map                       as M
+import           Data.ByteString          (ByteString)
+import qualified Data.Map                 as M
 import           Network.GRPC.LowLevel
 import           Test.Tasty
-import           Test.Tasty.HUnit               as HU (testCase, (@?=))
+import           Test.Tasty.HUnit         as HU (Assertion, assertEqual,
+                                                 assertFailure, testCase, (@?=))
 
 lowLevelTests :: TestTree
 lowLevelTests = testGroup "Unit tests of low-level Haskell library"
-  [  testGRPCBracket
-   , testCompletionQueueCreateDestroy
-   , testServerCreateDestroy
-   , testClientCreateDestroy
-   , testWithServerCall
-   , testWithClientCall
-   , testPayloadLowLevel
-   , testClientRequestNoServer
-   , testServerAwaitNoClient
-   , testPayloadLowLevelUnregistered
-   , testWrongEndpoint
-   ]
+  [ testGRPCBracket
+  , testCompletionQueueCreateDestroy
+  , testServerCreateDestroy
+  , testClientCreateDestroy
+  , testWithServerCall
+  , testWithClientCall
+  , testClientTimeoutNoServer
+  , testServerTimeoutNoClient
+  -- , testWrongEndpoint
+  , testPayload
+  , testPayloadUnregistered
+  ]
 
 testGRPCBracket :: TestTree
-testGRPCBracket = grpcTest "Start/stop GRPC" nop
+testGRPCBracket =
+  testCase "Start/stop GRPC" $ withGRPC nop
 
 testCompletionQueueCreateDestroy :: TestTree
 testCompletionQueueCreateDestroy =
-  grpcTest "Create/destroy completion queue" $ \grpc -> do
-  withCompletionQueue grpc nop
+  testCase "Create/destroy CQ" $ withGRPC $ \g ->
+  withCompletionQueue g nop
 
 testServerCreateDestroy :: TestTree
 testServerCreateDestroy =
-  grpcTest "Server - start/stop" $ \grpc -> do
-  withServer grpc (ServerConfig "localhost" 50051 []) nop
+  serverOnlyTest "start/stop" [] nop
 
 testClientCreateDestroy :: TestTree
 testClientCreateDestroy =
-  grpcTest "Client - start/stop" $ \grpc -> do
-  withClient grpc (ClientConfig "localhost" 50051) nop
-
-payloadLowLevelServer :: TestServer
-payloadLowLevelServer = TestServer $ \grpc -> do
-  let conf = (ServerConfig "localhost" 50051 [("/foo", Normal)])
-  withServer grpc conf $ \server -> do
-    let method = head (registeredMethods server)
-    result <- serverHandleNormalRegisteredCall server method 11 M.empty $
-                \reqBody reqMeta -> do
-                  reqMeta M.! "foo_key" @?= "foo_val"
-                  reqBody @?= "Hello!"
-                  return ("reply test", dummyMeta, dummyMeta,
-                          StatusDetails "details string")
-    case result of
-      Left err -> error $ show err
-      Right _ -> return ()
-
-payloadLowLevelClient :: TestClient
-payloadLowLevelClient = TestClient $ \grpc ->
-  withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
-    method <- clientRegisterMethod client "/foo" Normal
-    putStrLn "registered method on client."
-    let reqMeta = M.fromList [("foo_key", "foo_val")]
-    reqResult <- clientRegisteredRequest client method 10 "Hello!" reqMeta
-    case reqResult of
-      Left x -> error $ "Client got error: " ++ show x
-      Right (NormalRequestResult respBody (Just initMeta) trailingMeta respCode details) -> do
-        details @?= "details string"
-        respBody @?= "reply test"
-        respCode @?= GrpcStatusOk
-        initMeta M.! "foo" @?= "bar"
-        trailingMeta M.! "foo" @?= "bar"
-      Right (NormalRequestResult _ Nothing _ _ _) -> error $ "got no metadata."
-
-payloadLowLevelClientUnregistered :: TestClient
-payloadLowLevelClientUnregistered = TestClient $ \grpc -> do
-  withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
-    reqResult <- clientRequest client "/foo" 10 "Hello!" M.empty
-    case reqResult of
-      Left x -> error $ "Client got error: " ++ show x
-      Right (NormalRequestResult
-              respBody _initMeta _trailingMeta respCode details) -> do
-        respBody @?= "reply test"
-        respCode @?= GrpcStatusOk
-        details @?= "details string"
-
-payloadLowLevelServerUnregistered :: TestServer
-payloadLowLevelServerUnregistered = TestServer $ \grpc -> do
-  withServer grpc (ServerConfig "localhost" 50051 []) $ \server -> do
-    result <- serverHandleNormalCall server 11 M.empty $
-                \reqBody _reqMeta reqMethod -> do
-                  reqBody @?= "Hello!"
-                  reqMethod @?= "/foo"
-                  return ("reply test", M.empty, StatusDetails "details string")
-    case result of
-      Left x -> error $ show x
-      Right _ -> return ()
-
-testClientRequestNoServer :: TestTree
-testClientRequestNoServer =
-  grpcTest "Client - request timeout when server DNE" $ \grpc -> do
-  withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
-    method <- clientRegisterMethod client "/foo" Normal
-    reqResult <- clientRegisteredRequest client method 1 "Hello" M.empty
-    reqResult @?= (Left GRPCIOTimeout)
-
-testServerAwaitNoClient :: TestTree
-testServerAwaitNoClient = testCase "server wait times out when no client " $ do
-  withGRPC $ \grpc -> do
-    let conf = (ServerConfig "localhost" 50051 [("/foo", Normal)])
-    withServer grpc conf $ \server -> do
-      let method = head (registeredMethods server)
-      result <- serverHandleNormalRegisteredCall server method 1 M.empty $
-                  \_ _ -> return ("", M.empty, M.empty, StatusDetails "details")
-      result @?= Left GRPCIOTimeout
-
-testServerUnregisteredAwaitNoClient :: TestTree
-testServerUnregisteredAwaitNoClient =
-  testCase "server wait times out when no client -- unregistered method " $ do
-    withGRPC $ \grpc -> do
-      let conf = ServerConfig "localhost" 50051 []
-      withServer grpc conf $ \server -> do
-        result <- serverHandleNormalCall server 10 M.empty $
-                    \_ _ _ -> return ("", M.empty, StatusDetails "")
-        case result of
-          Left err -> error $ show err
-          Right _ -> return ()
-
-testPayloadLowLevel :: TestTree
-testPayloadLowLevel =
-  grpcTest "Client/Server - low-level (registered) request/response" $
-  runClientServer payloadLowLevelClient payloadLowLevelServer
-
-payloadWrongEndpoint :: TestClient
-payloadWrongEndpoint = TestClient $ \grpc ->
-  withClient grpc (ClientConfig "localhost" 50051) $ \client -> do
-    method <- clientRegisterMethod client "/bar" Normal
-    reqResult <- clientRegisteredRequest client method 1 "" M.empty
-    reqResult @?= Left (GRPCIOBadStatusCode GrpcStatusDeadlineExceeded
-                                            (StatusDetails "Deadline Exceeded"))
-
-
-testWrongEndpoint :: TestTree
-testWrongEndpoint =
-  grpcTest "Client/Server - client requests unknown endpoint" $
-  runClientServer payloadLowLevelClient payloadLowLevelServer
-
-testPayloadLowLevelUnregistered :: TestTree
-testPayloadLowLevelUnregistered =
-  grpcTest "Client/Server - low-level unregistered request/response" $
-  runClientServer payloadLowLevelClientUnregistered payloadLowLevelServerUnregistered
+  clientOnlyTest "start/stop" nop
 
 testWithServerCall :: TestTree
 testWithServerCall =
-  grpcTest "Server - Create/destroy call" $ \grpc -> do
-  let conf = ServerConfig "localhost" 50051 []
-  withServer grpc conf $ \server -> do
-    result <- withServerUnregCall server 1 $ const $ return $ Right ()
-    result @?= Left GRPCIOTimeout
+  serverOnlyTest "create/destroy call" [] $ \s -> do
+    r <- withServerUnregCall s 1 $ const $ return $ Right ()
+    r @?= Left GRPCIOTimeout
 
 testWithClientCall :: TestTree
 testWithClientCall =
-  grpcTest "Client - Create/destroy call" $ \grpc -> do
-  let conf = ClientConfig "localhost" 50051
-  withClient grpc conf $ \client -> do
-    result <- withClientCall client "foo" 10 $
-                const $ return $ Right ()
-    case result of
-      Left err -> error $ show err
-      Right _ -> return ()
+  clientOnlyTest "create/destroy call" $ \c -> do
+    r <- withClientCall c "foo" 10 $ const $ return $ Right ()
+    r @?= Right ()
+
+testClientTimeoutNoServer :: TestTree
+testClientTimeoutNoServer =
+  clientOnlyTest "request timeout when server DNE" $ \c -> do
+    rm <- clientRegisterMethod c "/foo" Normal
+    r  <- clientRegisteredRequest c rm 1 "Hello" mempty
+    r @?= Left GRPCIOTimeout
+
+testServerTimeoutNoClient :: TestTree
+testServerTimeoutNoClient =
+  serverOnlyTest "wait timeout when client DNE" [("/foo", Normal)] $ \s -> do
+    let rm = head (registeredMethods s)
+    r <- serverHandleNormalRegisteredCall s rm 1 mempty $ \_ _ ->
+           return ("", mempty, mempty, StatusDetails "details")
+    r @?= Left GRPCIOTimeout
+
+-- TODO: fix this test: currently, client seems to hang and server times out,
+-- expecting that the client reports an invalid endpoint.  Also, investigate
+-- intermittent crashes on shorter server timeouts (tried 2, 5 seconds)
+testWrongEndpoint :: TestTree
+testWrongEndpoint =
+  csTest "client requests unknown endpoint" client server [("/foo", Normal)]
+  where
+    -- TODO: possibly factor out dead-simple client/server construction even
+    -- further
+    client c = do
+      rm <- clientRegisterMethod c "/bar" Normal
+      r  <- clientRegisteredRequest c rm 1 "Hello!" mempty
+      r @?= Left (GRPCIOBadStatusCode GrpcStatusDeadlineExceeded
+                    (StatusDetails "Deadline Exceeded"))
+    server s = do
+      length (registeredMethods s) @?= 1
+      let rm = head (registeredMethods s)
+      r <- serverHandleNormalRegisteredCall s rm 10 mempty $ \_ _ -> do
+        return ("reply test", dummyMeta, dummyMeta, StatusDetails "details string")
+      r @?= Right ()
+
+-- TODO: There seems to be a race here (and in other client/server pairs, of
+-- course) about what gets reported when there is a failure. E.g., if one of the
+-- Assertions fails in the request processing block for the server, we /may/ get
+-- that error reported accurately as a call cancellation on the client, rather
+-- than a useful error about the failure on the server. Maybe we'll need to
+-- tweak EH behavior / async use.
+testPayload :: TestTree
+testPayload =
+  csTest "registered normal request/response" client server [("/foo", Normal)]
+  where
+    clientMD = [("foo_key", "foo_val"), ("bar_key", "bar_val")]
+    client c = do
+      rm <- clientRegisterMethod c "/foo" Normal
+      clientRegisteredRequest c rm 10 "Hello!" clientMD >>= do
+        checkReqRslt $ \NormalRequestResult{..} -> do
+          rspCode @?= GrpcStatusOk
+          rspBody @?= "reply test"
+          details @?= "details string"
+          initMD  @?= Just dummyMeta
+          trailMD @?= dummyMeta
+    server s = do
+      length (registeredMethods s) @?= 1
+      let rm = head (registeredMethods s)
+      r <- serverHandleNormalRegisteredCall s rm 11 mempty $ \reqBody reqMD -> do
+        reqBody @?= "Hello!"
+        checkMD "Server metadata mismatch" clientMD reqMD
+        return ("reply test", dummyMeta, dummyMeta, StatusDetails "details string")
+      r @?= Right ()
+
+testPayloadUnregistered :: TestTree
+testPayloadUnregistered =
+  csTest "unregistered normal request/response" client server []
+  where
+    client c = do
+      clientRequest c "/foo" 10 "Hello!" mempty >>= do
+        checkReqRslt $ \NormalRequestResult{..} -> do
+          rspCode @?= GrpcStatusOk
+          rspBody @?= "reply test"
+          details @?= "details string"
+    server s = do
+      r <- serverHandleNormalCall s 11 mempty $ \body _md meth -> do
+             body @?= "Hello!"
+             meth @?= "/foo"
+             return ("reply test", mempty, "details string")
+      r @?= Right ()
 
 --------------------------------------------------------------------------------
 -- Utilities and helpers
 
 dummyMeta :: M.Map ByteString ByteString
-dummyMeta = M.fromList [("foo","bar")]
+dummyMeta = [("foo","bar")]
 
 nop :: Monad m => a -> m ()
 nop = const (return ())
 
--- | Defines a general-purpose GRPC unit test
-grpcTest :: TestName -> (GRPC -> IO ()) -> TestTree
-grpcTest nm = testCase nm . withGRPC
+serverOnlyTest :: TestName
+               -> [(MethodName, GRPCMethodType)]
+               -> (Server -> IO ())
+               -> TestTree
+serverOnlyTest nm ms =
+  testCase ("Server - " ++ nm) . runTestServer . stdTestServer ms
 
-newtype TestClient = TestClient (GRPC -> IO ())
-newtype TestServer = TestServer (GRPC -> IO ())
+clientOnlyTest :: TestName -> (Client -> IO ()) -> TestTree
+clientOnlyTest nm =
+  testCase ("Client - " ++ nm) . runTestClient . stdTestClient
 
--- | Concurrently executes the given 'TestClient' and 'TestServer' TODO: We may
--- want to add toplevel timeouts and better error reporting here.
-runClientServer :: TestClient -> TestServer -> GRPC -> IO ()
-runClientServer (TestClient c) (TestServer s) grpc =
-  void $ s grpc `concurrently` c grpc
+csTest :: TestName
+       -> (Client -> IO ())
+       -> (Server -> IO ())
+       -> [(MethodName, GRPCMethodType)]
+       -> TestTree
+csTest nm c s ms = csTest' nm (stdTestClient c) (stdTestServer ms s)
+
+csTest' :: TestName -> TestClient -> TestServer -> TestTree
+csTest' nm tc ts =
+  testCase ("Client/Server - " ++ nm)
+  $ void (s `concurrently` c)
+  where
+    -- We use a small delay to give the server a head start
+    c = threadDelay 100000 >> runTestClient tc
+    s = runTestServer ts
+
+-- | @checkMD msg expected actual@ fails when keys from @expected@ are not in
+-- @actual@, or when values differ for matching keys.
+checkMD :: String -> MetadataMap -> MetadataMap -> Assertion
+checkMD desc expected actual = do
+  when (not $ M.null $ expected `diff` actual) $ do
+    assertEqual desc expected (actual `M.intersection` expected)
+  where
+    diff = M.differenceWith $ \a b -> if a == b then Nothing else Just b
+
+checkReqRslt :: Show a => (b -> Assertion) -> Either a b -> Assertion
+checkReqRslt = either clientFail
+
+clientFail :: Show a => a -> Assertion
+clientFail = assertFailure . ("Client error: " ++). show
+
+data TestClient = TestClient ClientConfig (Client -> IO ())
+
+runTestClient :: TestClient -> IO ()
+runTestClient (TestClient conf c) = withGRPC $ \g -> withClient g conf c
+
+stdTestClient :: (Client -> IO ()) -> TestClient
+stdTestClient = TestClient stdClientConf
+
+stdClientConf :: ClientConfig
+stdClientConf = ClientConfig "localhost" 50051
+
+data TestServer = TestServer ServerConfig (Server -> IO ())
+
+runTestServer :: TestServer -> IO ()
+runTestServer (TestServer conf s) = withGRPC $ \g -> withServer g conf s
+
+stdTestServer :: [(MethodName, GRPCMethodType)] -> (Server -> IO ()) -> TestServer
+stdTestServer = TestServer . stdServerConf
+
+stdServerConf :: [(MethodName, GRPCMethodType)] -> ServerConfig
+stdServerConf = ServerConfig "localhost" 50051

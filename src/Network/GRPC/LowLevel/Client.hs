@@ -121,11 +121,12 @@ withClientCall client method timeout f = do
                                          >> destroyClientCall c
 
 data NormalRequestResult = NormalRequestResult
-                             ByteString
-                             (Maybe MetadataMap) --init metadata
-                             MetadataMap --trailing metadata
-                             C.StatusCode
-                             StatusDetails
+  { rspBody :: ByteString
+  , initMD  :: Maybe MetadataMap -- initial metadata
+  , trailMD :: MetadataMap       -- trailing metadata
+  , rspCode :: C.StatusCode
+  , details :: StatusDetails
+  }
   deriving (Show, Eq)
 
 -- | Function for assembling call result when the 'MethodType' is 'Normal'.
