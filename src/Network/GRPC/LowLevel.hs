@@ -47,8 +47,6 @@ GRPC
 , withClientCall
 
 -- * Ops
-, runClientOps
-, runServerOps
 , Op(..)
 , OpRecvResult(..)
 

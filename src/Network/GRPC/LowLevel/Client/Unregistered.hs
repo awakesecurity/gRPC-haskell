@@ -48,23 +48,22 @@ withClientCall client method timeout f = do
                                          >> destroyClientCall c
 
 -- | Makes a normal (non-streaming) request without needing to register a method
--- first. Probably only useful for testing. TODO: This is preliminary, like
--- 'clientRegisteredRequest'.
+-- first. Probably only useful for testing.
 clientRequest :: Client
-                 -> MethodName
-                 -- ^ Method name, e.g. "/foo"
-                 -> TimeoutSeconds
-                 -- ^ "Number of seconds until request times out"
-                 -> ByteString
-                 -- ^ Request body.
-                 -> MetadataMap
-                 -- ^ Request metadata.
-                 -> IO (Either GRPCIOError NormalRequestResult)
+              -> MethodName
+              -- ^ Method name, e.g. "/foo"
+              -> TimeoutSeconds
+              -- ^ "Number of seconds until request times out"
+              -> ByteString
+              -- ^ Request body.
+              -> MetadataMap
+              -- ^ Request metadata.
+              -> IO (Either GRPCIOError NormalRequestResult)
 clientRequest client@Client{..} meth timeLimit body meta =
   fmap join $ do
   withClientCall client meth timeLimit $ \call -> do
     let ops = clientNormalRequestOps body meta
-    results <- runClientOps call clientCQ ops timeLimit
+    results <- runOps (unClientCall call) clientCQ ops timeLimit
     grpcDebug "clientRequest(U): ops ran."
     case results of
       Left x -> return $ Left x

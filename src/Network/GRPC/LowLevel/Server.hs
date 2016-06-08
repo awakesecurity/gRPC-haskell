@@ -217,7 +217,7 @@ serverHandleNormalCall s@Server{..} rm timeLimit srvMetadata f = do
         let status = C.GrpcStatusOk
         let respOps = serverOpsSendNormalRegisteredResponse
                         respBody initMeta trailingMeta status details
-        respOpsResults <- runServerOps call serverCQ respOps timeLimit
+        respOpsResults <- runOps (unServerCall call) serverCQ respOps timeLimit
         grpcDebug "serverHandleNormalCall(R): finished response ops."
         case respOpsResults of
           Left x -> return $ Left x

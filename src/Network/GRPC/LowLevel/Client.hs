@@ -153,12 +153,13 @@ clientRequest client@(Client{..}) rm@(RegisteredMethod{..})
     Normal -> withClientCall client rm timeLimit $ \call -> do
                 grpcDebug "clientRequest(R): created call."
                 debugClientCall call
+                let call' = unClientCall call
                 -- NOTE: sendOps and recvOps *must* be in separate batches or
                 -- the client hangs when the server can't be reached.
                 let sendOps = [OpSendInitialMetadata meta
                            , OpSendMessage body
                            , OpSendCloseFromClient]
-                sendRes <- runClientOps call clientCQ sendOps timeLimit
+                sendRes <- runOps call' clientCQ sendOps timeLimit
                 case sendRes of
                   Left x -> do grpcDebug "clientRequest(R) : batch error."
                                return $ Left x
@@ -166,7 +167,7 @@ clientRequest client@(Client{..}) rm@(RegisteredMethod{..})
                     let recvOps = [OpRecvInitialMetadata,
                                    OpRecvMessage,
                                    OpRecvStatusOnClient]
-                    recvRes <- runClientOps call clientCQ recvOps timeLimit
+                    recvRes <- runOps call' clientCQ recvOps timeLimit
                     case recvRes of
                       Left x -> do
                         grpcDebug "clientRequest(R): batch error."
