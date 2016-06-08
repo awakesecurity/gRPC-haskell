@@ -19,11 +19,11 @@ lowLevelTests :: TestTree
 lowLevelTests = testGroup "Unit tests of low-level Haskell library"
   [ testGRPCBracket
   , testCompletionQueueCreateDestroy
-  , testServerCreateDestroy
   , testClientCreateDestroy
-  , testWithServerCall
-  , testWithClientCall
+  , testClientCall
   , testClientTimeoutNoServer
+  , testServerCreateDestroy
+  , testServerCall
   , testServerTimeoutNoClient
   -- , testWrongEndpoint
   , testPayload
@@ -39,22 +39,12 @@ testCompletionQueueCreateDestroy =
   testCase "Create/destroy CQ" $ withGRPC $ \g ->
   withCompletionQueue g nop
 
-testServerCreateDestroy :: TestTree
-testServerCreateDestroy =
-  serverOnlyTest "start/stop" [] nop
-
 testClientCreateDestroy :: TestTree
 testClientCreateDestroy =
   clientOnlyTest "start/stop" nop
 
-testWithServerCall :: TestTree
-testWithServerCall =
-  serverOnlyTest "create/destroy call" [] $ \s -> do
-    r <- withServerUnregCall s 1 $ const $ return $ Right ()
-    r @?= Left GRPCIOTimeout
-
-testWithClientCall :: TestTree
-testWithClientCall =
+testClientCall :: TestTree
+testClientCall =
   clientOnlyTest "create/destroy call" $ \c -> do
     r <- withClientCall c "foo" 10 $ const $ return $ Right ()
     r @?= Right ()
@@ -64,6 +54,16 @@ testClientTimeoutNoServer =
   clientOnlyTest "request timeout when server DNE" $ \c -> do
     rm <- clientRegisterMethod c "/foo" Normal
     r  <- clientRegisteredRequest c rm 1 "Hello" mempty
+    r @?= Left GRPCIOTimeout
+
+testServerCreateDestroy :: TestTree
+testServerCreateDestroy =
+  serverOnlyTest "start/stop" [] nop
+
+testServerCall :: TestTree
+testServerCall =
+  serverOnlyTest "create/destroy call" [] $ \s -> do
+    r <- withServerUnregCall s 1 $ const $ return $ Right ()
     r @?= Left GRPCIOTimeout
 
 testServerTimeoutNoClient :: TestTree
