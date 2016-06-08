@@ -2,17 +2,18 @@
 
 module Network.GRPC.LowLevel.Client.Unregistered where
 
-import           Control.Exception                     (finally)
-import           Control.Monad                         (join)
-import           Data.ByteString                       (ByteString)
-import           Foreign.Ptr                           (nullPtr)
-import qualified Network.GRPC.Unsafe                   as C
-import qualified Network.GRPC.Unsafe.Constants         as C
-import qualified Network.GRPC.Unsafe.Time              as C
+import           Control.Exception                                  (finally)
+import           Control.Monad                                      (join)
+import           Data.ByteString                                    (ByteString)
+import           Foreign.Ptr                                        (nullPtr)
+import qualified Network.GRPC.Unsafe                                as C
+import qualified Network.GRPC.Unsafe.Constants                      as C
+import qualified Network.GRPC.Unsafe.Time                           as C
 
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.Client
-import           Network.GRPC.LowLevel.CompletionQueue
+import           Network.GRPC.LowLevel.CompletionQueue              (TimeoutSeconds)
+import qualified Network.GRPC.LowLevel.CompletionQueue.Unregistered as U
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
 
@@ -26,8 +27,8 @@ clientCreateCall :: Client
 clientCreateCall Client{..} meth timeout = do
   let parentCall = C.Call nullPtr
   C.withDeadlineSeconds timeout $ \deadline -> do
-    channelCreateCall clientChannel parentCall C.propagateDefaults
-                      clientCQ meth (clientEndpoint clientConfig) deadline
+    U.channelCreateCall clientChannel parentCall C.propagateDefaults
+      clientCQ meth (clientEndpoint clientConfig) deadline
 
 withClientCall :: Client
                -> MethodName

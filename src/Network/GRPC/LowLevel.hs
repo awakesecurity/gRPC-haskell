@@ -50,7 +50,6 @@ GRPC
 -- * Ops
 , runClientOps
 , runServerRegOps
-, runServerUnregOps
 , Op(..)
 , OpRecvResult(..)
 
@@ -63,7 +62,6 @@ import           Network.GRPC.LowLevel.Op
 import           Network.GRPC.LowLevel.Client
 import           Network.GRPC.LowLevel.Client.Unregistered
 import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.Call.Unregistered
 
 import Network.GRPC.Unsafe (ConnectivityState(..))
 import Network.GRPC.Unsafe.Op (StatusCode(..))

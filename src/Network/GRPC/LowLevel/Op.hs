@@ -7,7 +7,6 @@ import           Control.Exception
 import qualified Data.ByteString                         as B
 import qualified Data.Map.Strict                         as M
 import           Data.Maybe                              (catMaybes)
-import           Data.String                             (IsString)
 import           Foreign.C.String                        (CString)
 import           Foreign.C.Types                         (CInt)
 import           Foreign.Marshal.Alloc                   (free, malloc,
@@ -20,7 +19,6 @@ import qualified Network.GRPC.Unsafe.Metadata            as C
 import qualified Network.GRPC.Unsafe.Op                  as C
 
 import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.Call.Unregistered as U
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.GRPC
 
@@ -224,7 +222,7 @@ runOps call cq ops timeLimit =
 -- | For a given call, run the given 'Op's on the given completion queue with
 -- the given tag. Blocks until the ops are complete or the given number of
 -- seconds have elapsed.
--- TODO: now that 'ServerRegCall' and 'ServerUnregCall' are separate types, we
+-- TODO: now that 'ServerRegCall' and 'U.ServerCall' are separate types, we
 -- could try to limit the input 'Op's more appropriately. E.g., we don't use
 -- an 'OpRecvInitialMetadata' when receiving a registered call, because gRPC
 -- handles that for us.
@@ -243,13 +241,6 @@ runServerRegOps :: ServerRegCall
                 -> IO (Either GRPCIOError [OpRecvResult])
 runServerRegOps = runOps . internalServerRegCall
 
-runServerUnregOps :: U.ServerCall
-                     -> CompletionQueue
-                     -> [Op]
-                     -> TimeoutSeconds
-                     -> IO (Either GRPCIOError [OpRecvResult])
-runServerUnregOps = runOps . U.internalServerCall
-
 -- | Like 'runServerOps', but for client-side calls.
 runClientOps :: ClientCall
                 -> CompletionQueue
@@ -263,6 +254,6 @@ runClientOps = runOps . internalClientCall
 extractStatusInfo :: [OpRecvResult]
                      -> Maybe (MetadataMap, C.StatusCode, B.ByteString)
 extractStatusInfo [] = Nothing
-extractStatusInfo (res@(OpRecvStatusOnClientResult meta code details):_) =
+extractStatusInfo (OpRecvStatusOnClientResult meta code details:_) =
   Just (meta, code, details)
 extractStatusInfo (_:xs) = extractStatusInfo xs

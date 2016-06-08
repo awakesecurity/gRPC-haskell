@@ -15,7 +15,6 @@ import           Network.GRPC.LowLevel.CompletionQueue   (CompletionQueue,
                                                           createCompletionQueue,
                                                           pluck,
                                                           serverRegisterCompletionQueue,
-                                                          serverRequestCall,
                                                           serverRequestRegisteredCall,
                                                           serverShutdownAndNotify,
                                                           shutdownCompletionQueue)

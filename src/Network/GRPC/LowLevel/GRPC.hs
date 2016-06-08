@@ -3,12 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Network.GRPC.LowLevel.GRPC where
-{-
--- TODO: remove if not needed
-import           Control.Monad.IO.Class (liftIO, MonadIO)
-import           Control.Monad.Except (ExceptT(..), runExceptT, throwError,
-                                       MonadError)
--}
+import           Control.Concurrent                      (threadDelay)
 import           Control.Exception
 import qualified Data.ByteString as B
 import qualified Data.Map as M
@@ -62,6 +57,9 @@ grpcDebug str = do tid <- myThreadId
 #else
 grpcDebug _ = return ()
 #endif
+
+threadDelaySecs :: Int -> IO ()
+threadDelaySecs = threadDelay . (* 10^(6::Int))
 
 {-
 -- TODO: remove this once finally decided on whether to use it.
