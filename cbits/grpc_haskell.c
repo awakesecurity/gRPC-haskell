@@ -385,3 +385,12 @@ char* call_details_get_host(grpc_call_details* details){
 gpr_timespec* call_details_get_deadline(grpc_call_details* details){
   return &(details->deadline);
 }
+
+void* grpc_server_register_method_(grpc_server* server, const char* method,
+                                   const char* host){
+  //NOTE: grpc 0.14.0 added more params to this function. None of our code takes
+  //advantage of them, so we hardcode to the equivalent of 0.13.0's behavior.
+  return grpc_server_register_method(server, method, host,
+                                     GRPC_SRM_PAYLOAD_READ_INITIAL_BYTE_BUFFER,
+                                     0);
+}
