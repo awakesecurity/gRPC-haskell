@@ -5,6 +5,7 @@ module Network.GRPC.Unsafe where
 import Control.Monad
 
 import Foreign.C.Types
+import Foreign.Marshal.Alloc (free)
 import Foreign.Ptr
 import Foreign.Storable
 
@@ -115,8 +116,15 @@ instance Storable Event where
     {#set grpc_event.success#} p $ if s then 1 else 0
     {#set grpc_event.tag#} p (unTag t)
 
+-- | Used to unwrap structs from pointers. This is all part of a workaround
+-- because the C FFI can't return raw structs directly. So we wrap the C
+-- function, mallocing a temporary pointer. This function peeks the struct
+-- within the pointer, then frees it.
 castPeek :: Storable b => Ptr a -> IO b
-castPeek p = peek (castPtr p)
+castPeek p = do
+  val <- peek (castPtr p)
+  free p
+  return val
 
 {#enum grpc_connectivity_state as ConnectivityState {underscoreToCase}
   deriving (Show, Eq)#}

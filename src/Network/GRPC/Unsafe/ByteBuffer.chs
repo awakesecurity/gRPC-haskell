@@ -84,9 +84,15 @@ withByteStringAsByteBuffer bs f = do
   bracket (byteStringToSlice bs) freeSlice $ \slice -> do
     bracket (grpcRawByteBufferCreate slice 1) grpcByteBufferDestroy f
 
--- TODO: Issue #5
-createByteBuffer :: B.ByteString -> IO ByteBuffer
-createByteBuffer bs = byteStringToSlice bs >>= flip grpcRawByteBufferCreate 1
+-- Creates a 'ByteBuffer'. We also return the slice we needed to allocate to
+-- create it. It is the caller's responsibility to free both when finished using
+-- the byte buffer. In most cases, one should prefer to use
+-- 'withByteStringAsByteBuffer' if possible.
+createByteBuffer :: B.ByteString -> IO (ByteBuffer, Slice)
+createByteBuffer bs = do
+  slice <- byteStringToSlice bs
+  bb <- grpcRawByteBufferCreate slice 1
+  return (bb, slice)
 
 copyByteBufferToByteString :: ByteBuffer -> IO B.ByteString
 copyByteBufferToByteString bb = do

@@ -37,6 +37,7 @@ import           Control.Exception                       (bracket)
 import           Data.IORef                              (newIORef)
 import           Data.List                               (intersperse)
 import           Foreign.Marshal.Alloc                   (free, malloc)
+import           Foreign.Ptr                             (nullPtr)
 import           Foreign.Storable                        (peek)
 import qualified Network.GRPC.Unsafe                     as C
 import qualified Network.GRPC.Unsafe.Constants           as C
@@ -97,8 +98,8 @@ shutdownCompletionQueue (CompletionQueue{..}) = do
 
   where drainLoop :: IO ()
         drainLoop = do
-          deadline <- C.secondsToDeadline 1
-          ev <- C.grpcCompletionQueueNext unsafeCQ deadline C.reserved
+          ev <- C.withDeadlineSeconds 1 $ \deadline ->
+                  C.grpcCompletionQueueNext unsafeCQ deadline C.reserved
           case (C.eventCompletionType ev) of
             C.QueueShutdown -> return ()
             C.QueueTimeout -> drainLoop
@@ -170,7 +171,12 @@ serverRequestCall
                      let assembledCall = ServerCall rawCall metadataArrayPtr
                                            bbPtr Nothing deadline
                      return $ Right assembledCall
-      -- TODO: see TODO for failureCleanup in serverRequestCall.
+      --TODO: the gRPC library appears to hold onto these pointers for a random
+      -- amount of time, even after returning from the only call that uses them.
+      -- This results in malloc errors if
+      -- gRPC tries to modify them after we free them. To work around it,
+      -- we sleep for a while before freeing the objects. We should find a
+      -- permanent solution that's more robust.
       where failureCleanup deadline callPtr metadataArrayPtr bbPtr = forkIO $ do
               threadDelaySecs 30
               grpcDebug "serverRequestCall(R): doing delayed cleanup."

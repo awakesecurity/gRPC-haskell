@@ -20,6 +20,7 @@ import qualified Network.GRPC.Unsafe                   as C (Call)
 import qualified Network.GRPC.Unsafe.ByteBuffer        as C
 import qualified Network.GRPC.Unsafe.Metadata          as C
 import qualified Network.GRPC.Unsafe.Op                as C
+import qualified Network.GRPC.Unsafe.Slice             as C (Slice, freeSlice)
 
 -- | Sum describing all possible send and receive operations that can be batched
 -- and executed by gRPC. Usually these are processed in a handful of
@@ -39,7 +40,7 @@ data Op = OpSendInitialMetadata MetadataMap
 -- 'withOpContexts'.
 data OpContext =
   OpSendInitialMetadataContext C.MetadataKeyValPtr Int
-  | OpSendMessageContext C.ByteBuffer
+  | OpSendMessageContext (C.ByteBuffer, C.Slice)
   | OpSendCloseFromClientContext
   | OpSendStatusFromServerContext C.MetadataKeyValPtr Int C.StatusCode
                                   B.ByteString
@@ -90,7 +91,7 @@ createOpContext OpRecvCloseOnServer =
 setOpArray :: C.OpArray -> Int -> OpContext -> IO ()
 setOpArray arr i (OpSendInitialMetadataContext kvs l) =
   C.opSendInitialMetadata arr i kvs l
-setOpArray arr i (OpSendMessageContext bb) =
+setOpArray arr i (OpSendMessageContext (bb,_)) =
   C.opSendMessage arr i bb
 setOpArray arr i OpSendCloseFromClientContext =
   C.opSendCloseClient arr i
@@ -109,7 +110,8 @@ setOpArray arr i (OpRecvCloseOnServerContext pcancelled) = do
 -- | Cleans up an 'OpContext'.
 freeOpContext :: OpContext -> IO ()
 freeOpContext (OpSendInitialMetadataContext m _) = C.metadataFree m
-freeOpContext (OpSendMessageContext bb) = C.grpcByteBufferDestroy bb
+freeOpContext (OpSendMessageContext (bb, s)) =
+  C.grpcByteBufferDestroy bb >> C.freeSlice s
 freeOpContext OpSendCloseFromClientContext = return ()
 freeOpContext (OpSendStatusFromServerContext metadata _ _ _) =
   C.metadataFree metadata

@@ -15,6 +15,7 @@ import qualified Network.GRPC.LowLevel.Client.Unregistered as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
 import           Test.Tasty
 import           Test.Tasty.HUnit                          as HU (Assertion,
+                                                                  assertBool,
                                                                   assertEqual,
                                                                   assertFailure,
                                                                   testCase,
@@ -33,6 +34,8 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
   -- , testWrongEndpoint
   , testPayload
   , testPayloadUnregistered
+  , testGoaway
+  , testSlowServer
   ]
 
 testGRPCBracket :: TestTree
@@ -146,11 +149,64 @@ testPayloadUnregistered =
              return ("reply test", mempty, "details string")
       r @?= Right ()
 
+testGoaway :: TestTree
+testGoaway =
+  csTest "Client handles server shutdown gracefully"
+         client
+         server
+         [("/foo", Normal)]
+  where
+    client c = do
+      rm <- clientRegisterMethod c "/foo" Normal
+      clientRequest c rm 10 "" mempty
+      clientRequest c rm 10 "" mempty
+      lastResult <- clientRequest c rm 1 "" mempty
+      assertBool "Client handles server shutdown gracefully" $
+        lastResult == unavailableStatus
+        ||
+        lastResult == Left GRPCIOTimeout
+    server s = do
+      let rm = head (registeredMethods s)
+      serverHandleNormalCall s rm 11 mempty dummyHandler
+      serverHandleNormalCall s rm 11 mempty dummyHandler
+      return ()
+
+testSlowServer :: TestTree
+testSlowServer =
+  csTest "Client handles slow server response" client server [("/foo", Normal)]
+  where
+    client c = do
+      rm <- clientRegisterMethod c "/foo" Normal
+      result <- clientRequest c rm 1 "" mempty
+      assertBool "Client gets timeout or deadline exceeded" $
+        result == Left GRPCIOTimeout
+        ||
+        result == deadlineExceededStatus
+    server s = do
+      let rm = head (registeredMethods s)
+      serverHandleNormalCall s rm 1 mempty $ \_ _ -> do
+        threadDelay (2*10^(6 :: Int))
+        return ("", mempty, mempty, StatusDetails "")
+      return ()
+
 --------------------------------------------------------------------------------
 -- Utilities and helpers
 
 dummyMeta :: M.Map ByteString ByteString
 dummyMeta = [("foo","bar")]
+
+dummyHandler :: ByteString -> MetadataMap
+                -> IO (ByteString, MetadataMap, MetadataMap, StatusDetails)
+dummyHandler _ _ = return ("", mempty, mempty, StatusDetails "")
+
+unavailableStatus :: Either GRPCIOError a
+unavailableStatus =
+  Left (GRPCIOBadStatusCode GrpcStatusUnavailable (StatusDetails ""))
+
+deadlineExceededStatus :: Either GRPCIOError a
+deadlineExceededStatus =
+  Left (GRPCIOBadStatusCode GrpcStatusDeadlineExceeded
+                            (StatusDetails "Deadline Exceeded"))
 
 nop :: Monad m => a -> m ()
 nop = const (return ())

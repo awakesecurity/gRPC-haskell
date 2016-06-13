@@ -9,7 +9,7 @@
 
 void grpc_haskell_free(char *debugMsg, void *ptr){
   #ifdef GRPC_HASKELL_DEBUG
-  printf("C wrapper: freeing %s, ptr: %p\n", debugMsg, ptr);
+  printf("C wrapper: %s: freeing ptr: %p\n", debugMsg, ptr);
   #endif
   free(ptr);
 }
@@ -175,13 +175,14 @@ grpc_op* op_array_create(size_t n){
 }
 
 void op_array_destroy(grpc_op* op_array, size_t n){
+  #ifdef GRPC_HASKELL_DEBUG
+  printf("C wrapper: entered op_array_destroy\n");
+  #endif
   for(int i = 0; i < n; i++){
     grpc_op* op = op_array + i;
     switch (op->op) {
       case GRPC_OP_SEND_INITIAL_METADATA:
-      if(op->data.send_initial_metadata.count > 0){
-        metadata_free(op->data.send_initial_metadata.metadata);
-      }
+      metadata_free(op->data.send_initial_metadata.metadata);
       break;
       case GRPC_OP_SEND_MESSAGE:
       grpc_byte_buffer_destroy(op->data.send_message);
@@ -224,6 +225,7 @@ void op_send_initial_metadata_empty(grpc_op *op_array, size_t i){
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_SEND_INITIAL_METADATA;
   op->data.send_initial_metadata.count = 0;
+  op->data.send_initial_metadata.metadata = malloc(0*sizeof(grpc_metadata));
   op->flags = 0;
   op->reserved = NULL;
 }

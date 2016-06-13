@@ -142,8 +142,11 @@ payloadClient = do
             destroyStatusCodePtr statusCodePtr
         --verify response received
         responseRecv <- peek clientRecvBB
-        responseRecvBS <- copyByteBufferToByteString responseRecv
-        responseRecvBS HU.@?= "hello you"
+        let (ByteBuffer rawPtr) = responseRecv
+        if rawPtr == nullPtr
+           then error "Client got null pointer for received response!"
+           else do responseRecvBS <- copyByteBufferToByteString responseRecv
+                   responseRecvBS HU.@?= "hello you"
         grpcCompletionQueueShutdown cq
         grpcCallDestroy clientCall
         --TODO: the grpc test drains the cq here
