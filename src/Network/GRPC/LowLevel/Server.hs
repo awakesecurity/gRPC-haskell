@@ -125,41 +125,22 @@ serverRegisterMethod _ _ _ _ = error "Streaming methods not implemented yet."
 serverCreateCall :: Server
                  -> RegisteredMethod
                  -> TimeoutSeconds
-                 -> MetadataMap
                  -> IO (Either GRPCIOError ServerCall)
-serverCreateCall Server{..} rm timeLimit initMeta =
-  serverRequestCall internalServer serverCQ timeLimit rm initMeta
+serverCreateCall Server{..} rm timeLimit =
+  serverRequestCall internalServer serverCQ timeLimit rm
 
 withServerCall :: Server
                -> RegisteredMethod
                -> TimeoutSeconds
-               -> MetadataMap
                -> (ServerCall -> IO (Either GRPCIOError a))
                -> IO (Either GRPCIOError a)
-withServerCall server regmethod timeout initMeta f = do
-  createResult <- serverCreateCall server regmethod timeout initMeta
+withServerCall server regmethod timeout f = do
+  createResult <- serverCreateCall server regmethod timeout
   case createResult of
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
       where logDestroy c = grpcDebug "withServerRegisteredCall: destroying."
                            >> destroyServerCall c
-
--- | Sequence of 'Op's needed to receive a normal (non-streaming) call.
-serverOpsGetNormalCall :: MetadataMap -> [Op]
-serverOpsGetNormalCall initMetadata =
-  [OpSendInitialMetadata initMetadata,
-   OpRecvMessage]
-
--- | Sequence of 'Op's needed to respond to a normal (non-streaming) call.
-serverOpsSendNormalResponse :: ByteString
-                               -> MetadataMap
-                               -> C.StatusCode
-                               -> StatusDetails
-                               -> [Op]
-serverOpsSendNormalResponse body metadata code details =
-  [OpRecvCloseOnServer,
-   OpSendMessage body,
-   OpSendStatusFromServer metadata code details]
 
 serverOpsSendNormalRegisteredResponse :: ByteString
                                          -> MetadataMap
@@ -180,13 +161,14 @@ serverOpsSendNormalRegisteredResponse
 -- body, with the bytestring response body in the result tuple. The first
 -- metadata parameter refers to the request metadata, with the two metadata
 -- values in the result tuple being the initial and trailing metadata
--- respectively.
+-- respectively. We pass in the 'ServerCall' so that the server can call
+-- 'serverCallCancel' on it if needed.
 
 -- TODO: make a more rigid type for this with a Maybe MetadataMap for the
 -- trailing meta, and use it for both kinds of call handlers.
 type ServerHandler
-  =  ByteString -> MetadataMap
-  -> IO (ByteString, MetadataMap, MetadataMap, StatusDetails)
+  =  ServerCall -> ByteString -> MetadataMap
+  -> IO (ByteString, MetadataMap, StatusDetails)
 
 -- TODO: we will want to replace this with some more general concept that also
 -- works with streaming calls in the future.
@@ -198,12 +180,12 @@ serverHandleNormalCall :: Server
                        -- ^ Initial server metadata
                        -> ServerHandler
                        -> IO (Either GRPCIOError ())
-serverHandleNormalCall s@Server{..} rm timeLimit srvMetadata f = do
+serverHandleNormalCall s@Server{..} rm timeLimit initMeta f = do
   -- TODO: we use this timeLimit twice, so the max time spent is 2*timeLimit.
   -- Should we just hard-code time limits instead? Not sure if client
   -- programmer cares, since this function will likely just be put in a loop
   -- anyway.
-  withServerCall s rm timeLimit srvMetadata $ \call -> do
+  withServerCall s rm timeLimit $ \call -> do
     grpcDebug "serverHandleNormalCall(R): starting batch."
     debugServerCall call
     payload <- serverCallGetPayload call
@@ -213,7 +195,7 @@ serverHandleNormalCall s@Server{..} rm timeLimit srvMetadata f = do
       Nothing -> error "serverHandleNormalCall(R): payload empty."
       Just requestBody -> do
         requestMeta <- serverCallGetMetadata call
-        (respBody, initMeta, trailingMeta, details) <- f requestBody requestMeta
+        (respBody, trailingMeta, details) <- f call requestBody requestMeta
         let status = C.GrpcStatusOk
         let respOps = serverOpsSendNormalRegisteredResponse
                         respBody initMeta trailingMeta status details

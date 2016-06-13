@@ -9,10 +9,8 @@ import           Network.GRPC.LowLevel.Call.Unregistered
 import           Network.GRPC.LowLevel.CompletionQueue              (TimeoutSeconds)
 import           Network.GRPC.LowLevel.CompletionQueue.Unregistered (serverRequestCall)
 import           Network.GRPC.LowLevel.GRPC
-import           Network.GRPC.LowLevel.Op                           (OpRecvResult (..), runOps)
-import           Network.GRPC.LowLevel.Server                       (Server (..),
-                                                                     serverOpsGetNormalCall,
-                                                                     serverOpsSendNormalResponse)
+import           Network.GRPC.LowLevel.Op                           (Op(..), OpRecvResult (..), runOps)
+import           Network.GRPC.LowLevel.Server                       (Server (..))
 import qualified Network.GRPC.Unsafe.Op                             as C
 
 serverCreateCall :: Server -> TimeoutSeconds
@@ -31,10 +29,30 @@ withServerCall server timeout f = do
       where logDestroy c = grpcDebug "withServerCall: destroying."
                            >> destroyServerCall c
 
+-- | Sequence of 'Op's needed to receive a normal (non-streaming) call.
+-- TODO: We have to put 'OpRecvCloseOnServer' in the response ops, or else the
+-- client times out. Given this, I have no idea how to check for cancellation on
+-- the server.
+serverOpsGetNormalCall :: MetadataMap -> [Op]
+serverOpsGetNormalCall initMetadata =
+  [OpSendInitialMetadata initMetadata,
+   OpRecvMessage]
+
+-- | Sequence of 'Op's needed to respond to a normal (non-streaming) call.
+serverOpsSendNormalResponse :: ByteString
+                               -> MetadataMap
+                               -> C.StatusCode
+                               -> StatusDetails
+                               -> [Op]
+serverOpsSendNormalResponse body metadata code details =
+  [OpRecvCloseOnServer,
+   OpSendMessage body,
+   OpSendStatusFromServer metadata code details]
+
 -- | A handler for an unregistered server call; bytestring arguments are the
 -- request body and response body respectively.
 type ServerHandler
-  =  ByteString -> MetadataMap -> MethodName
+  =  ServerCall -> ByteString -> MetadataMap -> MethodName
   -> IO (ByteString, MetadataMap, StatusDetails)
 
 -- | Handle one unregistered call.
@@ -58,7 +76,7 @@ serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
         methodName <- serverCallGetMethodName call
         hostName <- serverCallGetHost call
         grpcDebug $ "call_details host is: " ++ show hostName
-        (respBody, respMetadata, details) <- f body requestMeta methodName
+        (respBody, respMetadata, details) <- f call body requestMeta methodName
         let status = C.GrpcStatusOk
         let respOps = serverOpsSendNormalResponse
                         respBody respMetadata status details

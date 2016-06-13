@@ -34,6 +34,7 @@ GRPC
 , withServer
 , serverHandleNormalCall
 , withServerCall
+, serverCallCancel
 
 -- * Client
 , ClientConfig(..)
@@ -45,6 +46,7 @@ GRPC
 , clientRegisterMethod
 , clientRequest
 , withClientCall
+, clientCallCancel
 
 -- * Ops
 , Op(..)

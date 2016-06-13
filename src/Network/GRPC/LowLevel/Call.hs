@@ -17,6 +17,7 @@ import qualified Network.GRPC.Unsafe            as C
 import qualified Network.GRPC.Unsafe.ByteBuffer as C
 import qualified Network.GRPC.Unsafe.Metadata   as C
 import qualified Network.GRPC.Unsafe.Time       as C
+import qualified Network.GRPC.Unsafe.Op         as C
 
 import           Network.GRPC.LowLevel.GRPC     (MetadataMap, grpcDebug)
 
@@ -56,6 +57,9 @@ data RegisteredMethod = RegisteredMethod {methodType :: GRPCMethodType,
 -- This is used to associate send/receive 'Op's with a request.
 data ClientCall = ClientCall { unClientCall :: C.Call }
 
+clientCallCancel :: ClientCall -> IO ()
+clientCallCancel cc = C.grpcCallCancel (unClientCall cc) C.reserved
+
 -- | Represents one registered GRPC call on the server. Contains pointers to all
 -- the C state needed to respond to a registered call.
 data ServerCall = ServerCall
@@ -65,6 +69,10 @@ data ServerCall = ServerCall
     parentPtr           :: Maybe (Ptr C.Call),
     callDeadline        :: C.CTimeSpecPtr
   }
+
+serverCallCancel :: ServerCall -> C.StatusCode -> String -> IO ()
+serverCallCancel sc code reason =
+  C.grpcCallCancelWithStatus (unServerCall sc) code reason C.reserved
 
 serverCallGetMetadata :: ServerCall -> IO MetadataMap
 serverCallGetMetadata ServerCall{..} = do

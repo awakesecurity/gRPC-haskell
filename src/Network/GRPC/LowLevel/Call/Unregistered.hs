@@ -10,6 +10,7 @@ import           Network.GRPC.LowLevel.Call   (Host (..), MethodName (..))
 import           Network.GRPC.LowLevel.GRPC   (MetadataMap, grpcDebug)
 import qualified Network.GRPC.Unsafe          as C
 import qualified Network.GRPC.Unsafe.Metadata as C
+import qualified Network.GRPC.Unsafe.Op as C
 
 -- | Represents one unregistered GRPC call on the server.
 -- Contains pointers to all the C state needed to respond to an unregistered
@@ -20,6 +21,10 @@ data ServerCall = ServerCall
   , parentPtr           :: Maybe (Ptr C.Call)
   , callDetails         :: C.CallDetails
   }
+
+serverCallCancel :: ServerCall -> C.StatusCode -> String -> IO ()
+serverCallCancel sc code reason =
+  C.grpcCallCancelWithStatus (unServerCall sc) code reason C.reserved
 
 serverCallGetMetadata :: ServerCall -> IO MetadataMap
 serverCallGetMetadata ServerCall{..} = do

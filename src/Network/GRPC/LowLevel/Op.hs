@@ -129,15 +129,17 @@ freeOpContext (OpRecvCloseOnServerContext pcancelled) =
   grpcDebug ("freeOpContext: freeing pcancelled: " ++ show pcancelled)
   >> free pcancelled
 
--- | Converts a list of 'Op's into the corresponding 'OpContext's and guarantees
--- they will be cleaned up correctly.
-withOpContexts :: [Op] -> ([OpContext] -> IO a) -> IO a
-withOpContexts ops = bracket (mapM createOpContext ops)
-                             (mapM freeOpContext)
-
-withOpArray :: Int -> (C.OpArray -> IO a) -> IO a
-withOpArray n = bracket (C.opArrayCreate n)
-                        (flip C.opArrayDestroy n)
+-- | Allocates an `OpArray` and a list of `OpContext`s from the given list of
+-- `Op`s. 
+withOpArrayAndCtxts :: [Op] -> ((C.OpArray, [OpContext]) -> IO a) -> IO a
+withOpArrayAndCtxts ops = bracket setup teardown
+  where setup = do ctxts <- mapM createOpContext ops
+                   let l = length ops
+                   arr <- C.opArrayCreate l
+                   sequence_ $ zipWith (setOpArray arr) [0..l-1] ctxts
+                   return (arr, ctxts)
+        teardown (arr, ctxts) = do C.opArrayDestroy arr (length ctxts)
+                                   mapM_ freeOpContext ctxts
 
 -- | Container holding GC-managed results for 'Op's which receive data.
 data OpRecvResult =
@@ -216,25 +218,22 @@ runOps :: C.Call
        -> IO (Either GRPCIOError [OpRecvResult])
 runOps call cq ops timeLimit =
   let l = length ops in
-    withOpArray l $ \opArray -> do
-      grpcDebug "runOps: created op array."
-      withOpContexts ops $ \contexts -> do
-        grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
-        sequence_ $ zipWith (setOpArray opArray) [0..l-1] contexts
-        tag <- newTag cq
-        callError <- startBatch cq call opArray l tag
-        grpcDebug $ "runOps: called start_batch. callError: "
-                     ++ (show callError)
-        case callError of
-          Left x -> return $ Left x
-          Right () -> do
-            ev <- pluck cq tag timeLimit
-            grpcDebug $ "runOps: pluck returned " ++ show ev
-            case ev of
-              Right () -> do
-                grpcDebug "runOps: got good op; starting."
-                fmap (Right . catMaybes) $ mapM resultFromOpContext contexts
-              Left err -> return $ Left err
+    withOpArrayAndCtxts ops $ \(opArray, contexts) -> do
+      grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
+      tag <- newTag cq
+      callError <- startBatch cq call opArray l tag
+      grpcDebug $ "runOps: called start_batch. callError: "
+                   ++ (show callError)
+      case callError of
+        Left x -> return $ Left x
+        Right () -> do
+          ev <- pluck cq tag timeLimit
+          grpcDebug $ "runOps: pluck returned " ++ show ev
+          case ev of
+            Right () -> do
+              grpcDebug "runOps: got good op; starting."
+              fmap (Right . catMaybes) $ mapM resultFromOpContext contexts
+            Left err -> return $ Left err
 
 -- | If response status info is present in the given 'OpRecvResult's, returns
 -- a tuple of trailing metadata, status code, and status details.

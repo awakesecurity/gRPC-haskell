@@ -128,10 +128,9 @@ serverRequestCall :: C.Server
                   -> CompletionQueue
                   -> TimeoutSeconds
                   -> RegisteredMethod
-                  -> MetadataMap
                   -> IO (Either GRPCIOError ServerCall)
 serverRequestCall
-  server cq@CompletionQueue{..} timeLimit RegisteredMethod{..} initMeta =
+  server cq@CompletionQueue{..} timeLimit RegisteredMethod{..} =
     withPermission Push cq $ do
       -- TODO: Is gRPC supposed to populate this deadline?
       -- NOTE: the below stuff is freed when we free the call we return.
@@ -139,15 +138,6 @@ serverRequestCall
       callPtr <- malloc
       metadataArrayPtr <- C.metadataArrayCreate
       metadataArray <- peek metadataArrayPtr
-      #ifdef DEBUG
-      metaCount <- C.metadataArrayGetCount metadataArray
-      metaCap <- C.metadataArrayGetCapacity metadataArray
-      kvPtr <- C.metadataArrayGetMetadata metadataArray
-      grpcDebug $ "grpc-created meta: count: " ++ show metaCount
-                  ++ " capacity: " ++ show metaCap ++ " ptr: " ++ show kvPtr
-      #endif
-      metadataContents <- C.createMetadata initMeta
-      C.metadataArraySetMetadata metadataArray metadataContents
       bbPtr <- malloc
       tag <- newTag cq
       callError <- C.grpcServerRequestRegisteredCall

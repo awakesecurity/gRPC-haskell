@@ -8,13 +8,14 @@ import           Control.Monad                             (forever)
 import           Data.ByteString                           (ByteString)
 import           Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
+import qualified Network.GRPC.LowLevel.Call.Unregistered as U
 
 serverMeta :: MetadataMap
 serverMeta = [("test_meta", "test_meta_value")]
 
-handler :: ByteString -> MetadataMap -> MethodName
+handler :: U.ServerCall -> ByteString -> MetadataMap -> MethodName
            -> IO (ByteString, MetadataMap, StatusDetails)
-handler reqBody _reqMeta _method = do
+handler _call reqBody _reqMeta _method = do
   --putStrLn $ "Got request for method: " ++ show method
   --putStrLn $ "Got metadata: " ++ show reqMeta
   return (reqBody, serverMeta, StatusDetails "")
@@ -34,8 +35,8 @@ regMain = withGRPC $ \grpc -> do
     forever $ do
       let method = head (registeredMethods server)
       result <- serverHandleNormalCall server method 15 serverMeta $
-        \reqBody _reqMeta -> return (reqBody, serverMeta, serverMeta,
-                                     StatusDetails "")
+        \_call reqBody _reqMeta -> return (reqBody, serverMeta,
+                                           StatusDetails "")
       case result of
         Left x -> putStrLn $ "registered call result error: " ++ show x
         Right _ -> return ()
@@ -44,8 +45,8 @@ regMain = withGRPC $ \grpc -> do
 regLoop :: Server -> RegisteredMethod -> IO ()
 regLoop server method = forever $ do
   result <- serverHandleNormalCall server method 15 serverMeta $
-    \reqBody _reqMeta -> return (reqBody, serverMeta, serverMeta,
-                                 StatusDetails "")
+    \_call reqBody _reqMeta -> return (reqBody, serverMeta,
+                                       StatusDetails "")
   case result of
     Left x -> putStrLn $ "registered call result error: " ++ show x
     Right _ -> return ()

@@ -3,7 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
-module LowLevelTests (lowLevelTests) where
+module LowLevelTests where
 
 import           Control.Concurrent                        (threadDelay)
 import           Control.Concurrent.Async
@@ -34,6 +34,7 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
   -- , testWrongEndpoint
   , testPayload
   , testPayloadUnregistered
+  , testServerCancel
   , testGoaway
   , testSlowServer
   ]
@@ -78,8 +79,8 @@ testServerTimeoutNoClient :: TestTree
 testServerTimeoutNoClient =
   serverOnlyTest "wait timeout when client DNE" [("/foo", Normal)] $ \s -> do
     let rm = head (registeredMethods s)
-    r <- serverHandleNormalCall s rm 1 mempty $ \_ _ ->
-           return ("", mempty, mempty, StatusDetails "details")
+    r <- serverHandleNormalCall s rm 1 mempty $ \_ _ _ ->
+           return ("", mempty, StatusDetails "details")
     r @?= Left GRPCIOTimeout
 
 -- TODO: fix this test: currently, client seems to hang and server times out,
@@ -99,8 +100,8 @@ testWrongEndpoint =
     server s = do
       length (registeredMethods s) @?= 1
       let rm = head (registeredMethods s)
-      r <- serverHandleNormalCall s rm 10 mempty $ \_ _ -> do
-        return ("reply test", dummyMeta, dummyMeta, StatusDetails "details string")
+      r <- serverHandleNormalCall s rm 10 mempty $ \_ _ _ -> do
+        return ("reply test", dummyMeta, StatusDetails "details string")
       r @?= Right ()
 
 -- TODO: There seems to be a race here (and in other client/server pairs, of
@@ -126,10 +127,27 @@ testPayload =
     server s = do
       length (registeredMethods s) @?= 1
       let rm = head (registeredMethods s)
-      r <- serverHandleNormalCall s rm 11 mempty $ \reqBody reqMD -> do
+      r <- serverHandleNormalCall s rm 11 dummyMeta $ \_ reqBody reqMD -> do
         reqBody @?= "Hello!"
         checkMD "Server metadata mismatch" clientMD reqMD
-        return ("reply test", dummyMeta, dummyMeta, StatusDetails "details string")
+        return ("reply test", dummyMeta, StatusDetails "details string")
+      r @?= Right ()
+
+testServerCancel :: TestTree
+testServerCancel =
+  csTest "server cancel call" client server [("/foo", Normal)]
+  where
+    client c = do
+      rm <- clientRegisterMethod c "/foo" Normal
+      res <- clientRequest c rm 10 "" mempty
+      res @?= Left (GRPCIOBadStatusCode GrpcStatusCancelled
+                                        (StatusDetails
+                                          "Received RST_STREAM err=8"))
+    server s = do
+      let rm = head (registeredMethods s)
+      r <- serverHandleNormalCall s rm 10 mempty $ \c _ _ -> do
+        serverCallCancel c GrpcStatusCancelled ""
+        return (mempty, mempty, "")
       r @?= Right ()
 
 testPayloadUnregistered :: TestTree
@@ -143,7 +161,7 @@ testPayloadUnregistered =
           rspBody @?= "reply test"
           details @?= "details string"
     server s = do
-      r <- U.serverHandleNormalCall s 11 mempty $ \body _md meth -> do
+      r <- U.serverHandleNormalCall s 11 mempty $ \_ body _md meth -> do
              body @?= "Hello!"
              meth @?= "/foo"
              return ("reply test", mempty, "details string")
@@ -184,9 +202,9 @@ testSlowServer =
         result == deadlineExceededStatus
     server s = do
       let rm = head (registeredMethods s)
-      serverHandleNormalCall s rm 1 mempty $ \_ _ -> do
+      serverHandleNormalCall s rm 1 mempty $ \_ _ _ -> do
         threadDelay (2*10^(6 :: Int))
-        return ("", mempty, mempty, StatusDetails "")
+        return ("", mempty, StatusDetails "")
       return ()
 
 --------------------------------------------------------------------------------
@@ -195,9 +213,9 @@ testSlowServer =
 dummyMeta :: M.Map ByteString ByteString
 dummyMeta = [("foo","bar")]
 
-dummyHandler :: ByteString -> MetadataMap
-                -> IO (ByteString, MetadataMap, MetadataMap, StatusDetails)
-dummyHandler _ _ = return ("", mempty, mempty, StatusDetails "")
+dummyHandler :: ServerCall -> ByteString -> MetadataMap
+                -> IO (ByteString, MetadataMap, StatusDetails)
+dummyHandler _ _ _ = return ("", mempty, StatusDetails "")
 
 unavailableStatus :: Either GRPCIOError a
 unavailableStatus =
