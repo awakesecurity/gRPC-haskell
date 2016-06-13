@@ -222,7 +222,7 @@ castPeek p = peek (castPtr p)
 {#fun grpc_server_create as ^
   {`ChannelArgsPtr',unReserved `Reserved'} -> `Server'#}
 
-{#fun grpc_server_register_method as ^
+{#fun grpc_server_register_method_ as ^
   {`Server', `String', `String'} -> `CallHandle' CallHandle#}
 
 {#fun grpc_server_register_completion_queue as ^

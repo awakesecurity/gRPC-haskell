@@ -173,6 +173,7 @@ clientRequest client@(Client{..}) rm@(RegisteredMethod{..})
                         grpcDebug "clientRequest(R): batch error."
                         return $ Left x
                       Right rs' -> do
+                        grpcDebug $ "clientRequest(R): got " ++ show rs'
                         return $ Right $ compileNormalRequestResults (rs ++ rs')
     _ -> error "Streaming methods not yet implemented."
 
