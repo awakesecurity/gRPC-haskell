@@ -127,6 +127,12 @@ gpr_timespec* millis_to_deadline(int64_t millis){
   return retval;
 }
 
+gpr_timespec* infinite_deadline(){
+  gpr_timespec *retval = malloc(sizeof(gpr_timespec));
+  *retval = gpr_inf_future(GPR_CLOCK_MONOTONIC);
+  return retval;
+}
+
 grpc_metadata_array** metadata_array_create(){
   grpc_metadata_array **retval = malloc(sizeof(grpc_metadata_array*));
   *retval = malloc(sizeof(grpc_metadata_array));

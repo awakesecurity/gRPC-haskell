@@ -182,7 +182,7 @@ testGoaway =
       assertBool "Client handles server shutdown gracefully" $
         lastResult == unavailableStatus
         ||
-        lastResult == Left GRPCIOTimeout
+        lastResult == deadlineExceededStatus
     server s = do
       let rm = head (registeredMethods s)
       serverHandleNormalCall s rm 11 mempty dummyHandler
@@ -196,10 +196,7 @@ testSlowServer =
     client c = do
       rm <- clientRegisterMethod c "/foo" Normal
       result <- clientRequest c rm 1 "" mempty
-      assertBool "Client gets timeout or deadline exceeded" $
-        result == Left GRPCIOTimeout
-        ||
-        result == deadlineExceededStatus
+      result @?= deadlineExceededStatus
     server s = do
       let rm = head (registeredMethods s)
       serverHandleNormalCall s rm 1 mempty $ \_ _ _ -> do

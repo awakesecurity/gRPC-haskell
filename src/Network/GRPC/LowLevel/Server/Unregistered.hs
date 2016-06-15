@@ -66,7 +66,7 @@ serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
     grpcDebug "serverHandleNormalCall(U): starting batch."
     let recvOps = serverOpsGetNormalCall srvMetadata
         call'   = unServerCall call
-    opResults <- runOps call' serverCQ recvOps timeLimit
+    opResults <- runOps call' serverCQ recvOps
     case opResults of
       Left x -> do grpcDebug "serverHandleNormalCall(U): ops failed; aborting"
                    return $ Left x
@@ -80,7 +80,7 @@ serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
         let status = C.GrpcStatusOk
         let respOps = serverOpsSendNormalResponse
                         respBody respMetadata status details
-        respOpsResults <- runOps call' serverCQ respOps timeLimit
+        respOpsResults <- runOps call' serverCQ respOps
         case respOpsResults of
           Left x -> do grpcDebug "serverHandleNormalCall(U): resp failed."
                        return $ Left x

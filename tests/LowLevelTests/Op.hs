@@ -35,7 +35,7 @@ testCancelWhileHandling =
       withOpArrayAndCtxts serverEmptyRecvOps $ \(opArray, ctxts) -> do
         tag <- newTag serverCQ
         startBatch serverCQ unServerCall opArray 3 tag
-        pluck serverCQ tag 1
+        pluck serverCQ tag (Just 1)
         let (OpRecvCloseOnServerContext pcancelled) = last ctxts
         cancelledBefore <- peek pcancelled
         cancelledBefore @?= 0
@@ -52,7 +52,7 @@ testCancelFromServer =
     withClientServerUnaryCall grpc $
     \(c@Client{..}, s@Server{..}, cc@ClientCall{..}, sc@ServerCall{..}) -> do
       serverCallCancel sc GrpcStatusPermissionDenied "TestStatus"
-      clientRes <- runOps unClientCall clientCQ clientRecvOps 1
+      clientRes <- runOps unClientCall clientCQ clientRecvOps
       case clientRes of
         Left x -> error $ "Client recv error: " ++ show x
         Right [_,_,OpRecvStatusOnClientResult _ code details] -> do
@@ -83,7 +83,7 @@ withClientServerUnaryCall grpc f = do
         -- because registered methods try to do recv ops immediately when
         -- created. If later we want to send payloads or metadata, we'll need
         -- to tweak this.
-        clientRes <- runOps (unClientCall cc) (clientCQ c) clientEmptySendOps 1
+        clientRes <- runOps (unClientCall cc) (clientCQ c) clientEmptySendOps
         withServerCall s srm 10 $ \sc ->
           f (c, s, cc, sc)
 

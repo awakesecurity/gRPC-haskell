@@ -130,7 +130,7 @@ freeOpContext (OpRecvCloseOnServerContext pcancelled) =
   >> free pcancelled
 
 -- | Allocates an `OpArray` and a list of `OpContext`s from the given list of
--- `Op`s. 
+-- `Op`s.
 withOpArrayAndCtxts :: [Op] -> ((C.OpArray, [OpContext]) -> IO a) -> IO a
 withOpArrayAndCtxts ops = bracket setup teardown
   where setup = do ctxts <- mapM createOpContext ops
@@ -186,8 +186,9 @@ resultFromOpContext _ = do
   return Nothing
 
 -- | For a given call, run the given 'Op's on the given completion queue with
--- the given tag. Blocks until the ops are complete or the given number of
--- seconds have elapsed.  TODO: now that we distinguish between different types
+-- the given tag. Blocks until the ops are complete or the deadline on the
+-- associated call has been reached.
+-- TODO: now that we distinguish between different types
 -- of calls at the type level, we could try to limit the input 'Op's more
 -- appropriately. E.g., we don't use an 'OpRecvInitialMetadata' when receiving a
 -- registered call, because gRPC handles that for us.
@@ -211,23 +212,20 @@ runOps :: C.Call
           -- running.
        -> [Op]
           -- ^ The list of 'Op's to execute.
-       -> TimeoutSeconds
-          -- ^ How long to block waiting for the tag to appear on the queue. If
-          -- we time out, the result of this action will be @CallBatchError
-          -- BatchTimeout@.
        -> IO (Either GRPCIOError [OpRecvResult])
-runOps call cq ops timeLimit =
+runOps call cq ops =
   let l = length ops in
     withOpArrayAndCtxts ops $ \(opArray, contexts) -> do
       grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
       tag <- newTag cq
+      grpcDebug $ "runOps: tag: " ++ show tag
       callError <- startBatch cq call opArray l tag
       grpcDebug $ "runOps: called start_batch. callError: "
                    ++ (show callError)
       case callError of
         Left x -> return $ Left x
         Right () -> do
-          ev <- pluck cq tag timeLimit
+          ev <- pluck cq tag Nothing
           grpcDebug $ "runOps: pluck returned " ++ show ev
           case ev of
             Right () -> do

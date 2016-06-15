@@ -63,7 +63,7 @@ clientRequest client@Client{..} meth timeLimit body meta =
   fmap join $ do
   withClientCall client meth timeLimit $ \call -> do
     let ops = clientNormalRequestOps body meta
-    results <- runOps (unClientCall call) clientCQ ops timeLimit
+    results <- runOps (unClientCall call) clientCQ ops
     grpcDebug "clientRequest(U): ops ran."
     case results of
       Left x -> return $ Left x

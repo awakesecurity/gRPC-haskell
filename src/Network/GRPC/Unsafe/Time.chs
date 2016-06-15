@@ -49,3 +49,10 @@ withDeadlineSeconds i = bracket (secondsToDeadline i) timespecDestroy
 -- | Returns a GprClockMonotonic representing a deadline n milliseconds
 -- in the future.
 {#fun millis_to_deadline as ^ {`Int'} -> `CTimeSpecPtr'#}
+
+-- | Returns a GprClockMonotonic representing an infinitely distant deadline.
+-- wraps gpr_inf_future in the gRPC library.
+{#fun infinite_deadline as ^ {} -> `CTimeSpecPtr'#}
+
+withInfiniteDeadline :: (CTimeSpecPtr -> IO a) -> IO a
+withInfiniteDeadline = bracket infiniteDeadline timespecDestroy

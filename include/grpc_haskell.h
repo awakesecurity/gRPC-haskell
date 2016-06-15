@@ -52,6 +52,8 @@ gpr_timespec* seconds_to_deadline(int64_t seconds);
 
 gpr_timespec* millis_to_deadline(int64_t millis);
 
+gpr_timespec* infinite_deadline();
+
 grpc_metadata_array** metadata_array_create();
 
 void metadata_array_destroy(grpc_metadata_array **arr);

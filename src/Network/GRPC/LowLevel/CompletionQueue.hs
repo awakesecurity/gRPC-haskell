@@ -92,14 +92,17 @@ shutdownCompletionQueue (CompletionQueue{..}) = do
   --drain the queue
   C.grpcCompletionQueueShutdown unsafeCQ
   loopRes <- timeout (5*10^(6::Int)) drainLoop
+  grpcDebug $ "Got CQ loop shutdown result of: " ++ show loopRes
   case loopRes of
     Nothing -> return $ Left GRPCIOShutdownFailure
     Just () -> C.grpcCompletionQueueDestroy unsafeCQ >> return (Right ())
 
   where drainLoop :: IO ()
         drainLoop = do
+          grpcDebug "drainLoop: before next() call"
           ev <- C.withDeadlineSeconds 1 $ \deadline ->
                   C.grpcCompletionQueueNext unsafeCQ deadline C.reserved
+          grpcDebug $ "drainLoop: next() call got " ++ show ev
           case (C.eventCompletionType ev) of
             C.QueueShutdown -> return ()
             C.QueueTimeout -> drainLoop
@@ -140,6 +143,7 @@ serverRequestCall
       metadataArray <- peek metadataArrayPtr
       bbPtr <- malloc
       tag <- newTag cq
+      grpcDebug $ "serverRequestCall(R): tag is " ++ show tag
       callError <- C.grpcServerRequestRegisteredCall
                      server methodHandle callPtr deadline
                      metadataArray bbPtr unsafeCQ unsafeCQ tag
@@ -149,7 +153,7 @@ serverRequestCall
          then do grpcDebug "serverRequestCall(R): callError. cleaning up"
                  failureCleanup deadline callPtr metadataArrayPtr bbPtr
                  return $ Left $ GRPCIOCallError callError
-         else do pluckResult <- pluck cq tag timeLimit
+         else do pluckResult <- pluck cq tag (Just timeLimit)
                  grpcDebug "serverRequestCall(R): finished pluck."
                  case pluckResult of
                    Left x -> do

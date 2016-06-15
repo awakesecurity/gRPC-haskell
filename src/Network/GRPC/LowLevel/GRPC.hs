@@ -25,7 +25,8 @@ newtype StatusDetails = StatusDetails B.ByteString deriving (Show, Eq, IsString)
 data GRPC = GRPC
 
 withGRPC :: (GRPC -> IO a) -> IO a
-withGRPC = bracket (C.grpcInit >> return GRPC) (const C.grpcShutdown)
+withGRPC = bracket (C.grpcInit >> return GRPC)
+                   (\_ -> grpcDebug "withGRPC: shutting down" >> C.grpcShutdown)
 
 -- | Describes all errors that can occur while running a GRPC-related IO action.
 data GRPCIOError = GRPCIOCallError C.CallError

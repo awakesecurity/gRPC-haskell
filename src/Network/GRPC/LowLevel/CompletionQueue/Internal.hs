@@ -97,17 +97,23 @@ withPermission op cq f =
 
 -- | Waits for the given number of seconds for the given tag to appear on the
 -- completion queue. Throws 'GRPCIOShutdown' if the completion queue is shutting
--- down and cannot handle new requests.
-pluck :: CompletionQueue -> C.Tag -> TimeoutSeconds
+-- down and cannot handle new requests. Note that the timeout is optional. When
+-- doing client ops, provide @Nothing@ and the pluck will automatically fail if
+-- the deadline associated with the 'ClientCall' expires. If plucking
+-- 'serverRequestCall', this will block forever unless a timeout is given.
+pluck :: CompletionQueue -> C.Tag -> Maybe TimeoutSeconds
          -> IO (Either GRPCIOError ())
 pluck cq@CompletionQueue{..} tag waitSeconds = do
   grpcDebug $ "pluck: called with tag: " ++ show tag
               ++ " and wait: " ++ show waitSeconds
-  withPermission Pluck cq $ do
-    C.withDeadlineSeconds waitSeconds $ \deadline -> do
-      ev <- C.grpcCompletionQueuePluck unsafeCQ tag deadline C.reserved
-      grpcDebug $ "pluck: finished. Event: " ++ show ev
-      return $ if isEventSuccessful ev then Right () else eventToError ev
+  withPermission Pluck cq $
+    case waitSeconds of
+      Nothing -> C.withInfiniteDeadline go
+      Just seconds -> C.withDeadlineSeconds seconds go
+    where go deadline = do
+            ev <- C.grpcCompletionQueuePluck unsafeCQ tag deadline C.reserved
+            grpcDebug $ "pluck: finished. Event: " ++ show ev
+            return $ if isEventSuccessful ev then Right () else eventToError ev
 
 -- | Translate 'C.Event' to an error. The caller is responsible for ensuring
 -- that the event actually corresponds to an error condition; a successful event

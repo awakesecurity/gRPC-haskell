@@ -41,12 +41,14 @@ createClient grpc clientConfig = do
 
 destroyClient :: Client -> IO ()
 destroyClient Client{..} = do
+  grpcDebug "destroyClient: calling grpc_channel_destroy()"
+  C.grpcChannelDestroy clientChannel
+  grpcDebug "destroyClient: shutting down CQ."
   shutdownResult <- shutdownCompletionQueue clientCQ
   case shutdownResult of
     Left x -> do putStrLn $ "Failed to stop client CQ: " ++ show x
                  putStrLn $ "Trying to shut down anyway."
     Right _ -> return ()
-  C.grpcChannelDestroy clientChannel
 
 withClient :: GRPC -> ClientConfig -> (Client -> IO a) -> IO a
 withClient grpc config = bracket (createClient grpc config)
@@ -159,18 +161,18 @@ clientRequest client@(Client{..}) rm@(RegisteredMethod{..})
                 let sendOps = [OpSendInitialMetadata meta
                            , OpSendMessage body
                            , OpSendCloseFromClient]
-                sendRes <- runOps call' clientCQ sendOps timeLimit
+                sendRes <- runOps call' clientCQ sendOps
                 case sendRes of
-                  Left x -> do grpcDebug "clientRequest(R) : batch error."
+                  Left x -> do grpcDebug "clientRequest(R) : batch error sending."
                                return $ Left x
                   Right rs -> do
                     let recvOps = [OpRecvInitialMetadata,
                                    OpRecvMessage,
                                    OpRecvStatusOnClient]
-                    recvRes <- runOps call' clientCQ recvOps timeLimit
+                    recvRes <- runOps call' clientCQ recvOps
                     case recvRes of
                       Left x -> do
-                        grpcDebug "clientRequest(R): batch error."
+                        grpcDebug "clientRequest(R): batch error receiving."
                         return $ Left x
                       Right rs' -> do
                         grpcDebug $ "clientRequest(R): got " ++ show rs'

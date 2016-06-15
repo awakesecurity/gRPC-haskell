@@ -48,7 +48,7 @@ serverRequestCall server cq@CompletionQueue{..} timeLimit =
        then do grpcDebug "serverRequestCall: got call error; cleaning up."
                failureCleanup callPtr callDetails metadataArrayPtr
                return $ Left $ GRPCIOCallError callError
-       else do pluckResult <- pluck cq tag timeLimit
+       else do pluckResult <- pluck cq tag (Just timeLimit)
                grpcDebug $ "serverRequestCall: pluckResult was "
                            ++ show pluckResult
                case pluckResult of

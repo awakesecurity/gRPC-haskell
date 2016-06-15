@@ -83,7 +83,9 @@ stopServer (Server server cq _ _) = do
         shutdownNotify = do
           let shutdownTag = C.tag 0
           serverShutdownAndNotify server cq shutdownTag
-          shutdownEvent <- pluck cq shutdownTag 30
+          grpcDebug "called serverShutdownAndNotify; plucking."
+          shutdownEvent <- pluck cq shutdownTag (Just 30)
+          grpcDebug $ "shutdownNotify: got shutdown event" ++ show shutdownEvent
           case shutdownEvent of
             -- This case occurs when we pluck but the queue is already in the
             -- 'shuttingDown' state, implying we already tried to shut down.
@@ -181,10 +183,6 @@ serverHandleNormalCall :: Server
                        -> ServerHandler
                        -> IO (Either GRPCIOError ())
 serverHandleNormalCall s@Server{..} rm timeLimit initMeta f = do
-  -- TODO: we use this timeLimit twice, so the max time spent is 2*timeLimit.
-  -- Should we just hard-code time limits instead? Not sure if client
-  -- programmer cares, since this function will likely just be put in a loop
-  -- anyway.
   withServerCall s rm timeLimit $ \call -> do
     grpcDebug "serverHandleNormalCall(R): starting batch."
     debugServerCall call
@@ -199,7 +197,7 @@ serverHandleNormalCall s@Server{..} rm timeLimit initMeta f = do
         let status = C.GrpcStatusOk
         let respOps = serverOpsSendNormalRegisteredResponse
                         respBody initMeta trailingMeta status details
-        respOpsResults <- runOps (unServerCall call) serverCQ respOps timeLimit
+        respOpsResults <- runOps (unServerCall call) serverCQ respOps
         grpcDebug "serverHandleNormalCall(R): finished response ops."
         case respOpsResults of
           Left x -> return $ Left x
