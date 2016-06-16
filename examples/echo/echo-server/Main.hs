@@ -14,11 +14,11 @@ serverMeta :: MetadataMap
 serverMeta = [("test_meta", "test_meta_value")]
 
 handler :: U.ServerCall -> ByteString -> MetadataMap -> MethodName
-           -> IO (ByteString, MetadataMap, StatusDetails)
+           -> IO (ByteString, MetadataMap, StatusCode, StatusDetails)
 handler _call reqBody _reqMeta _method = do
   --putStrLn $ "Got request for method: " ++ show method
   --putStrLn $ "Got metadata: " ++ show reqMeta
-  return (reqBody, serverMeta, StatusDetails "")
+  return (reqBody, serverMeta, StatusOk, StatusDetails "")
 
 unregMain :: IO ()
 unregMain = withGRPC $ \grpc -> do
@@ -35,7 +35,7 @@ regMain = withGRPC $ \grpc -> do
     forever $ do
       let method = head (registeredMethods server)
       result <- serverHandleNormalCall server method 15 serverMeta $
-        \_call reqBody _reqMeta -> return (reqBody, serverMeta,
+        \_call reqBody _reqMeta -> return (reqBody, serverMeta, StatusOk,
                                            StatusDetails "")
       case result of
         Left x -> putStrLn $ "registered call result error: " ++ show x
@@ -45,7 +45,7 @@ regMain = withGRPC $ \grpc -> do
 regLoop :: Server -> RegisteredMethod -> IO ()
 regLoop server method = forever $ do
   result <- serverHandleNormalCall server method 15 serverMeta $
-    \_call reqBody _reqMeta -> return (reqBody, serverMeta,
+    \_call reqBody _reqMeta -> return (reqBody, serverMeta, StatusOk,
                                        StatusDetails "")
   case result of
     Left x -> putStrLn $ "registered call result error: " ++ show x

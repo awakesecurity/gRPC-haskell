@@ -196,7 +196,7 @@ payloadServer = do
           opSendMessage respOps 1 respbb
           B.useAsCString "ok" $ \detailsStr ->
             opSendStatusServer respOps 2 0 (MetadataKeyValPtr nullPtr)
-                               GrpcStatusOk detailsStr
+                               StatusOk detailsStr
           serverCall <- peek serverCallPtr
           respBatchError <- grpcCallStartBatch serverCall respOps 3
                                                (tag 103) reserved

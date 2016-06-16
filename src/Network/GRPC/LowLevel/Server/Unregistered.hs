@@ -53,7 +53,7 @@ serverOpsSendNormalResponse body metadata code details =
 -- request body and response body respectively.
 type ServerHandler
   =  ServerCall -> ByteString -> MetadataMap -> MethodName
-  -> IO (ByteString, MetadataMap, StatusDetails)
+  -> IO (ByteString, MetadataMap, C.StatusCode, StatusDetails)
 
 -- | Handle one unregistered call.
 serverHandleNormalCall :: Server
@@ -76,8 +76,10 @@ serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
         methodName <- serverCallGetMethodName call
         hostName <- serverCallGetHost call
         grpcDebug $ "call_details host is: " ++ show hostName
-        (respBody, respMetadata, details) <- f call body requestMeta methodName
-        let status = C.GrpcStatusOk
+        (respBody, respMetadata, status, details) <- f call
+                                                       body
+                                                       requestMeta
+                                                       methodName
         let respOps = serverOpsSendNormalResponse
                         respBody respMetadata status details
         respOpsResults <- runOps call' serverCQ respOps

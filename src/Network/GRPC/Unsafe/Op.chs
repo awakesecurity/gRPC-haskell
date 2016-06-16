@@ -14,6 +14,8 @@ import Foreign.Ptr
 #include <grpc/impl/codegen/grpc_types.h>
 #include <grpc_haskell.h>
 
+{#context prefix = "grpc" #}
+
 {#enum grpc_op_type as OpType {underscoreToCase} deriving (Eq, Show)#}
 {#enum grpc_status_code as StatusCode {underscoreToCase} deriving (Eq, Show)#}
 

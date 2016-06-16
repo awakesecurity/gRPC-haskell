@@ -170,7 +170,7 @@ serverOpsSendNormalRegisteredResponse
 -- trailing meta, and use it for both kinds of call handlers.
 type ServerHandler
   =  ServerCall -> ByteString -> MetadataMap
-  -> IO (ByteString, MetadataMap, StatusDetails)
+  -> IO (ByteString, MetadataMap, C.StatusCode, StatusDetails)
 
 -- TODO: we will want to replace this with some more general concept that also
 -- works with streaming calls in the future.
@@ -193,8 +193,9 @@ serverHandleNormalCall s@Server{..} rm timeLimit initMeta f = do
       Nothing -> error "serverHandleNormalCall(R): payload empty."
       Just requestBody -> do
         requestMeta <- serverCallGetMetadata call
-        (respBody, trailingMeta, details) <- f call requestBody requestMeta
-        let status = C.GrpcStatusOk
+        (respBody, trailingMeta, status, details) <- f call
+                                                       requestBody
+                                                       requestMeta
         let respOps = serverOpsSendNormalRegisteredResponse
                         respBody initMeta trailingMeta status details
         respOpsResults <- runOps (unServerCall call) serverCQ respOps

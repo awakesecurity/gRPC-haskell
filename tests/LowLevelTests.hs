@@ -31,7 +31,8 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
   , testServerCreateDestroy
   , testServerCall
   , testServerTimeoutNoClient
-  -- , testWrongEndpoint
+  , testWrongEndpoint
+  , testMixRegisteredUnregistered
   , testPayload
   , testPayloadUnregistered
   , testServerCancel
@@ -79,13 +80,9 @@ testServerTimeoutNoClient :: TestTree
 testServerTimeoutNoClient =
   serverOnlyTest "wait timeout when client DNE" [("/foo", Normal)] $ \s -> do
     let rm = head (registeredMethods s)
-    r <- serverHandleNormalCall s rm 1 mempty $ \_ _ _ ->
-           return ("", mempty, StatusDetails "details")
+    r <- serverHandleNormalCall s rm 1 mempty dummyHandler
     r @?= Left GRPCIOTimeout
 
--- TODO: fix this test: currently, client seems to hang and server times out,
--- expecting that the client reports an invalid endpoint.  Also, investigate
--- intermittent crashes on shorter server timeouts (tried 2, 5 seconds)
 testWrongEndpoint :: TestTree
 testWrongEndpoint =
   csTest "client requests unknown endpoint" client server [("/foo", Normal)]
@@ -95,14 +92,55 @@ testWrongEndpoint =
     client c = do
       rm <- clientRegisterMethod c "/bar" Normal
       r  <- clientRequest c rm 1 "Hello!" mempty
-      r @?= Left (GRPCIOBadStatusCode GrpcStatusDeadlineExceeded
+      r @?= Left (GRPCIOBadStatusCode StatusDeadlineExceeded
                     (StatusDetails "Deadline Exceeded"))
     server s = do
       length (registeredMethods s) @?= 1
       let rm = head (registeredMethods s)
-      r <- serverHandleNormalCall s rm 10 mempty $ \_ _ _ -> do
-        return ("reply test", dummyMeta, StatusDetails "details string")
-      r @?= Right ()
+      r <- serverHandleNormalCall s rm 2 mempty dummyHandler
+      r @?= Left GRPCIOTimeout
+
+testMixRegisteredUnregistered :: TestTree
+testMixRegisteredUnregistered =
+  csTest "server uses unregistered calls to handle unknown endpoints"
+         client
+         server
+         [("/foo", Normal)]
+  where
+    client c = do
+      rm1 <- clientRegisterMethod c "/foo" Normal
+      rm2 <- clientRegisterMethod c "/bar" Normal
+      clientRequest c rm1 1 "Hello" mempty >>= do
+        checkReqRslt $ \NormalRequestResult{..} -> do
+          rspBody @?= "reply test"
+          initMD @?= Just dummyMeta
+          trailMD @?= dummyMeta
+      clientRequest c rm2 1 "bad endpoint" mempty >>= do
+        checkReqRslt $ \NormalRequestResult{..} -> do
+          rspBody @?= ""
+      r3 <- clientRequest c rm1 1 "Hello" mempty
+      r3 @?= deadlineExceededStatus
+      return ()
+    server s = do
+       concurrently regThread unregThread
+       return ()
+       where regThread = do
+               let rm = head (registeredMethods s)
+               r <- serverHandleNormalCall s rm 2 dummyMeta $ \_ body _ -> do
+                 body @?= "Hello"
+                 return ("reply test", dummyMeta, StatusOk, StatusDetails "")
+               return ()
+             unregThread = do
+               r1 <- U.serverHandleNormalCall s 2 mempty $ \_ _ _ method -> do
+                 method @?= "/bar"
+                 return ("", mempty, StatusOk,
+                         StatusDetails "Wrong endpoint")
+               r2 <- U.serverHandleNormalCall s 2 mempty $ \_ _ _ method -> do
+                 method @?= "/bar"
+                 return ("", mempty, StatusNotFound,
+                         StatusDetails "Wrong endpoint")
+               r2 @?= Left GRPCIOTimeout
+               return ()
 
 -- TODO: There seems to be a race here (and in other client/server pairs, of
 -- course) about what gets reported when there is a failure. E.g., if one of the
@@ -119,7 +157,7 @@ testPayload =
       rm <- clientRegisterMethod c "/foo" Normal
       clientRequest c rm 10 "Hello!" clientMD >>= do
         checkReqRslt $ \NormalRequestResult{..} -> do
-          rspCode @?= GrpcStatusOk
+          rspCode @?= StatusOk
           rspBody @?= "reply test"
           details @?= "details string"
           initMD  @?= Just dummyMeta
@@ -130,7 +168,8 @@ testPayload =
       r <- serverHandleNormalCall s rm 11 dummyMeta $ \_ reqBody reqMD -> do
         reqBody @?= "Hello!"
         checkMD "Server metadata mismatch" clientMD reqMD
-        return ("reply test", dummyMeta, StatusDetails "details string")
+        return ("reply test", dummyMeta, StatusOk,
+                StatusDetails "details string")
       r @?= Right ()
 
 testServerCancel :: TestTree
@@ -140,14 +179,14 @@ testServerCancel =
     client c = do
       rm <- clientRegisterMethod c "/foo" Normal
       res <- clientRequest c rm 10 "" mempty
-      res @?= Left (GRPCIOBadStatusCode GrpcStatusCancelled
+      res @?= Left (GRPCIOBadStatusCode StatusCancelled
                                         (StatusDetails
                                           "Received RST_STREAM err=8"))
     server s = do
       let rm = head (registeredMethods s)
       r <- serverHandleNormalCall s rm 10 mempty $ \c _ _ -> do
-        serverCallCancel c GrpcStatusCancelled ""
-        return (mempty, mempty, "")
+        serverCallCancel c StatusCancelled ""
+        return (mempty, mempty, StatusOk, "")
       r @?= Right ()
 
 testPayloadUnregistered :: TestTree
@@ -157,14 +196,14 @@ testPayloadUnregistered =
     client c = do
       U.clientRequest c "/foo" 10 "Hello!" mempty >>= do
         checkReqRslt $ \NormalRequestResult{..} -> do
-          rspCode @?= GrpcStatusOk
+          rspCode @?= StatusOk
           rspBody @?= "reply test"
           details @?= "details string"
     server s = do
       r <- U.serverHandleNormalCall s 11 mempty $ \_ body _md meth -> do
              body @?= "Hello!"
              meth @?= "/foo"
-             return ("reply test", mempty, "details string")
+             return ("reply test", mempty, StatusOk, "details string")
       r @?= Right ()
 
 testGoaway :: TestTree
@@ -201,7 +240,7 @@ testSlowServer =
       let rm = head (registeredMethods s)
       serverHandleNormalCall s rm 1 mempty $ \_ _ _ -> do
         threadDelay (2*10^(6 :: Int))
-        return ("", mempty, StatusDetails "")
+        return ("", mempty, StatusOk, StatusDetails "")
       return ()
 
 --------------------------------------------------------------------------------
@@ -211,16 +250,16 @@ dummyMeta :: M.Map ByteString ByteString
 dummyMeta = [("foo","bar")]
 
 dummyHandler :: ServerCall -> ByteString -> MetadataMap
-                -> IO (ByteString, MetadataMap, StatusDetails)
-dummyHandler _ _ _ = return ("", mempty, StatusDetails "")
+                -> IO (ByteString, MetadataMap, StatusCode, StatusDetails)
+dummyHandler _ _ _ = return ("", mempty, StatusOk, StatusDetails "")
 
 unavailableStatus :: Either GRPCIOError a
 unavailableStatus =
-  Left (GRPCIOBadStatusCode GrpcStatusUnavailable (StatusDetails ""))
+  Left (GRPCIOBadStatusCode StatusUnavailable (StatusDetails ""))
 
 deadlineExceededStatus :: Either GRPCIOError a
 deadlineExceededStatus =
-  Left (GRPCIOBadStatusCode GrpcStatusDeadlineExceeded
+  Left (GRPCIOBadStatusCode StatusDeadlineExceeded
                             (StatusDetails "Deadline Exceeded"))
 
 nop :: Monad m => a -> m ()

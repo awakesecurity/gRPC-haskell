@@ -51,12 +51,12 @@ testCancelFromServer =
   runSerialTest $ \grpc ->
     withClientServerUnaryCall grpc $
     \(c@Client{..}, s@Server{..}, cc@ClientCall{..}, sc@ServerCall{..}) -> do
-      serverCallCancel sc GrpcStatusPermissionDenied "TestStatus"
+      serverCallCancel sc StatusPermissionDenied "TestStatus"
       clientRes <- runOps unClientCall clientCQ clientRecvOps
       case clientRes of
         Left x -> error $ "Client recv error: " ++ show x
         Right [_,_,OpRecvStatusOnClientResult _ code details] -> do
-          code @?= GrpcStatusPermissionDenied
+          code @?= StatusPermissionDenied
           assertBool "Received status details or RST_STREAM error" $
             details == "TestStatus"
             ||
