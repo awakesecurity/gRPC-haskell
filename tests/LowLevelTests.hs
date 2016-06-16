@@ -38,6 +38,7 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
   , testServerCancel
   , testGoaway
   , testSlowServer
+  , testServerCallExpirationCheck
   ]
 
 testGRPCBracket :: TestTree
@@ -243,6 +244,28 @@ testSlowServer =
         return ("", mempty, StatusOk, StatusDetails "")
       return ()
 
+testServerCallExpirationCheck :: TestTree
+testServerCallExpirationCheck =
+  csTest "Check for call expiration" client server [("/foo", Normal)]
+  where
+    client c = do
+      rm <- clientRegisterMethod c "/foo" Normal
+      result <- clientRequest c rm 3 "" mempty
+      return ()
+    server s = do
+      let rm = head (registeredMethods s)
+      serverHandleNormalCall s rm 5 mempty $ \c _ _ -> do
+        exp1 <- serverCallIsExpired c
+        assertBool "Call isn't expired when handler starts" $ not exp1
+        threadDelaySecs 1
+        exp2 <- serverCallIsExpired c
+        assertBool "Call isn't expired after 1 second" $ not exp2
+        threadDelaySecs 3
+        exp3 <- serverCallIsExpired c
+        assertBool "Call is expired after 4 seconds" exp3
+        return ("", mempty, StatusDetails "")
+      return ()
+
 --------------------------------------------------------------------------------
 -- Utilities and helpers
 
@@ -328,3 +351,7 @@ stdTestServer = TestServer . stdServerConf
 
 stdServerConf :: [(MethodName, GRPCMethodType)] -> ServerConfig
 stdServerConf = ServerConfig "localhost" 50051
+
+
+threadDelaySecs :: Int -> IO ()
+threadDelaySecs = threadDelay . (* 10^(6::Int))

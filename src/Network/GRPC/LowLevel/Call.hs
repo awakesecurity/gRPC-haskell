@@ -12,6 +12,7 @@ import           Data.String                    (IsString)
 import           Foreign.Marshal.Alloc          (free)
 import           Foreign.Ptr                    (Ptr, nullPtr)
 import           Foreign.Storable               (peek)
+import           System.Clock
 
 import qualified Network.GRPC.Unsafe            as C
 import qualified Network.GRPC.Unsafe.ByteBuffer as C
@@ -67,7 +68,8 @@ data ServerCall = ServerCall
     requestMetadataRecv :: Ptr C.MetadataArray,
     optionalPayload     :: Ptr C.ByteBuffer,
     parentPtr           :: Maybe (Ptr C.Call),
-    callDeadline        :: C.CTimeSpecPtr
+    callDeadlinePtr     :: C.CTimeSpecPtr,
+    callDeadline        :: TimeSpec
   }
 
 serverCallCancel :: ServerCall -> C.StatusCode -> String -> IO ()
@@ -92,6 +94,11 @@ serverCallGetPayload ServerCall{..} = do
      then return Nothing
      else Just <$> C.copyByteBufferToByteString bb
 
+serverCallIsExpired :: ServerCall -> IO Bool
+serverCallIsExpired sc = do
+  currTime <- getTime Monotonic
+  return $ currTime > (callDeadline sc)
+
 debugClientCall :: ClientCall -> IO ()
 {-# INLINE debugClientCall #-}
 #ifdef DEBUG
@@ -103,7 +110,7 @@ debugClientCall = const $ return ()
 
 debugServerCall :: ServerCall -> IO ()
 #ifdef DEBUG
-debugServerCall call@(ServerCall (C.Call ptr) _ _ _ _) = do
+debugServerCall call@(ServerCall (C.Call ptr) _ _ _ _ _) = do
   grpcDebug $ "debugServerCall(R): server call: " ++ (show ptr)
   grpcDebug $ "debugServerCall(R): metadata ptr: "
               ++ show (requestMetadataRecv call)
@@ -119,7 +126,7 @@ debugServerCall call@(ServerCall (C.Call ptr) _ _ _ _) = do
     (C.Call parent) <- peek parentPtr'
     grpcDebug $ "debugServerCall(R): parent: " ++ show parent
   grpcDebug $ "debugServerCall(R): deadline ptr: " ++ show (callDeadline call)
-  timespec <- peek (callDeadline call)
+  timespec <- peek (callDeadlinePtr call)
   grpcDebug $ "debugServerCall(R): deadline: " ++ show (C.timeSpec timespec)
 #else
 {-# INLINE debugServerCall #-}
@@ -144,4 +151,4 @@ destroyServerCall call@ServerCall{..} = do
   grpcDebug $ "freeing parentPtr: " ++ show parentPtr
   forM_ parentPtr free
   grpcDebug $ "destroying deadline." ++ show callDeadline
-  C.timespecDestroy callDeadline
+  C.timespecDestroy callDeadlinePtr

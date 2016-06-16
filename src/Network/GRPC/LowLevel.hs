@@ -35,6 +35,7 @@ GRPC
 , serverHandleNormalCall
 , withServerCall
 , serverCallCancel
+, serverCallIsExpired
 
 -- * Client
 , ClientConfig(..)

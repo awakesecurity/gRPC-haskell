@@ -54,6 +54,8 @@ gpr_timespec* millis_to_deadline(int64_t millis);
 
 gpr_timespec* infinite_deadline();
 
+gpr_timespec* convert_clock_type(gpr_timespec *t, gpr_clock_type to);
+
 grpc_metadata_array** metadata_array_create();
 
 void metadata_array_destroy(grpc_metadata_array **arr);

@@ -133,6 +133,12 @@ gpr_timespec* infinite_deadline(){
   return retval;
 }
 
+gpr_timespec* convert_clock_type(gpr_timespec *t, gpr_clock_type to){
+  gpr_timespec *retval = malloc(sizeof(gpr_timespec));
+  *retval = gpr_convert_clock_type(*t, to);
+  return retval;
+}
+
 grpc_metadata_array** metadata_array_create(){
   grpc_metadata_array **retval = malloc(sizeof(grpc_metadata_array*));
   *retval = malloc(sizeof(grpc_metadata_array));

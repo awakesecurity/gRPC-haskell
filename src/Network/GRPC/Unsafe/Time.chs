@@ -56,3 +56,11 @@ withDeadlineSeconds i = bracket (secondsToDeadline i) timespecDestroy
 
 withInfiniteDeadline :: (CTimeSpecPtr -> IO a) -> IO a
 withInfiniteDeadline = bracket infiniteDeadline timespecDestroy
+
+{#fun convert_clock_type as ^ {`CTimeSpecPtr', `ClockType'} -> `CTimeSpecPtr'#}
+
+withConvertedClockType :: CTimeSpecPtr -> ClockType
+                          -> (CTimeSpecPtr -> IO a)
+                          -> IO a
+withConvertedClockType cptr ctype = bracket (convertClockType cptr ctype)
+                                            timespecDestroy

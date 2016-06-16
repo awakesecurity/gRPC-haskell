@@ -44,6 +44,8 @@ import qualified Network.GRPC.Unsafe.Constants           as C
 import qualified Network.GRPC.Unsafe.Metadata            as C
 import qualified Network.GRPC.Unsafe.Op                  as C
 import qualified Network.GRPC.Unsafe.Time                as C
+import           System.Clock                            (getTime, Clock(..),
+                                                          TimeSpec(..))
 import           System.Timeout                          (timeout)
 
 import           Network.GRPC.LowLevel.Call
@@ -135,9 +137,8 @@ serverRequestCall :: C.Server
 serverRequestCall
   server cq@CompletionQueue{..} timeLimit RegisteredMethod{..} =
     withPermission Push cq $ do
-      -- TODO: Is gRPC supposed to populate this deadline?
       -- NOTE: the below stuff is freed when we free the call we return.
-      deadline <- C.secondsToDeadline timeLimit
+      deadlinePtr <- malloc
       callPtr <- malloc
       metadataArrayPtr <- C.metadataArrayCreate
       metadataArray <- peek metadataArrayPtr
@@ -145,25 +146,26 @@ serverRequestCall
       tag <- newTag cq
       grpcDebug $ "serverRequestCall(R): tag is " ++ show tag
       callError <- C.grpcServerRequestRegisteredCall
-                     server methodHandle callPtr deadline
+                     server methodHandle callPtr deadlinePtr
                      metadataArray bbPtr unsafeCQ unsafeCQ tag
       grpcDebug $ "serverRequestCall(R): callError: "
                    ++ show callError
       if callError /= C.CallOk
          then do grpcDebug "serverRequestCall(R): callError. cleaning up"
-                 failureCleanup deadline callPtr metadataArrayPtr bbPtr
+                 failureCleanup deadlinePtr callPtr metadataArrayPtr bbPtr
                  return $ Left $ GRPCIOCallError callError
          else do pluckResult <- pluck cq tag (Just timeLimit)
                  grpcDebug "serverRequestCall(R): finished pluck."
                  case pluckResult of
                    Left x -> do
                      grpcDebug "serverRequestCall(R): cleanup pluck err"
-                     failureCleanup deadline callPtr metadataArrayPtr bbPtr
+                     failureCleanup deadlinePtr callPtr metadataArrayPtr bbPtr
                      return $ Left x
                    Right () -> do
                      rawCall <- peek callPtr
+                     deadline <- convertDeadline deadlinePtr
                      let assembledCall = ServerCall rawCall metadataArrayPtr
-                                           bbPtr Nothing deadline
+                                           bbPtr Nothing deadlinePtr deadline
                      return $ Right assembledCall
       --TODO: the gRPC library appears to hold onto these pointers for a random
       -- amount of time, even after returning from the only call that uses them.
@@ -178,6 +180,12 @@ serverRequestCall
               free callPtr
               C.metadataArrayDestroy metadataArrayPtr
               free bbPtr
+            convertDeadline deadline = do
+              --gRPC gives us a deadline that is just a delta, so we convert it
+              --to a proper deadline.
+              deadline' <- C.timeSpec <$> peek deadline
+              now <- getTime Monotonic
+              return $ now + deadline'
 
 -- | Register the server's completion queue. Must be done before the server is
 -- started.
