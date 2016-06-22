@@ -34,6 +34,7 @@ import           Control.Concurrent.STM                  (atomically, check)
 import           Control.Concurrent.STM.TVar             (newTVarIO, readTVar,
                                                           writeTVar)
 import           Control.Exception                       (bracket)
+import           Control.Monad                           (liftM2)
 import           Data.IORef                              (newIORef)
 import           Data.List                               (intersperse)
 import           Foreign.Marshal.Alloc                   (free, malloc)
@@ -51,6 +52,8 @@ import           System.Timeout                          (timeout)
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.CompletionQueue.Internal
+import qualified Network.GRPC.Unsafe.ByteBuffer as C
+import qualified Network.GRPC.Unsafe.Metadata   as C
 
 withCompletionQueue :: GRPC -> (CompletionQueue -> IO a) -> IO a
 withCompletionQueue grpc = bracket (createCompletionQueue grpc)
@@ -131,61 +134,69 @@ channelCreateCall
 -- | Create the call object to handle a registered call.
 serverRequestCall :: C.Server
                   -> CompletionQueue
-                  -> TimeoutSeconds
                   -> RegisteredMethod
                   -> IO (Either GRPCIOError ServerCall)
 serverRequestCall
-  server cq@CompletionQueue{..} timeLimit RegisteredMethod{..} =
-    withPermission Push cq $ do
-      -- NOTE: the below stuff is freed when we free the call we return.
-      deadlinePtr <- malloc
-      callPtr <- malloc
-      metadataArrayPtr <- C.metadataArrayCreate
-      metadataArray <- peek metadataArrayPtr
-      bbPtr <- malloc
-      tag <- newTag cq
-      grpcDebug $ "serverRequestCall(R): tag is " ++ show tag
-      callError <- C.grpcServerRequestRegisteredCall
-                     server methodHandle callPtr deadlinePtr
-                     metadataArray bbPtr unsafeCQ unsafeCQ tag
-      grpcDebug $ "serverRequestCall(R): callError: "
-                   ++ show callError
-      if callError /= C.CallOk
-         then do grpcDebug "serverRequestCall(R): callError. cleaning up"
-                 failureCleanup deadlinePtr callPtr metadataArrayPtr bbPtr
-                 return $ Left $ GRPCIOCallError callError
-         else do pluckResult <- pluck cq tag (Just timeLimit)
-                 grpcDebug "serverRequestCall(R): finished pluck."
-                 case pluckResult of
-                   Left x -> do
-                     grpcDebug "serverRequestCall(R): cleanup pluck err"
-                     failureCleanup deadlinePtr callPtr metadataArrayPtr bbPtr
-                     return $ Left x
-                   Right () -> do
-                     rawCall <- peek callPtr
-                     deadline <- convertDeadline deadlinePtr
-                     let assembledCall = ServerCall rawCall metadataArrayPtr
-                                           bbPtr Nothing deadlinePtr deadline
-                     return $ Right assembledCall
-      --TODO: the gRPC library appears to hold onto these pointers for a random
-      -- amount of time, even after returning from the only call that uses them.
-      -- This results in malloc errors if
-      -- gRPC tries to modify them after we free them. To work around it,
-      -- we sleep for a while before freeing the objects. We should find a
-      -- permanent solution that's more robust.
-      where failureCleanup deadline callPtr metadataArrayPtr bbPtr = forkIO $ do
-              threadDelaySecs 30
-              grpcDebug "serverRequestCall(R): doing delayed cleanup."
-              C.timespecDestroy deadline
-              free callPtr
-              C.metadataArrayDestroy metadataArrayPtr
-              free bbPtr
-            convertDeadline deadline = do
+  server cq@CompletionQueue{..} RegisteredMethod{..} =
+    withPermission Push cq $
+      bracket (liftM2 (,) malloc malloc)
+              (\(p1,p2) -> free p1 >> free p2)
+              $ \(deadlinePtr, callPtr) ->
+        C.withByteBufferPtr $ \bbPtr ->
+          C.withMetadataArrayPtr $ \metadataArrayPtr -> do
+            metadataArray <- peek metadataArrayPtr
+            tag <- newTag cq
+            grpcDebug $ "serverRequestCall(R): tag is " ++ show tag
+            callError <- C.grpcServerRequestRegisteredCall
+                           server methodHandle callPtr deadlinePtr
+                           metadataArray bbPtr unsafeCQ unsafeCQ tag
+            grpcDebug $ "serverRequestCall(R): callError: "
+                         ++ show callError
+            if callError /= C.CallOk
+               then do grpcDebug "serverRequestCall(R): callError. cleaning up"
+                       return $ Left $ GRPCIOCallError callError
+               else do pluckResult <- pluck cq tag Nothing
+                       grpcDebug $ "serverRequestCall(R): finished pluck:"
+                                   ++ show pluckResult
+                       case pluckResult of
+                         Left x -> do
+                           grpcDebug "serverRequestCall(R): cleanup pluck err"
+                           return $ Left x
+                         Right () -> do
+                           rawCall <- peek callPtr
+                           deadline <- convertDeadline deadlinePtr
+                           payload <- convertPayload bbPtr
+                           meta <- convertMeta metadataArrayPtr
+                           let assembledCall = ServerCall rawCall
+                                                          meta
+                                                          payload
+                                                          Nothing
+                                                          deadline
+                           grpcDebug "serverRequestCall(R): About to return"
+                           return $ Right assembledCall
+      where convertDeadline deadline = do
               --gRPC gives us a deadline that is just a delta, so we convert it
               --to a proper deadline.
               deadline' <- C.timeSpec <$> peek deadline
               now <- getTime Monotonic
               return $ now + deadline'
+            convertPayload bbPtr = do
+              -- TODO: the reason this returns @Maybe ByteString@ is because the
+              -- gRPC library calls the  underlying out parameter
+              -- "optional_payload". I am not sure exactly in what cases it
+              -- won't be present. The C++ library checks a
+              -- has_request_payload_ bool and passes in nullptr to
+              -- request_registered_call if the bool is false, so we
+              -- may be able to do the payload present/absent check earlier.
+              bb@(C.ByteBuffer rawPtr) <- peek bbPtr
+              if rawPtr == nullPtr
+                 then return Nothing
+                 else do bs <- C.copyByteBufferToByteString bb
+                         return $ Just bs
+            convertMeta requestMetadataRecv = do
+              mArray <- peek requestMetadataRecv
+              metamap <- C.getAllMetadataArray mArray
+              return metamap
 
 -- | Register the server's completion queue. Must be done before the server is
 -- started.

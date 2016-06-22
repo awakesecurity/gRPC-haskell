@@ -84,7 +84,7 @@ withClientServerUnaryCall grpc f = do
         -- created. If later we want to send payloads or metadata, we'll need
         -- to tweak this.
         clientRes <- runOps (unClientCall cc) (clientCQ c) clientEmptySendOps
-        withServerCall s srm 10 $ \sc ->
+        withServerCall s srm $ \sc ->
           f (c, s, cc, sc)
 
 serverConf = (ServerConfig "localhost" 50051 [("/foo", Normal)])

@@ -13,16 +13,15 @@ import           Network.GRPC.LowLevel.Op                           (Op(..), OpR
 import           Network.GRPC.LowLevel.Server                       (Server (..))
 import qualified Network.GRPC.Unsafe.Op                             as C
 
-serverCreateCall :: Server -> TimeoutSeconds
-                    -> IO (Either GRPCIOError ServerCall)
-serverCreateCall Server{..} timeLimit =
-  serverRequestCall internalServer serverCQ timeLimit
+serverCreateCall :: Server -> IO (Either GRPCIOError ServerCall)
+serverCreateCall Server{..} =
+  serverRequestCall internalServer serverCQ
 
-withServerCall :: Server -> TimeoutSeconds
+withServerCall :: Server
                   -> (ServerCall -> IO (Either GRPCIOError a))
                   -> IO (Either GRPCIOError a)
-withServerCall server timeout f = do
-  createResult <- serverCreateCall server timeout
+withServerCall server f = do
+  createResult <- serverCreateCall server
   case createResult of
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
@@ -52,37 +51,29 @@ serverOpsSendNormalResponse body metadata code details =
 -- | A handler for an unregistered server call; bytestring arguments are the
 -- request body and response body respectively.
 type ServerHandler
-  =  ServerCall -> ByteString -> MetadataMap -> MethodName
+  =  ServerCall -> ByteString
   -> IO (ByteString, MetadataMap, C.StatusCode, StatusDetails)
 
 -- | Handle one unregistered call.
 serverHandleNormalCall :: Server
-                       -> TimeoutSeconds
                        -> MetadataMap -- ^ Initial server metadata.
                        -> ServerHandler
                        -> IO (Either GRPCIOError ())
-serverHandleNormalCall s@Server{..} timeLimit srvMetadata f = do
-  withServerCall s timeLimit $ \call -> do
+serverHandleNormalCall s@Server{..} srvMetadata f = do
+  withServerCall s $ \call@ServerCall{..} -> do
     grpcDebug "serverHandleNormalCall(U): starting batch."
     let recvOps = serverOpsGetNormalCall srvMetadata
-        call'   = unServerCall call
-    opResults <- runOps call' serverCQ recvOps
+    opResults <- runOps unServerCall serverCQ recvOps
     case opResults of
       Left x -> do grpcDebug "serverHandleNormalCall(U): ops failed; aborting"
                    return $ Left x
       Right [OpRecvMessageResult (Just body)] -> do
-        requestMeta <- serverCallGetMetadata call
-        grpcDebug $ "got client metadata: " ++ show requestMeta
-        methodName <- serverCallGetMethodName call
-        hostName <- serverCallGetHost call
-        grpcDebug $ "call_details host is: " ++ show hostName
-        (respBody, respMetadata, status, details) <- f call
-                                                       body
-                                                       requestMeta
-                                                       methodName
+        grpcDebug $ "got client metadata: " ++ show requestMetadataRecv
+        grpcDebug $ "call_details host is: " ++ show callHost
+        (respBody, respMetadata, status, details) <- f call body
         let respOps = serverOpsSendNormalResponse
                         respBody respMetadata status details
-        respOpsResults <- runOps call' serverCQ respOps
+        respOpsResults <- runOps unServerCall serverCQ respOps
         case respOpsResults of
           Left x -> do grpcDebug "serverHandleNormalCall(U): resp failed."
                        return $ Left x

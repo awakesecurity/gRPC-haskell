@@ -6,6 +6,8 @@ import           Control.Monad
 import           Foreign.Marshal.Alloc        (free)
 import           Foreign.Ptr                  (Ptr)
 import           Foreign.Storable             (peek)
+import           System.Clock                 (TimeSpec)
+
 import           Network.GRPC.LowLevel.Call   (Host (..), MethodName (..))
 import           Network.GRPC.LowLevel.GRPC   (MetadataMap, grpcDebug)
 import qualified Network.GRPC.Unsafe          as C
@@ -17,27 +19,16 @@ import qualified Network.GRPC.Unsafe.Op as C
 -- call.
 data ServerCall = ServerCall
   { unServerCall        :: C.Call
-  , requestMetadataRecv :: Ptr C.MetadataArray
+  , requestMetadataRecv :: MetadataMap
   , parentPtr           :: Maybe (Ptr C.Call)
-  , callDetails         :: C.CallDetails
+  , callDeadline        :: TimeSpec
+  , callMethod          :: MethodName
+  , callHost            :: Host
   }
 
 serverCallCancel :: ServerCall -> C.StatusCode -> String -> IO ()
 serverCallCancel sc code reason =
   C.grpcCallCancelWithStatus (unServerCall sc) code reason C.reserved
-
-serverCallGetMetadata :: ServerCall -> IO MetadataMap
-serverCallGetMetadata ServerCall{..} = do
-  marray <- peek requestMetadataRecv
-  C.getAllMetadataArray marray
-
-serverCallGetMethodName :: ServerCall -> IO MethodName
-serverCallGetMethodName ServerCall{..} =
-  MethodName <$> C.callDetailsGetMethod callDetails
-
-serverCallGetHost :: ServerCall -> IO Host
-serverCallGetHost ServerCall{..} =
-  Host <$> C.callDetailsGetHost callDetails
 
 debugServerCall :: ServerCall -> IO ()
 #ifdef DEBUG
@@ -66,9 +57,5 @@ destroyServerCall call@ServerCall{..} = do
   debugServerCall call
   grpcDebug $ "Destroying server-side call object: " ++ show unServerCall
   C.grpcCallDestroy unServerCall
-  grpcDebug $ "destroying metadata array: " ++ show requestMetadataRecv
-  C.metadataArrayDestroy requestMetadataRecv
   grpcDebug $ "freeing parentPtr: " ++ show parentPtr
   forM_ parentPtr free
-  grpcDebug $ "destroying call details: " ++ show callDetails
-  C.destroyCallDetails callDetails

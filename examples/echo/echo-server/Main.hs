@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds       #-}
 
@@ -13,9 +14,10 @@ import qualified Network.GRPC.LowLevel.Call.Unregistered as U
 serverMeta :: MetadataMap
 serverMeta = [("test_meta", "test_meta_value")]
 
-handler :: U.ServerCall -> ByteString -> MetadataMap -> MethodName
+handler :: U.ServerCall
+           -> ByteString
            -> IO (ByteString, MetadataMap, StatusCode, StatusDetails)
-handler _call reqBody _reqMeta _method = do
+handler U.ServerCall{..} reqBody = do
   --putStrLn $ "Got request for method: " ++ show method
   --putStrLn $ "Got metadata: " ++ show reqMeta
   return (reqBody, serverMeta, StatusOk, StatusDetails "")
@@ -23,7 +25,7 @@ handler _call reqBody _reqMeta _method = do
 unregMain :: IO ()
 unregMain = withGRPC $ \grpc -> do
   withServer grpc (ServerConfig "localhost" 50051 []) $ \server -> forever $ do
-    result <- U.serverHandleNormalCall server 15 serverMeta handler
+    result <- U.serverHandleNormalCall server serverMeta handler
     case result of
       Left x -> putStrLn $ "handle call result error: " ++ show x
       Right _ -> return ()
@@ -34,7 +36,7 @@ regMain = withGRPC $ \grpc -> do
   withServer grpc (ServerConfig "localhost" 50051 methods) $ \server ->
     forever $ do
       let method = head (registeredMethods server)
-      result <- serverHandleNormalCall server method 15 serverMeta $
+      result <- serverHandleNormalCall server method serverMeta $
         \_call reqBody _reqMeta -> return (reqBody, serverMeta, StatusOk,
                                            StatusDetails "")
       case result of
@@ -44,7 +46,7 @@ regMain = withGRPC $ \grpc -> do
 -- | loop to fork n times
 regLoop :: Server -> RegisteredMethod -> IO ()
 regLoop server method = forever $ do
-  result <- serverHandleNormalCall server method 15 serverMeta $
+  result <- serverHandleNormalCall server method serverMeta $
     \_call reqBody _reqMeta -> return (reqBody, serverMeta, StatusOk,
                                        StatusDetails "")
   case result of

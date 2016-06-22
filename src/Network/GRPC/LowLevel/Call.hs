@@ -65,34 +65,15 @@ clientCallCancel cc = C.grpcCallCancel (unClientCall cc) C.reserved
 -- the C state needed to respond to a registered call.
 data ServerCall = ServerCall
   { unServerCall        :: C.Call,
-    requestMetadataRecv :: Ptr C.MetadataArray,
-    optionalPayload     :: Ptr C.ByteBuffer,
+    requestMetadataRecv :: MetadataMap,
+    optionalPayload     :: Maybe ByteString,
     parentPtr           :: Maybe (Ptr C.Call),
-    callDeadlinePtr     :: C.CTimeSpecPtr,
     callDeadline        :: TimeSpec
   }
 
 serverCallCancel :: ServerCall -> C.StatusCode -> String -> IO ()
 serverCallCancel sc code reason =
   C.grpcCallCancelWithStatus (unServerCall sc) code reason C.reserved
-
-serverCallGetMetadata :: ServerCall -> IO MetadataMap
-serverCallGetMetadata ServerCall{..} = do
-  marray <- peek requestMetadataRecv
-  C.getAllMetadataArray marray
-
--- | Extract the client request body from the given call, if present.  TODO: the
--- reason this returns @Maybe ByteString@ is because the gRPC library calls the
--- underlying out parameter "optional_payload". I am not sure exactly in what
--- cases it won't be present. The C++ library checks a has_request_payload_ bool
--- and passes in nullptr to request_registered_call if the bool is false, so we
--- may be able to do the payload present/absent check earlier.
-serverCallGetPayload :: ServerCall -> IO (Maybe ByteString)
-serverCallGetPayload ServerCall{..} = do
-  bb@(C.ByteBuffer rawPtr) <- peek optionalPayload
-  if rawPtr == nullPtr
-     then return Nothing
-     else Just <$> C.copyByteBufferToByteString bb
 
 serverCallIsExpired :: ServerCall -> IO Bool
 serverCallIsExpired sc = do
@@ -110,24 +91,16 @@ debugClientCall = const $ return ()
 
 debugServerCall :: ServerCall -> IO ()
 #ifdef DEBUG
-debugServerCall call@(ServerCall (C.Call ptr) _ _ _ _ _) = do
+debugServerCall call@(ServerCall (C.Call ptr) _ _ _ _) = do
   grpcDebug $ "debugServerCall(R): server call: " ++ (show ptr)
   grpcDebug $ "debugServerCall(R): metadata ptr: "
               ++ show (requestMetadataRecv call)
-  metadataArr <- peek (requestMetadataRecv call)
-  metadata <- C.getAllMetadataArray metadataArr
-  grpcDebug $ "debugServerCall(R): metadata received: " ++ (show metadata)
   grpcDebug $ "debugServerCall(R): payload ptr: " ++ show (optionalPayload call)
-  payload <- peek (optionalPayload call)
-  bs <- C.copyByteBufferToByteString payload
-  grpcDebug $ "debugServerCall(R): payload contents: " ++ show bs
   forM_ (parentPtr call) $ \parentPtr' -> do
     grpcDebug $ "debugServerCall(R): parent ptr: " ++ show parentPtr'
     (C.Call parent) <- peek parentPtr'
     grpcDebug $ "debugServerCall(R): parent: " ++ show parent
   grpcDebug $ "debugServerCall(R): deadline ptr: " ++ show (callDeadline call)
-  timespec <- peek (callDeadlinePtr call)
-  grpcDebug $ "debugServerCall(R): deadline: " ++ show (C.timeSpec timespec)
 #else
 {-# INLINE debugServerCall #-}
 debugServerCall = const $ return ()
@@ -144,11 +117,5 @@ destroyServerCall call@ServerCall{..} = do
   debugServerCall call
   grpcDebug $ "Destroying server-side call object: " ++ show unServerCall
   C.grpcCallDestroy unServerCall
-  grpcDebug $ "destroying metadata array: " ++ show requestMetadataRecv
-  C.metadataArrayDestroy requestMetadataRecv
-  grpcDebug $ "destroying optional payload" ++ show optionalPayload
-  C.destroyReceivingByteBuffer optionalPayload
   grpcDebug $ "freeing parentPtr: " ++ show parentPtr
   forM_ parentPtr free
-  grpcDebug $ "destroying deadline." ++ show callDeadline
-  C.timespecDestroy callDeadlinePtr

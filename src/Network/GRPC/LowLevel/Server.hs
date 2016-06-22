@@ -126,18 +126,16 @@ serverRegisterMethod _ _ _ _ = error "Streaming methods not implemented yet."
 -- method.
 serverCreateCall :: Server
                  -> RegisteredMethod
-                 -> TimeoutSeconds
                  -> IO (Either GRPCIOError ServerCall)
-serverCreateCall Server{..} rm timeLimit =
-  serverRequestCall internalServer serverCQ timeLimit rm
+serverCreateCall Server{..} rm =
+  serverRequestCall internalServer serverCQ rm
 
 withServerCall :: Server
                -> RegisteredMethod
-               -> TimeoutSeconds
                -> (ServerCall -> IO (Either GRPCIOError a))
                -> IO (Either GRPCIOError a)
-withServerCall server regmethod timeout f = do
-  createResult <- serverCreateCall server regmethod timeout
+withServerCall server regmethod f = do
+  createResult <- serverCreateCall server regmethod
   case createResult of
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
@@ -177,22 +175,21 @@ type ServerHandler
 -- | Wait for and then handle a normal (non-streaming) call.
 serverHandleNormalCall :: Server
                        -> RegisteredMethod
-                       -> TimeoutSeconds
                        -> MetadataMap
                        -- ^ Initial server metadata
                        -> ServerHandler
                        -> IO (Either GRPCIOError ())
-serverHandleNormalCall s@Server{..} rm timeLimit initMeta f = do
-  withServerCall s rm timeLimit $ \call -> do
+serverHandleNormalCall s@Server{..} rm initMeta f = do
+  withServerCall s rm $ \call -> do
     grpcDebug "serverHandleNormalCall(R): starting batch."
     debugServerCall call
-    payload <- serverCallGetPayload call
+    let payload = optionalPayload call
     case payload of
       --TODO: what should we do with an empty payload? Have the handler take
       -- @Maybe ByteString@? Need to figure out when/why payload would be empty.
       Nothing -> error "serverHandleNormalCall(R): payload empty."
       Just requestBody -> do
-        requestMeta <- serverCallGetMetadata call
+        let requestMeta = requestMetadataRecv call
         (respBody, trailingMeta, status, details) <- f call
                                                        requestBody
                                                        requestMeta
