@@ -2,6 +2,7 @@
 #include <grpc/byte_buffer.h>
 #include <grpc/byte_buffer_reader.h>
 #include <grpc/impl/codegen/grpc_types.h>
+#include <grpc/impl/codegen/compression_types.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -407,4 +408,51 @@ void* grpc_server_register_method_(grpc_server* server, const char* method,
   return grpc_server_register_method(server, method, host,
                                      GRPC_SRM_PAYLOAD_READ_INITIAL_BYTE_BUFFER,
                                      0);
+}
+
+grpc_arg* create_arg_array(size_t n){
+  return malloc(sizeof(grpc_arg)*n);
+}
+
+//Converts our enum into real GRPC #defines. c2hs workaround.
+char* translate_arg_key(enum supported_arg_key key){
+  switch (key) {
+    case compression_algorithm_key:
+      return GRPC_COMPRESSION_ALGORITHM_ARG;
+    case user_agent_prefix_key:
+      return GRPC_ARG_PRIMARY_USER_AGENT_STRING;
+    case user_agent_suffix_key:
+      return GRPC_ARG_SECONDARY_USER_AGENT_STRING;
+    default:
+      return "unknown_arg_key";
+  }
+}
+
+void create_string_arg(grpc_arg* args, size_t i,
+                       enum supported_arg_key key, char* value){
+  grpc_arg* arg = args+i;
+  arg->type = GRPC_ARG_STRING;
+  arg->key = translate_arg_key(key);
+  char* storeValue = malloc(sizeof(char)*strlen(value));
+  arg->value.string = strcpy(storeValue, value);
+}
+
+void create_int_arg(grpc_arg* args, size_t i,
+                    enum supported_arg_key key, int value){
+  grpc_arg* arg = args+i;
+  arg->type = GRPC_ARG_INTEGER;
+  arg->key = translate_arg_key(key);
+  arg->value.integer = value;
+}
+
+//Destroys an arg array of the given length. NOTE: the args in the arg array
+//MUST have been created by the create_*_arg functions above!
+void destroy_arg_array(grpc_arg* args, size_t n){
+  for(int i = 0; i < n; i++){
+    grpc_arg* arg = args+i;
+    if(arg->type == GRPC_ARG_STRING){
+      free(arg->value.string);
+    }
+  }
+  free(args);
 }

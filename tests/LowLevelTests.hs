@@ -8,7 +8,9 @@ module LowLevelTests where
 import           Control.Concurrent                        (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Monad
-import           Data.ByteString                           (ByteString)
+import           Data.ByteString                           (ByteString,
+                                                            isPrefixOf,
+                                                            isSuffixOf)
 import qualified Data.Map                                  as M
 import           Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
@@ -37,6 +39,9 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
   , testGoaway
   , testSlowServer
   , testServerCallExpirationCheck
+  , testCustomUserAgent
+  , testClientCompression
+  , testClientServerCompression
   ]
 
 testGRPCBracket :: TestTree
@@ -204,7 +209,7 @@ testSlowServer =
       let rm = head (registeredMethods s)
       serverHandleNormalCall s rm mempty $ \_ _ _ -> do
         threadDelay (2*10^(6 :: Int))
-        return ("", mempty, StatusOk, StatusDetails "")
+        return dummyResp
       return ()
 
 testServerCallExpirationCheck :: TestTree
@@ -226,7 +231,73 @@ testServerCallExpirationCheck =
         threadDelaySecs 3
         exp3 <- serverCallIsExpired c
         assertBool "Call is expired after 4 seconds" exp3
-        return ("", mempty, StatusCancelled, StatusDetails "")
+        return dummyResp
+      return ()
+
+testCustomUserAgent :: TestTree
+testCustomUserAgent =
+  csTest' "Server sees custom user agent prefix/suffix" client server
+  where
+    clientArgs = [UserAgentPrefix "prefix!", UserAgentSuffix "suffix!"]
+    client =
+      TestClient (ClientConfig "localhost" 50051 clientArgs) $
+        \c -> do rm <- clientRegisterMethod c "/foo" Normal
+                 result <- clientRequest c rm 4 "" mempty
+                 return ()
+    server = TestServer (stdServerConf [("/foo", Normal)]) $ \s -> do
+      let rm = head (registeredMethods s)
+      serverHandleNormalCall s rm mempty $ \_ _ meta -> do
+        let ua = meta M.! "user-agent"
+        assertBool "User agent prefix is present" $ isPrefixOf "prefix!" ua
+        assertBool "User agent suffix is present" $ isSuffixOf "suffix!" ua
+        return dummyResp
+      return ()
+
+testClientCompression :: TestTree
+testClientCompression =
+  csTest' "client-only compression: no errors" client server
+  where
+    client =
+      TestClient (ClientConfig
+                   "localhost"
+                   50051
+                   [CompressionAlgArg GrpcCompressDeflate]) $ \c -> do
+        rm <- clientRegisterMethod c "/foo" Normal
+        result <- clientRequest c rm 1 "hello" mempty
+        return ()
+    server = TestServer (stdServerConf [("/foo", Normal)]) $ \s -> do
+      let rm = head (registeredMethods s)
+      serverHandleNormalCall s rm mempty $ \c body _ -> do
+        body @?= "hello"
+        return dummyResp
+      return ()
+
+testClientServerCompression :: TestTree
+testClientServerCompression =
+  csTest' "client/server compression: no errors" client server
+  where
+    cconf = ClientConfig "localhost"
+                         50051
+                         [CompressionAlgArg GrpcCompressDeflate]
+    client = TestClient cconf $ \c -> do
+      rm <- clientRegisterMethod c "/foo" Normal
+      clientRequest c rm 1 "hello" mempty >>= do
+        checkReqRslt $ \NormalRequestResult{..} -> do
+          rspCode @?= StatusOk
+          rspBody @?= "hello"
+          details @?= ""
+          initMD  @?= Just dummyMeta
+          trailMD @?= dummyMeta
+      return ()
+    sconf = ServerConfig "localhost"
+                         50051
+                         [("/foo", Normal)]
+                         [CompressionAlgArg GrpcCompressDeflate]
+    server = TestServer sconf $ \s -> do
+      let rm = head (registeredMethods s)
+      serverHandleNormalCall s rm dummyMeta $ \c body _ -> do
+        body @?= "hello"
+        return ("hello", dummyMeta, StatusOk, StatusDetails "")
       return ()
 
 --------------------------------------------------------------------------------
@@ -235,9 +306,11 @@ testServerCallExpirationCheck =
 dummyMeta :: M.Map ByteString ByteString
 dummyMeta = [("foo","bar")]
 
+dummyResp = ("", mempty, StatusOk, StatusDetails "")
+
 dummyHandler :: ServerCall -> ByteString -> MetadataMap
                 -> IO (ByteString, MetadataMap, StatusCode, StatusDetails)
-dummyHandler _ _ _ = return ("", mempty, StatusOk, StatusDetails "")
+dummyHandler _ _ _ = return dummyResp
 
 unavailableStatus :: Either GRPCIOError a
 unavailableStatus =
@@ -302,7 +375,7 @@ stdTestClient :: (Client -> IO ()) -> TestClient
 stdTestClient = TestClient stdClientConf
 
 stdClientConf :: ClientConfig
-stdClientConf = ClientConfig "localhost" 50051
+stdClientConf = ClientConfig "localhost" 50051 []
 
 data TestServer = TestServer ServerConfig (Server -> IO ())
 
@@ -313,7 +386,7 @@ stdTestServer :: [(MethodName, GRPCMethodType)] -> (Server -> IO ()) -> TestServ
 stdTestServer = TestServer . stdServerConf
 
 stdServerConf :: [(MethodName, GRPCMethodType)] -> ServerConfig
-stdServerConf = ServerConfig "localhost" 50051
+stdServerConf xs = ServerConfig "localhost" 50051 xs []
 
 
 threadDelaySecs :: Int -> IO ()

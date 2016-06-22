@@ -5,6 +5,7 @@ module Network.GRPC.Unsafe where
 import Control.Exception (bracket)
 import Control.Monad
 
+import Foreign.C.String (CString, peekCString)
 import Foreign.C.Types
 import Foreign.Marshal.Alloc (free)
 import Foreign.Ptr
@@ -15,9 +16,11 @@ import Network.GRPC.Unsafe.Constants
 {#import Network.GRPC.Unsafe.ByteBuffer#}
 {#import Network.GRPC.Unsafe.Op#}
 {#import Network.GRPC.Unsafe.Metadata#}
+{#import Network.GRPC.Unsafe.ChannelArgs#}
 
 #include <grpc/grpc.h>
 #include <grpc/status.h>
+#include <grpc/impl/codegen/alloc.h>
 #include <grpc_haskell.h>
 
 {#context prefix = "grpc" #}
@@ -57,17 +60,6 @@ instance Storable Call where
   alignment (Call r) = alignment r
   peek p = fmap Call (peek (castPtr p))
   poke p (Call r) = poke (castPtr p) r
-
--- {#enum grpc_arg_type as ArgType {underscoreToCase} deriving (Eq)#}
-
-newtype ChannelArgs = ChannelArgs [Arg]
-
--- TODO Storable ChannelArgs
-
-{#pointer *grpc_channel_args as ChannelArgsPtr -> ChannelArgs #}
-
-data Arg = Arg { argKey :: String, argValue :: ArgValue }
-data ArgValue = ArgString String | ArgInt Int
 
 -- | A 'Tag' is an identifier that is used with a 'CompletionQueue' to signal
 -- that the corresponding operation has completed.
@@ -184,7 +176,7 @@ castPeek p = do
 -- expose any functions for creating channel args, since they are entirely
 -- undocumented.
 {#fun grpc_insecure_channel_create as ^
-  {`String', `ChannelArgsPtr',unReserved `Reserved'} -> `Channel'#}
+  {`String', `GrpcChannelArgs', unReserved `Reserved'} -> `Channel'#}
 
 {#fun grpc_channel_register_call as ^
   {`Channel', `String', `String',unReserved `Reserved'}
@@ -226,13 +218,21 @@ castPeek p = do
 
 {#fun grpc_call_destroy as ^ {`Call'} -> `()'#}
 
---TODO: we need to free this string with gpr_free!
-{#fun grpc_call_get_peer as ^ {`Call'} -> `String' #}
+-- | Gets the peer of the current call as a string.
+{#fun grpc_call_get_peer as ^ {`Call'} -> `String' getPeerPeek* #}
+
+{#fun gpr_free as ^ {`Ptr ()'} -> `()'#}
+
+getPeerPeek :: CString -> IO String
+getPeerPeek cstr = do
+  haskellStr <- peekCString cstr
+  gprFree (castPtr cstr)
+  return haskellStr
 
 -- Server stuff
 
 {#fun grpc_server_create as ^
-  {`ChannelArgsPtr',unReserved `Reserved'} -> `Server'#}
+  {`GrpcChannelArgs',unReserved `Reserved'} -> `Server'#}
 
 {#fun grpc_server_register_method_ as ^
   {`Server', `String', `String'} -> `CallHandle' CallHandle#}
@@ -269,7 +269,9 @@ castPeek p = do
    `CompletionQueue', `CompletionQueue',unTag `Tag'}
   -> `CallError'#}
 
--- | TODO: I am not yet sure how this function is supposed to be used.
+-- | Request a registered call for the given registered method described by a
+-- 'CallHandle'. The call, deadline, metadata array, and byte buffer are all
+-- out parameters.
 {#fun grpc_server_request_registered_call as ^
   {`Server',unCallHandle `CallHandle',id `Ptr Call', `CTimeSpecPtr',
    `MetadataArray', id `Ptr ByteBuffer', `CompletionQueue',

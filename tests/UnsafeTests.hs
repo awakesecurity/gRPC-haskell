@@ -16,6 +16,7 @@ import           Network.GRPC.Unsafe.Metadata
 import           Network.GRPC.Unsafe.Op
 import           Network.GRPC.Unsafe.Slice
 import           Network.GRPC.Unsafe.Time
+import           Network.GRPC.Unsafe.ChannelArgs
 import           Test.Tasty
 import           Test.Tasty.HUnit               as HU (testCase, (@?=))
 
@@ -23,13 +24,19 @@ unsafeTests :: TestTree
 unsafeTests = testGroup "Unit tests for unsafe C bindings"
   [ roundtripSlice "Hello, world!"
   , roundtripByteBuffer "Hwaet! We gardena in geardagum..."
+  , roundtripSlice largeByteString
+  , roundtripByteBuffer largeByteString
   , testMetadata
   , testNow
   , testCreateDestroyMetadata
   , testCreateDestroyMetadataKeyVals
   , testCreateDestroyDeadline
   , testPayload
+  , testCreateDestroyChannelArgs
   ]
+
+largeByteString :: B.ByteString
+largeByteString = B.pack $ take (32*1024*1024) $ cycle [97..99]
 
 roundtripSlice :: B.ByteString -> TestTree
 roundtripSlice bs = testCase "ByteString slice roundtrip" $ do
@@ -97,6 +104,11 @@ testCreateDestroyMetadataKeyVals = testCase "Create/destroy metadata key/values"
 testCreateDestroyDeadline :: TestTree
 testCreateDestroyDeadline = testCase "Create/destroy deadline" $ do
   grpc $ withDeadlineSeconds 10 $ const $ return ()
+
+testCreateDestroyChannelArgs :: TestTree
+testCreateDestroyChannelArgs = testCase "Create/destroy channel args" $
+  grpc $ withChannelArgs [CompressionAlgArg GrpcCompressDeflate] $
+  const $ return ()
 
 assertCqEventComplete :: Event -> IO ()
 assertCqEventComplete e = do

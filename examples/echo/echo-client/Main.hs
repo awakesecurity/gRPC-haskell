@@ -16,7 +16,7 @@ registered c = do
   meth <- clientRegisterMethod c echoMethod Normal
   clientRequest c meth 1 "hi" mempty
 
-run f = withGRPC $ \g -> withClient g (ClientConfig "localhost" 50051) $ \c ->
+run f = withGRPC $ \g -> withClient g (ClientConfig "localhost" 50051 []) $ \c ->
   f c >>= \case
     Left e -> error $ "Got client error: " ++ show e
     _      -> return ()

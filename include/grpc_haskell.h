@@ -140,4 +140,23 @@ gpr_timespec* call_details_get_deadline(grpc_call_details* details);
 void* grpc_server_register_method_(grpc_server* server, const char* method,
                                    const char* host);
 
+//c2hs doesn't support #const pragmas referring to #define'd strings, so we use
+//this enum as a workaround. These are converted into actual GRPC #defines in
+// translate_arg_key in grpc_haskell.c.
+enum supported_arg_key {
+  compression_algorithm_key = 0,
+  user_agent_prefix_key,
+  user_agent_suffix_key
+};
+
+grpc_arg* create_arg_array(size_t n);
+
+void create_string_arg(grpc_arg* args, size_t i,
+                       enum supported_arg_key key, char* value);
+
+void create_int_arg(grpc_arg* args, size_t i,
+                    enum supported_arg_key key, int value);
+
+void destroy_arg_array(grpc_arg* args, size_t n);
+
 #endif //GRPC_HASKELL

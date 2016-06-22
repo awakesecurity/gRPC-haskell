@@ -10,14 +10,12 @@ module Network.GRPC.Unsafe.ByteBuffer where
 #include <grpc_haskell.h>
 
 {#import Network.GRPC.Unsafe.Slice#}
+{#import Network.GRPC.Unsafe.ChannelArgs#}
 import Control.Exception (bracket)
 import qualified Data.ByteString as B
 import Foreign.Ptr
 import Foreign.C.Types
 import Foreign.Storable
-
-{#enum grpc_compression_algorithm as GRPCCompressionAlgorithm
-  {underscoreToCase} deriving (Eq) #}
 
 -- | Represents a pointer to a gRPC byte buffer containing 1 or more 'Slice's.
 -- Must be destroyed manually with 'grpcByteBufferDestroy'.
@@ -56,7 +54,7 @@ withByteBufferPtr
 {#fun grpc_raw_byte_buffer_create as ^ {`Slice', `CULong'} -> `ByteBuffer'#}
 
 {#fun grpc_raw_compressed_byte_buffer_create as ^
-  {`Slice', `CULong', `GRPCCompressionAlgorithm'} -> `ByteBuffer'#}
+  {`Slice', `CULong', `CompressionAlgorithm'} -> `ByteBuffer'#}
 
 {#fun grpc_byte_buffer_copy as ^ {`ByteBuffer'} -> `ByteBuffer'#}
 
@@ -78,7 +76,6 @@ withByteBufferPtr
 {#fun grpc_raw_byte_buffer_from_reader as ^
   {`ByteBufferReader'} -> `ByteBuffer'#}
 
--- TODO: Issue #5
 withByteStringAsByteBuffer :: B.ByteString -> (ByteBuffer -> IO a) -> IO a
 withByteStringAsByteBuffer bs f = do
   bracket (byteStringToSlice bs) freeSlice $ \slice -> do

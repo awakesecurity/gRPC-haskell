@@ -22,6 +22,7 @@ import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
 import qualified Network.GRPC.Unsafe                   as C
 import qualified Network.GRPC.Unsafe.Op                as C
+import qualified Network.GRPC.Unsafe.ChannelArgs       as C
 
 -- | Wraps various gRPC state needed to run a server.
 data Server = Server
@@ -42,6 +43,11 @@ data ServerConfig = ServerConfig
     -- ^ List of (method name, method type) tuples specifying all methods to
     -- register. You can also handle other unregistered methods with
     -- `serverHandleNormalCall`.
+  , serverArgs :: [C.Arg]
+  -- ^ Optional arguments for setting up the
+  -- channel on the server. Supplying an empty
+  -- list will cause the channel to use gRPC's
+  -- default options.
   }
   deriving (Show, Eq)
 
@@ -49,18 +55,19 @@ serverEndpoint :: ServerConfig -> Endpoint
 serverEndpoint ServerConfig{..} = endpoint host port
 
 startServer :: GRPC -> ServerConfig -> IO Server
-startServer grpc conf@ServerConfig{..} = do
-  let e = serverEndpoint conf
-  server <- C.grpcServerCreate nullPtr C.reserved
-  actualPort <- C.grpcServerAddInsecureHttp2Port server (unEndpoint e)
-  when (actualPort /= unPort port) $
-    error $ "Unable to bind port: " ++ show port
-  cq <- createCompletionQueue grpc
-  serverRegisterCompletionQueue server cq
-  methods <- forM methodsToRegister $ \(name, mtype) ->
-               serverRegisterMethod server name e mtype
-  C.grpcServerStart server
-  return $ Server server cq methods conf
+startServer grpc conf@ServerConfig{..} =
+  C.withChannelArgs serverArgs $ \args -> do
+    let e = serverEndpoint conf
+    server <- C.grpcServerCreate args C.reserved
+    actualPort <- C.grpcServerAddInsecureHttp2Port server (unEndpoint e)
+    when (actualPort /= unPort port) $
+      error $ "Unable to bind port: " ++ show port
+    cq <- createCompletionQueue grpc
+    serverRegisterCompletionQueue server cq
+    methods <- forM methodsToRegister $ \(name, mtype) ->
+                 serverRegisterMethod server name e mtype
+    C.grpcServerStart server
+    return $ Server server cq methods conf
 
 stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?

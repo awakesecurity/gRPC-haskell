@@ -10,9 +10,11 @@ import           Control.Monad                         (join)
 import           Data.ByteString                       (ByteString)
 import           Foreign.Ptr                           (nullPtr)
 import qualified Network.GRPC.Unsafe                   as C
+import qualified Network.GRPC.Unsafe.ChannelArgs       as C
 import qualified Network.GRPC.Unsafe.Constants         as C
 import qualified Network.GRPC.Unsafe.Op                as C
 import qualified Network.GRPC.Unsafe.Time              as C
+
 
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue
@@ -27,17 +29,24 @@ data Client = Client {clientChannel :: C.Channel,
 
 -- | Configuration necessary to set up a client.
 data ClientConfig = ClientConfig {serverHost :: Host,
-                                  serverPort :: Port}
+                                  serverPort :: Port,
+                                  clientArgs :: [C.Arg]
+                                  -- ^ Optional arguments for setting up the
+                                  -- channel on the client. Supplying an empty
+                                  -- list will cause the channel to use gRPC's
+                                  -- default options.
+                                 }
 
 clientEndpoint :: ClientConfig -> Endpoint
 clientEndpoint ClientConfig{..} = endpoint serverHost serverPort
 
 createClient :: GRPC -> ClientConfig -> IO Client
-createClient grpc clientConfig = do
-  let Endpoint e = clientEndpoint clientConfig
-  clientChannel <- C.grpcInsecureChannelCreate e nullPtr C.reserved
-  clientCQ <- createCompletionQueue grpc
-  return Client{..}
+createClient grpc clientConfig =
+  C.withChannelArgs (clientArgs clientConfig) $ \chanargs -> do
+    let Endpoint e = clientEndpoint clientConfig
+    clientChannel <- C.grpcInsecureChannelCreate e chanargs C.reserved
+    clientCQ <- createCompletionQueue grpc
+    return Client{..}
 
 destroyClient :: Client -> IO ()
 destroyClient Client{..} = do

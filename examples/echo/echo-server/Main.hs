@@ -24,7 +24,7 @@ handler U.ServerCall{..} reqBody = do
 
 unregMain :: IO ()
 unregMain = withGRPC $ \grpc -> do
-  withServer grpc (ServerConfig "localhost" 50051 []) $ \server -> forever $ do
+  withServer grpc (ServerConfig "localhost" 50051 [] []) $ \server -> forever $ do
     result <- U.serverHandleNormalCall server serverMeta handler
     case result of
       Left x -> putStrLn $ "handle call result error: " ++ show x
@@ -33,7 +33,7 @@ unregMain = withGRPC $ \grpc -> do
 regMain :: IO ()
 regMain = withGRPC $ \grpc -> do
   let methods = [(MethodName "/echo.Echo/DoEcho", Normal)]
-  withServer grpc (ServerConfig "localhost" 50051 methods) $ \server ->
+  withServer grpc (ServerConfig "localhost" 50051 methods []) $ \server ->
     forever $ do
       let method = head (registeredMethods server)
       result <- serverHandleNormalCall server method serverMeta $
@@ -57,7 +57,7 @@ regMainThreaded :: IO ()
 regMainThreaded = do
   withGRPC $ \grpc -> do
     let methods = [(MethodName "/echo.Echo/DoEcho", Normal)]
-    withServer grpc (ServerConfig "localhost" 50051 methods) $ \server -> do
+    withServer grpc (ServerConfig "localhost" 50051 methods []) $ \server -> do
       let method = head (registeredMethods server)
       tid1 <- async $ regLoop server method
       tid2 <- async $ regLoop server method

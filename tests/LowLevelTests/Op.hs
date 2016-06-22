@@ -87,9 +87,9 @@ withClientServerUnaryCall grpc f = do
         withServerCall s srm $ \sc ->
           f (c, s, cc, sc)
 
-serverConf = (ServerConfig "localhost" 50051 [("/foo", Normal)])
+serverConf = ServerConfig "localhost" 50051 [("/foo", Normal)] []
 
-clientConf = (ClientConfig "localhost" 50051)
+clientConf = ClientConfig "localhost" 50051 []
 
 clientEmptySendOps = [OpSendInitialMetadata mempty,
                       OpSendMessage "",

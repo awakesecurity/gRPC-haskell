@@ -26,6 +26,10 @@ GRPC
 , MethodName(..)
 , StatusDetails(..)
 
+-- * Configuration options
+, Arg(..)
+, CompressionAlgorithm(..)
+
 -- * Server
 , ServerConfig(..)
 , Server
@@ -64,3 +68,4 @@ import           Network.GRPC.LowLevel.Call
 
 import Network.GRPC.Unsafe (ConnectivityState(..))
 import Network.GRPC.Unsafe.Op (StatusCode(..))
+import Network.GRPC.Unsafe.ChannelArgs(Arg(..), CompressionAlgorithm(..))

@@ -37,6 +37,7 @@ library
     Network.GRPC.Unsafe.Constants
     Network.GRPC.Unsafe.Time
     Network.GRPC.Unsafe.Slice
+    Network.GRPC.Unsafe.ChannelArgs
     Network.GRPC.Unsafe.ByteBuffer
     Network.GRPC.Unsafe.Metadata
     Network.GRPC.Unsafe.Op

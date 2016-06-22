@@ -4,6 +4,7 @@ module Network.GRPC.Unsafe.Constants where
 
 #include "grpc/grpc.h"
 #include "grpc/impl/codegen/propagation_bits.h"
+#include "grpc/impl/codegen/compression_types.h"
 
 argEnableCensus :: Int
 argEnableCensus = #const GRPC_ARG_ENABLE_CENSUS
