@@ -3,3 +3,5 @@ dist
 *.pyc
 *.pyo
 *.o
+examples/echo/echo-cpp/echo-client
+examples/echo/echo-cpp/echo-server
