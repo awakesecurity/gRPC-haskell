@@ -87,7 +87,7 @@ testMixRegisteredUnregistered =
       clientRequest c rm1 1 "Hello" mempty >>= do
         checkReqRslt $ \NormalRequestResult{..} -> do
           rspBody @?= "reply test"
-          initMD @?= Just dummyMeta
+          initMD @?= dummyMeta
           trailMD @?= dummyMeta
       clientRequest c rm2 1 "bad endpoint" mempty >>= do
         checkReqRslt $ \NormalRequestResult{..} -> do
@@ -127,7 +127,7 @@ testPayload =
           rspCode @?= StatusOk
           rspBody @?= "reply test"
           details @?= "details string"
-          initMD  @?= Just dummyMeta
+          initMD  @?= dummyMeta
           trailMD @?= dummyMeta
     server s = do
       length (registeredMethods s) @?= 1
@@ -286,7 +286,7 @@ testClientServerCompression =
           rspCode @?= StatusOk
           rspBody @?= "hello"
           details @?= ""
-          initMD  @?= Just dummyMeta
+          initMD  @?= dummyMeta
           trailMD @?= dummyMeta
       return ()
     sconf = ServerConfig "localhost"

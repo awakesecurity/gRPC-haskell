@@ -113,7 +113,7 @@ withClientCall client regmethod timeout f = do
 
 data NormalRequestResult = NormalRequestResult
   { rspBody :: ByteString
-  , initMD  :: Maybe MetadataMap -- initial metadata
+  , initMD  :: MetadataMap -- initial metadata
   , trailMD :: MetadataMap       -- trailing metadata
   , rspCode :: C.StatusCode
   , details :: StatusDetails
@@ -127,14 +127,7 @@ compileNormalRequestResults
   [OpRecvInitialMetadataResult m,
    OpRecvMessageResult (Just body),
    OpRecvStatusOnClientResult m2 status details]
-    = Right $ NormalRequestResult body (Just m) m2 status
-                                  (StatusDetails details)
-  -- TODO: it seems registered request responses on the server
-  -- don't send initial metadata. Hence the 'Maybe'. Investigate.
-compileNormalRequestResults
-  [OpRecvMessageResult (Just body),
-   OpRecvStatusOnClientResult m2 status details]
-    = Right $ NormalRequestResult body Nothing m2 status (StatusDetails details)
+    = Right $ NormalRequestResult body m m2 status (StatusDetails details)
 compileNormalRequestResults x =
   case extractStatusInfo x of
     Nothing -> Left GRPCIOUnknownError
