@@ -124,7 +124,8 @@ test-suite test
   hs-source-dirs:       tests
   main-is:              Properties.hs
   type:                 exitcode-stdio-1.0
-  extensions:           CPP
+  default-extensions:   CPP
 
   if flag(debug)
-    GHC-Options: -DDEBUG
+    CPP-Options: -DDEBUG
+    CC-Options:  -DGRPC_HASKELL_DEBUG

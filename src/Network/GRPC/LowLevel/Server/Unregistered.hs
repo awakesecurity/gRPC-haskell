@@ -4,9 +4,7 @@ module Network.GRPC.LowLevel.Server.Unregistered where
 
 import           Control.Exception                                  (finally)
 import           Data.ByteString                                    (ByteString)
-import           Network.GRPC.LowLevel.Call                         (MethodName)
 import           Network.GRPC.LowLevel.Call.Unregistered
-import           Network.GRPC.LowLevel.CompletionQueue              (TimeoutSeconds)
 import           Network.GRPC.LowLevel.CompletionQueue.Unregistered (serverRequestCall)
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op                           (Op(..), OpRecvResult (..), runOps)

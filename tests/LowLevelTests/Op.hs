@@ -5,10 +5,7 @@
 module LowLevelTests.Op where
 
 import           Control.Concurrent             (threadDelay)
-import           Control.Concurrent.Async
-import           Control.Monad
-import           Data.ByteString                (ByteString, isPrefixOf)
-import qualified Data.Map                       as M
+import           Data.ByteString                (isPrefixOf)
 import           Foreign.Storable               (peek)
 import           Test.Tasty
 import           Test.Tasty.HUnit               as HU (testCase, (@?=),
@@ -31,7 +28,7 @@ testCancelWhileHandling =
   testCase "Client/Server - cancel after handler starts does nothing" $
   runSerialTest $ \grpc ->
     withClientServerUnaryCall grpc $
-    \(c@Client{..}, s@Server{..}, cc@ClientCall{..}, sc@ServerCall{..}) -> do
+    \(Client{..}, Server{..}, cc@ClientCall{..}, ServerCall{..}) -> do
       withOpArrayAndCtxts serverEmptyRecvOps $ \(opArray, ctxts) -> do
         tag <- newTag serverCQ
         startBatch serverCQ unServerCall opArray 3 tag
@@ -50,7 +47,7 @@ testCancelFromServer =
   testCase "Client/Server - client receives server cancellation" $
   runSerialTest $ \grpc ->
     withClientServerUnaryCall grpc $
-    \(c@Client{..}, s@Server{..}, cc@ClientCall{..}, sc@ServerCall{..}) -> do
+    \(Client{..}, Server{..}, ClientCall{..}, sc@ServerCall{..}) -> do
       serverCallCancel sc StatusPermissionDenied "TestStatus"
       clientRes <- runOps unClientCall clientCQ clientRecvOps
       case clientRes of
@@ -62,6 +59,7 @@ testCancelFromServer =
             ||
             isPrefixOf "Received RST_STREAM" details
           return $ Right ()
+        wrong -> error $ "Unexpected op results: " ++ show wrong
 
 
 runSerialTest :: (GRPC -> IO (Either GRPCIOError ())) -> IO ()
@@ -83,22 +81,27 @@ withClientServerUnaryCall grpc f = do
         -- because registered methods try to do recv ops immediately when
         -- created. If later we want to send payloads or metadata, we'll need
         -- to tweak this.
-        clientRes <- runOps (unClientCall cc) (clientCQ c) clientEmptySendOps
+        _clientRes <- runOps (unClientCall cc) (clientCQ c) clientEmptySendOps
         withServerCall s srm $ \sc ->
           f (c, s, cc, sc)
 
+serverConf :: ServerConfig
 serverConf = ServerConfig "localhost" 50051 [("/foo", Normal)] []
 
+clientConf :: ClientConfig
 clientConf = ClientConfig "localhost" 50051 []
 
+clientEmptySendOps :: [Op]
 clientEmptySendOps = [OpSendInitialMetadata mempty,
                       OpSendMessage "",
                       OpSendCloseFromClient]
 
+clientRecvOps :: [Op]
 clientRecvOps = [OpRecvInitialMetadata,
                  OpRecvMessage,
                  OpRecvStatusOnClient]
 
+serverEmptyRecvOps :: [Op]
 serverEmptyRecvOps = [OpSendInitialMetadata mempty,
                       OpRecvMessage,
                       OpRecvCloseOnServer]

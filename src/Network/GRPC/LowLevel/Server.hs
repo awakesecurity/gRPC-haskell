@@ -8,10 +8,8 @@ module Network.GRPC.LowLevel.Server where
 import           Control.Exception                     (bracket, finally)
 import           Control.Monad
 import           Data.ByteString                       (ByteString)
-import           Foreign.Ptr                           (nullPtr)
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
-                                                        TimeoutSeconds,
                                                         createCompletionQueue,
                                                         pluck,
                                                         serverRegisterCompletionQueue,

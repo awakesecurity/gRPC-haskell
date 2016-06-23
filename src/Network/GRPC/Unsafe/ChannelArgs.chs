@@ -5,7 +5,6 @@ module Network.GRPC.Unsafe.ChannelArgs where
 import Control.Exception
 import Control.Monad
 import Foreign.Storable
-import Foreign.Ptr (nullPtr)
 import Foreign.Marshal.Alloc (malloc, free)
 
 #include <grpc/grpc.h>

@@ -10,14 +10,10 @@ import           Control.Monad
 import           Data.ByteString                (ByteString)
 import           Data.String                    (IsString)
 import           Foreign.Marshal.Alloc          (free)
-import           Foreign.Ptr                    (Ptr, nullPtr)
-import           Foreign.Storable               (peek)
+import           Foreign.Ptr                    (Ptr)
 import           System.Clock
 
 import qualified Network.GRPC.Unsafe            as C
-import qualified Network.GRPC.Unsafe.ByteBuffer as C
-import qualified Network.GRPC.Unsafe.Metadata   as C
-import qualified Network.GRPC.Unsafe.Time       as C
 import qualified Network.GRPC.Unsafe.Op         as C
 
 import           Network.GRPC.LowLevel.GRPC     (MetadataMap, grpcDebug)

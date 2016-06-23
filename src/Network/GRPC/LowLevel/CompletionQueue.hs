@@ -29,7 +29,6 @@ module Network.GRPC.LowLevel.CompletionQueue
   )
 where
 
-import           Control.Concurrent                      (forkIO)
 import           Control.Concurrent.STM                  (atomically, check)
 import           Control.Concurrent.STM.TVar             (newTVarIO, readTVar,
                                                           writeTVar)
@@ -45,15 +44,13 @@ import qualified Network.GRPC.Unsafe.Constants           as C
 import qualified Network.GRPC.Unsafe.Metadata            as C
 import qualified Network.GRPC.Unsafe.Op                  as C
 import qualified Network.GRPC.Unsafe.Time                as C
-import           System.Clock                            (getTime, Clock(..),
-                                                          TimeSpec(..))
+import           System.Clock                            (getTime, Clock(..))
 import           System.Timeout                          (timeout)
 
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.CompletionQueue.Internal
 import qualified Network.GRPC.Unsafe.ByteBuffer as C
-import qualified Network.GRPC.Unsafe.Metadata   as C
 
 withCompletionQueue :: GRPC -> (CompletionQueue -> IO a) -> IO a
 withCompletionQueue grpc = bracket (createCompletionQueue grpc)

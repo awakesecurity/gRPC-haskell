@@ -13,7 +13,6 @@ import           Foreign.Marshal.Alloc                 (free, malloc,
                                                         mallocBytes)
 import           Foreign.Ptr                           (Ptr, nullPtr)
 import           Foreign.Storable                      (peek, poke)
-import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe                   as C (Call)

@@ -2,7 +2,6 @@
 
 module Network.GRPC.LowLevel.CompletionQueue.Unregistered where
 
-import           Control.Concurrent                             (forkIO)
 import           Control.Exception                              (bracket)
 import           Foreign.Marshal.Alloc                          (free, malloc)
 import           Foreign.Storable                               (peek)

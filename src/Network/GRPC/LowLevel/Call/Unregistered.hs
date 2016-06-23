@@ -5,13 +5,11 @@ module Network.GRPC.LowLevel.Call.Unregistered where
 import           Control.Monad
 import           Foreign.Marshal.Alloc        (free)
 import           Foreign.Ptr                  (Ptr)
-import           Foreign.Storable             (peek)
 import           System.Clock                 (TimeSpec)
 
 import           Network.GRPC.LowLevel.Call   (Host (..), MethodName (..))
 import           Network.GRPC.LowLevel.GRPC   (MetadataMap, grpcDebug)
 import qualified Network.GRPC.Unsafe          as C
-import qualified Network.GRPC.Unsafe.Metadata as C
 import qualified Network.GRPC.Unsafe.Op as C
 
 -- | Represents one unregistered GRPC call on the server.
