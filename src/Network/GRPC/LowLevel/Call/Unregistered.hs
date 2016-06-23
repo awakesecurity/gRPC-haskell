@@ -32,20 +32,18 @@ serverCallCancel sc code reason =
 
 debugServerCall :: ServerCall -> IO ()
 #ifdef DEBUG
-debugServerCall call@(ServerCall (C.Call ptr) _ _ _) = do
+debugServerCall call@ServerCall{..} = do
+  let (C.Call ptr) = unServerCall
   grpcDebug $ "debugServerCall(U): server call: " ++ (show ptr)
-  grpcDebug $ "debugServerCall(U): metadata ptr: "
-              ++ show (requestMetadataRecv call)
-  metadataArr <- peek (requestMetadataRecv call)
-  metadata <- C.getAllMetadataArray metadataArr
-  grpcDebug $ "debugServerCall(U): metadata received: " ++ (show metadata)
-  forM_ (parentPtr call) $ \parentPtr' -> do
+  grpcDebug $ "debugServerCall(U): metadata: "
+              ++ show requestMetadataRecv
+  forM_ parentPtr $ \parentPtr' -> do
     grpcDebug $ "debugServerCall(U): parent ptr: " ++ show parentPtr'
     (C.Call parent) <- peek parentPtr'
     grpcDebug $ "debugServerCall(U): parent: " ++ show parent
-  grpcDebug $ "debugServerCall(U): callDetails ptr: "
-              ++ show (callDetails call)
-  --TODO: need functions for getting data out of call_details.
+  grpcDebug $ "debugServerCall(U): deadline: " ++ show callDeadline
+  grpcDebug $ "debugServerCall(U): method: " ++ show callMethod
+  grpcDebug $ "debugServerCall(U): host: " ++ show callHost
 #else
 {-# INLINE debugServerCall #-}
 debugServerCall = const $ return ()
