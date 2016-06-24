@@ -51,6 +51,7 @@ GRPC
 , clientRegisterMethod
 , clientRequest
 , withClientCall
+, withClientCallParent
 , clientCallCancel
 
 -- * Ops

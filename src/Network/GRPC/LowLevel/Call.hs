@@ -63,7 +63,6 @@ data ServerCall = ServerCall
   { unServerCall        :: C.Call,
     requestMetadataRecv :: MetadataMap,
     optionalPayload     :: Maybe ByteString,
-    parentPtr           :: Maybe (Ptr C.Call),
     callDeadline        :: TimeSpec
   }
 
@@ -87,15 +86,11 @@ debugClientCall = const $ return ()
 
 debugServerCall :: ServerCall -> IO ()
 #ifdef DEBUG
-debugServerCall call@(ServerCall (C.Call ptr) _ _ _ _) = do
+debugServerCall call@(ServerCall (C.Call ptr) _ _ _) = do
   grpcDebug $ "debugServerCall(R): server call: " ++ (show ptr)
   grpcDebug $ "debugServerCall(R): metadata ptr: "
               ++ show (requestMetadataRecv call)
   grpcDebug $ "debugServerCall(R): payload ptr: " ++ show (optionalPayload call)
-  forM_ (parentPtr call) $ \parentPtr' -> do
-    grpcDebug $ "debugServerCall(R): parent ptr: " ++ show parentPtr'
-    (C.Call parent) <- peek parentPtr'
-    grpcDebug $ "debugServerCall(R): parent: " ++ show parent
   grpcDebug $ "debugServerCall(R): deadline ptr: " ++ show (callDeadline call)
 #else
 {-# INLINE debugServerCall #-}
@@ -113,5 +108,3 @@ destroyServerCall call@ServerCall{..} = do
   debugServerCall call
   grpcDebug $ "Destroying server-side call object: " ++ show unServerCall
   C.grpcCallDestroy unServerCall
-  grpcDebug $ "freeing parentPtr: " ++ show parentPtr
-  forM_ parentPtr free

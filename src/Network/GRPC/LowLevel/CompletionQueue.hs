@@ -111,7 +111,7 @@ shutdownCompletionQueue (CompletionQueue{..}) = do
             C.OpComplete -> drainLoop
 
 channelCreateCall :: C.Channel
-                  -> C.Call
+                  -> (Maybe ServerCall)
                   -> C.PropagationMask
                   -> CompletionQueue
                   -> C.CallHandle
@@ -120,11 +120,13 @@ channelCreateCall :: C.Channel
 channelCreateCall
   chan parent mask cq@CompletionQueue{..} handle deadline =
   withPermission Push cq $ do
+    let parentPtr = maybe (C.Call nullPtr) unServerCall parent
     grpcDebug $ "channelCreateCall: call with "
-                ++ concat (intersperse " " [show chan, show parent, show mask,
+                ++ concat (intersperse " " [show chan, show parentPtr,
+                                            show mask,
                                             show unsafeCQ, show handle,
                                             show deadline])
-    call <- C.grpcChannelCreateRegisteredCall chan parent mask unsafeCQ
+    call <- C.grpcChannelCreateRegisteredCall chan parentPtr mask unsafeCQ
                                               handle deadline C.reserved
     return $ Right $ ClientCall call
 
@@ -167,7 +169,6 @@ serverRequestCall
                            let assembledCall = ServerCall rawCall
                                                           meta
                                                           payload
-                                                          Nothing
                                                           deadline
                            grpcDebug "serverRequestCall(R): About to return"
                            return $ Right assembledCall

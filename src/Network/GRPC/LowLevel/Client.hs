@@ -89,22 +89,44 @@ clientCreateCall :: Client
                  -> RegisteredMethod
                  -> TimeoutSeconds
                  -> IO (Either GRPCIOError ClientCall)
-clientCreateCall Client{..} RegisteredMethod{..} timeout = do
-  let parentCall = C.Call nullPtr --Unsure what this does. null is safe, though.
+clientCreateCall c rm ts = clientCreateCallParent c rm ts Nothing
+
+-- | For servers that act as clients to other gRPC servers, this version creates
+-- a client call with an optional parent server call. This allows for cascading
+-- call cancellation from the `ServerCall` to the `ClientCall`.
+clientCreateCallParent :: Client
+                           -> RegisteredMethod
+                           -> TimeoutSeconds
+                           -> (Maybe ServerCall)
+                           -- ^ Optional parent call for cascading cancellation.
+                           -> IO (Either GRPCIOError ClientCall)
+clientCreateCallParent Client{..} RegisteredMethod{..} timeout parent = do
   C.withDeadlineSeconds timeout $ \deadline -> do
-    channelCreateCall clientChannel parentCall C.propagateDefaults
+    channelCreateCall clientChannel parent C.propagateDefaults
       clientCQ methodHandle deadline
 
--- TODO: the error-handling refactor made this quite ugly. It could be fixed
--- by switching to ExceptT IO.
 -- | Handles safe creation and cleanup of a client call
 withClientCall :: Client
                -> RegisteredMethod
                -> TimeoutSeconds
                -> (ClientCall -> IO (Either GRPCIOError a))
                -> IO (Either GRPCIOError a)
-withClientCall client regmethod timeout f = do
-  createResult <- clientCreateCall client regmethod timeout
+withClientCall client regmethod timeout f =
+  withClientCallParent client regmethod timeout Nothing f
+
+-- | Handles safe creation and cleanup of a client call, with an optional parent
+-- call parameter. This allows for cancellation to cascade from the parent
+-- `ServerCall` to the created `ClientCall`. Obviously, this is only useful if
+-- the given gRPC client is also a server.
+withClientCallParent :: Client
+                        -> RegisteredMethod
+                        -> TimeoutSeconds
+                        -> (Maybe ServerCall)
+                        -- ^ Optional parent call for cascading cancellation.
+                        -> (ClientCall -> IO (Either GRPCIOError a))
+                        -> IO (Either GRPCIOError a)
+withClientCallParent client regmethod timeout parent f = do
+  createResult <- clientCreateCallParent client regmethod timeout parent
   case createResult of
     Left x -> return $ Left x
     Right call -> f call `finally` logDestroy call
