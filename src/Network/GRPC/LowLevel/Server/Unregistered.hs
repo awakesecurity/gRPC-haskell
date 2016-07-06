@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase      #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Network.GRPC.LowLevel.Server.Unregistered where
@@ -7,7 +8,8 @@ import           Data.ByteString                                    (ByteString)
 import           Network.GRPC.LowLevel.Call.Unregistered
 import           Network.GRPC.LowLevel.CompletionQueue.Unregistered (serverRequestCall)
 import           Network.GRPC.LowLevel.GRPC
-import           Network.GRPC.LowLevel.Op                           (Op(..), OpRecvResult (..), runOps)
+import           Network.GRPC.LowLevel.Op                           (Op (..), OpRecvResult (..),
+                                                                     runOps)
 import           Network.GRPC.LowLevel.Server                       (Server (..))
 import qualified Network.GRPC.Unsafe.Op                             as C
 
@@ -57,24 +59,31 @@ serverHandleNormalCall :: Server
                        -> MetadataMap -- ^ Initial server metadata.
                        -> ServerHandler
                        -> IO (Either GRPCIOError ())
-serverHandleNormalCall s@Server{..} srvMetadata f = do
+serverHandleNormalCall s@Server{..} srvMetadata f =
   withServerCall s $ \call@ServerCall{..} -> do
     grpcDebug "serverHandleNormalCall(U): starting batch."
-    let recvOps = serverOpsGetNormalCall srvMetadata
-    opResults <- runOps unServerCall serverCQ recvOps
-    case opResults of
-      Left x -> do grpcDebug "serverHandleNormalCall(U): ops failed; aborting"
-                   return $ Left x
-      Right [OpRecvMessageResult (Just body)] -> do
-        grpcDebug $ "got client metadata: " ++ show requestMetadataRecv
-        grpcDebug $ "call_details host is: " ++ show callHost
-        (respBody, respMetadata, status, details) <- f call body
-        let respOps = serverOpsSendNormalResponse
-                        respBody respMetadata status details
-        respOpsResults <- runOps unServerCall serverCQ respOps
-        case respOpsResults of
-          Left x -> do grpcDebug "serverHandleNormalCall(U): resp failed."
-                       return $ Left x
-          Right _ -> grpcDebug "serverHandleNormalCall(U): ops done."
-                     >> return (Right ())
-      x -> error $ "impossible pattern match: " ++ show x
+    runOps unServerCall serverCQ
+      [ OpSendInitialMetadata srvMetadata
+      , OpRecvMessage
+      ]
+      >>= \case
+        Left x -> do
+          grpcDebug "serverHandleNormalCall(U): ops failed; aborting"
+          return $ Left x
+        Right [OpRecvMessageResult (Just body)] -> do
+          grpcDebug $ "got client metadata: " ++ show requestMetadataRecv
+          grpcDebug $ "call_details host is: " ++ show callHost
+          (rspBody, rspMeta, status, ds) <- f call body
+          runOps unServerCall serverCQ
+            [ OpRecvCloseOnServer
+            , OpSendMessage rspBody,
+              OpSendStatusFromServer rspMeta status ds
+            ]
+            >>= \case
+              Left x -> do
+                grpcDebug "serverHandleNormalCall(U): resp failed."
+                return $ Left x
+              Right _ -> do
+                grpcDebug "serverHandleNormalCall(U): ops done."
+                return $ Right ()
+        x -> error $ "impossible pattern match: " ++ show x

@@ -10,7 +10,11 @@
 -- implementation details to both are kept in
 -- `Network.GRPC.LowLevel.CompletionQueue.Internal`.
 
+{-# LANGUAGE LambdaCase      #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 
 module Network.GRPC.LowLevel.CompletionQueue
   ( CompletionQueue
@@ -33,12 +37,15 @@ import           Control.Concurrent.STM                  (atomically, check)
 import           Control.Concurrent.STM.TVar             (newTVarIO, readTVar,
                                                           writeTVar)
 import           Control.Exception                       (bracket)
+import           Control.Monad.Trans.Class               (MonadTrans(lift))
+import           Control.Monad.Trans.Except
 import           Control.Monad                           (liftM2)
+import           Control.Monad.Managed
 import           Data.IORef                              (newIORef)
 import           Data.List                               (intersperse)
 import           Foreign.Marshal.Alloc                   (free, malloc)
-import           Foreign.Ptr                             (nullPtr)
-import           Foreign.Storable                        (peek)
+import           Foreign.Ptr                             (Ptr, nullPtr)
+import           Foreign.Storable                        (Storable, peek)
 import qualified Network.GRPC.Unsafe                     as C
 import qualified Network.GRPC.Unsafe.Constants           as C
 import qualified Network.GRPC.Unsafe.Metadata            as C
@@ -63,11 +70,8 @@ createCompletionQueue _ = do
   currentPushers <- newTVarIO 0
   shuttingDown <- newTVarIO False
   nextTag <- newIORef minBound
-  return $ CompletionQueue{..}
+  return CompletionQueue{..}
 
--- TODO: I'm thinking it might be easier to use 'Either' uniformly everywhere
--- even when it's isomorphic to 'Maybe'. If that doesn't turn out to be the
--- case, switch these to 'Maybe'.
 -- | Very simple wrapper around 'grpcCallStartBatch'. Throws 'GRPCIOShutdown'
 -- without calling 'grpcCallStartBatch' if the queue is shutting down.
 -- Throws 'CallError' if 'grpcCallStartBatch' returns a non-OK code.
@@ -87,7 +91,7 @@ startBatch cq@CompletionQueue{..} call opArray opArraySize tag =
 -- queue after we begin the shutdown process. Errors with
 -- 'GRPCIOShutdownFailure' if the queue can't be shut down within 5 seconds.
 shutdownCompletionQueue :: CompletionQueue -> IO (Either GRPCIOError ())
-shutdownCompletionQueue (CompletionQueue{..}) = do
+shutdownCompletionQueue CompletionQueue{..} = do
   atomically $ writeTVar shuttingDown True
   atomically $ readTVar currentPushers >>= \x -> check (x == 0)
   atomically $ readTVar currentPluckers >>= \x -> check (x == 0)
@@ -105,7 +109,7 @@ shutdownCompletionQueue (CompletionQueue{..}) = do
           ev <- C.withDeadlineSeconds 1 $ \deadline ->
                   C.grpcCompletionQueueNext unsafeCQ deadline C.reserved
           grpcDebug $ "drainLoop: next() call got " ++ show ev
-          case (C.eventCompletionType ev) of
+          case C.eventCompletionType ev of
             C.QueueShutdown -> return ()
             C.QueueTimeout -> drainLoop
             C.OpComplete -> drainLoop
@@ -133,68 +137,46 @@ channelCreateCall
 -- | Create the call object to handle a registered call.
 serverRequestCall :: C.Server
                   -> CompletionQueue
-                  -> RegisteredMethod
+                  -> RegisteredMethod mt
                   -> IO (Either GRPCIOError ServerCall)
-serverRequestCall
-  server cq@CompletionQueue{..} RegisteredMethod{..} =
-    withPermission Push cq $
-      bracket (liftM2 (,) malloc malloc)
-              (\(p1,p2) -> free p1 >> free p2)
-              $ \(deadlinePtr, callPtr) ->
-        C.withByteBufferPtr $ \bbPtr ->
-          C.withMetadataArrayPtr $ \metadataArrayPtr -> do
-            metadataArray <- peek metadataArrayPtr
-            tag <- newTag cq
-            grpcDebug $ "serverRequestCall(R): tag is " ++ show tag
-            callError <- C.grpcServerRequestRegisteredCall
-                           server methodHandle callPtr deadlinePtr
-                           metadataArray bbPtr unsafeCQ unsafeCQ tag
-            grpcDebug $ "serverRequestCall(R): callError: "
-                         ++ show callError
-            if callError /= C.CallOk
-               then do grpcDebug "serverRequestCall(R): callError. cleaning up"
-                       return $ Left $ GRPCIOCallError callError
-               else do pluckResult <- pluck cq tag Nothing
-                       grpcDebug $ "serverRequestCall(R): finished pluck:"
-                                   ++ show pluckResult
-                       case pluckResult of
-                         Left x -> do
-                           grpcDebug "serverRequestCall(R): cleanup pluck err"
-                           return $ Left x
-                         Right () -> do
-                           rawCall <- peek callPtr
-                           deadline <- convertDeadline deadlinePtr
-                           payload <- convertPayload bbPtr
-                           meta <- convertMeta metadataArrayPtr
-                           let assembledCall = ServerCall rawCall
-                                                          meta
-                                                          payload
-                                                          deadline
-                           grpcDebug "serverRequestCall(R): About to return"
-                           return $ Right assembledCall
-      where convertDeadline deadline = do
-              --gRPC gives us a deadline that is just a delta, so we convert it
-              --to a proper deadline.
-              deadline' <- C.timeSpec <$> peek deadline
-              now <- getTime Monotonic
-              return $ now + deadline'
-            convertPayload bbPtr = do
-              -- TODO: the reason this returns @Maybe ByteString@ is because the
-              -- gRPC library calls the  underlying out parameter
-              -- "optional_payload". I am not sure exactly in what cases it
-              -- won't be present. The C++ library checks a
-              -- has_request_payload_ bool and passes in nullptr to
-              -- request_registered_call if the bool is false, so we
-              -- may be able to do the payload present/absent check earlier.
-              bb@(C.ByteBuffer rawPtr) <- peek bbPtr
-              if rawPtr == nullPtr
-                 then return Nothing
-                 else do bs <- C.copyByteBufferToByteString bb
-                         return $ Just bs
-            convertMeta requestMetadataRecv = do
-              mArray <- peek requestMetadataRecv
-              metamap <- C.getAllMetadataArray mArray
-              return metamap
+serverRequestCall s cq@CompletionQueue{.. } RegisteredMethod{..} =
+  -- NB: The method type dictates whether or not a payload is present, according
+  -- to the payloadHandling function. We do not allocate a buffer for the
+  -- payload when it is not present.
+  withPermission Push cq . with allocs $ \(dead, call, pay, meta) -> do
+    md  <- peek meta
+    tag <- newTag cq
+    dbug $ "tag is " ++ show tag
+    ce <- C.grpcServerRequestRegisteredCall s methodHandle call
+            dead md pay unsafeCQ unsafeCQ tag
+    dbug $ "callError: " ++ show ce
+    runExceptT $ case ce of
+      C.CallOk -> do
+        ExceptT $ do
+          r <- pluck cq tag Nothing
+          dbug $ "pluck finished:" ++ show r
+          return r
+        lift $
+          ServerCall
+          <$> peek call
+          <*> C.getAllMetadataArray md
+          <*> (if havePay then toBS pay else return Nothing)
+          <*> liftM2 (+) (getTime Monotonic) (C.timeSpec <$> peek dead)
+              -- gRPC gives us a deadline that is just a delta, so we convert it
+              -- to a proper deadline.
+      _ -> throwE (GRPCIOCallError ce)
+  where
+    allocs = (,,,) <$> ptr <*> ptr <*> pay <*> md
+      where
+        md  = managed C.withMetadataArrayPtr
+        pay = if havePay then managed C.withByteBufferPtr else return nullPtr
+        ptr :: forall a. Storable a => Managed (Ptr a)
+        ptr = managed (bracket malloc free)
+    dbug    = grpcDebug . ("serverRequestCall(R): " ++)
+    havePay = payloadHandling methodType /= C.SrmPayloadNone
+    toBS p  = peek p >>= \bb@(C.ByteBuffer rawPtr) ->
+      if | rawPtr == nullPtr -> return Nothing
+         | otherwise         -> Just <$> C.copyByteBufferToByteString bb
 
 -- | Register the server's completion queue. Must be done before the server is
 -- started.

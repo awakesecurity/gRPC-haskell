@@ -2,6 +2,7 @@
 
 module Network.GRPC.LowLevel.Client.Unregistered where
 
+import           Control.Arrow
 import           Control.Exception                                  (finally)
 import           Control.Monad                                      (join)
 import           Data.ByteString                                    (ByteString)
@@ -14,7 +15,6 @@ import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.Client                       (Client (..),
                                                                      NormalRequestResult (..),
                                                                      clientEndpoint,
-                                                                     clientNormalRequestOps,
                                                                      compileNormalRequestResults)
 import           Network.GRPC.LowLevel.CompletionQueue              (TimeoutSeconds)
 import qualified Network.GRPC.LowLevel.CompletionQueue.Unregistered as U
@@ -60,11 +60,14 @@ clientRequest :: Client
               -- ^ Request metadata.
               -> IO (Either GRPCIOError NormalRequestResult)
 clientRequest client@Client{..} meth timeLimit body meta =
-  fmap join $ do
-  withClientCall client meth timeLimit $ \call -> do
-    let ops = clientNormalRequestOps body meta
-    results <- runOps (unClientCall call) clientCQ ops
+  fmap join $ withClientCall client meth timeLimit $ \call -> do
+    results <- runOps (unClientCall call) clientCQ
+                 [ OpSendInitialMetadata meta
+                 , OpSendMessage body
+                 , OpSendCloseFromClient
+                 , OpRecvInitialMetadata
+                 , OpRecvMessage
+                 , OpRecvStatusOnClient
+                 ]
     grpcDebug "clientRequest(U): ops ran."
-    case results of
-      Left x -> return $ Left x
-      Right rs -> return $ Right $ compileNormalRequestResults rs
+    return $ right compileNormalRequestResults results

@@ -1,23 +1,26 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 
 module Network.GRPC.LowLevel.GRPC where
-import           Control.Concurrent                      (threadDelay)
+
+import           Control.Concurrent     (threadDelay)
 import           Control.Exception
-import qualified Data.ByteString as B
-import qualified Data.Map as M
-import           Data.String (IsString)
-import qualified Network.GRPC.Unsafe as C
+import           Data.String            (IsString)
+import qualified Data.ByteString        as B
+import qualified Data.Map               as M
+import qualified Network.GRPC.Unsafe    as C
 import qualified Network.GRPC.Unsafe.Op as C
 
+
 #ifdef DEBUG
-import           GHC.Conc (myThreadId)
+import           GHC.Conc              (myThreadId)
 #endif
 
 type MetadataMap = M.Map B.ByteString B.ByteString
 
-newtype StatusDetails = StatusDetails B.ByteString deriving (Show, Eq, IsString)
+newtype StatusDetails = StatusDetails B.ByteString
+  deriving (Eq, IsString, Monoid, Show)
 
 -- | Functions as a proof that the gRPC core has been started. The gRPC core
 -- must be initialized to create any gRPC state, so this is a requirement for
@@ -44,6 +47,9 @@ data GRPCIOError = GRPCIOCallError C.CallError
                    -- reasonable amount of time.
                    | GRPCIOUnknownError
                    | GRPCIOBadStatusCode C.StatusCode StatusDetails
+
+                   | GRPCIOInternalMissingExpectedPayload
+                   | GRPCIOInternalUnexpectedRecv String -- debugging description
   deriving (Show, Eq)
 
 throwIfCallError :: C.CallError -> Either GRPCIOError ()

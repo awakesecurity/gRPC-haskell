@@ -1,6 +1,7 @@
-{-# LANGUAGE OverloadedLists   #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DataKinds                       #-}
+{-# LANGUAGE OverloadedLists                 #-}
+{-# LANGUAGE OverloadedStrings               #-}
+{-# LANGUAGE RecordWildCards                 #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds       #-}
 
@@ -35,7 +36,7 @@ regMain = withGRPC $ \grpc -> do
   let methods = [(MethodName "/echo.Echo/DoEcho", Normal)]
   withServer grpc (ServerConfig "localhost" 50051 methods []) $ \server ->
     forever $ do
-      let method = head (registeredMethods server)
+      let method = head (normalMethods server)
       result <- serverHandleNormalCall server method serverMeta $
         \_call reqBody _reqMeta -> return (reqBody, serverMeta, StatusOk,
                                            StatusDetails "")
@@ -44,7 +45,7 @@ regMain = withGRPC $ \grpc -> do
         Right _ -> return ()
 
 -- | loop to fork n times
-regLoop :: Server -> RegisteredMethod -> IO ()
+regLoop :: Server -> RegisteredMethod 'Normal -> IO ()
 regLoop server method = forever $ do
   result <- serverHandleNormalCall server method serverMeta $
     \_call reqBody _reqMeta -> return (reqBody, serverMeta, StatusOk,
@@ -58,7 +59,7 @@ regMainThreaded = do
   withGRPC $ \grpc -> do
     let methods = [(MethodName "/echo.Echo/DoEcho", Normal)]
     withServer grpc (ServerConfig "localhost" 50051 methods []) $ \server -> do
-      let method = head (registeredMethods server)
+      let method = head (normalMethods server)
       tid1 <- async $ regLoop server method
       tid2 <- async $ regLoop server method
       wait tid1

@@ -1,9 +1,17 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 module Network.GRPC.LowLevel.Op where
 
+import           Control.Arrow
 import           Control.Exception
+import           Control.Monad
+import           Control.Monad.Trans.Class             (MonadTrans(lift))
+import           Control.Monad.Trans.Except
+import           Data.ByteString                       (ByteString)
 import qualified Data.ByteString                       as B
 import qualified Data.Map.Strict                       as M
 import           Data.Maybe                            (catMaybes)
@@ -20,6 +28,9 @@ import qualified Network.GRPC.Unsafe.ByteBuffer        as C
 import qualified Network.GRPC.Unsafe.Metadata          as C
 import qualified Network.GRPC.Unsafe.Op                as C
 import qualified Network.GRPC.Unsafe.Slice             as C (Slice, freeSlice)
+import           Pipes                                 ((>->))
+import qualified Pipes                                 as P
+import qualified Pipes.Core                            as P
 
 -- | Sum describing all possible send and receive operations that can be batched
 -- and executed by gRPC. Usually these are processed in a handful of
@@ -144,7 +155,8 @@ withOpArrayAndCtxts ops = bracket setup teardown
 data OpRecvResult =
   OpRecvInitialMetadataResult MetadataMap
   | OpRecvMessageResult (Maybe B.ByteString)
-    -- ^ If the client or server dies, we might not receive a response body, in
+    -- ^ If a streaming call is in progress and the stream terminates normally,
+    -- or If the client or server dies, we might not receive a response body, in
     -- which case this will be 'Nothing'.
   | OpRecvStatusOnClientResult MetadataMap C.StatusCode B.ByteString
   | OpRecvCloseOnServerResult Bool -- ^ True if call was cancelled.
@@ -202,7 +214,6 @@ resultFromOpContext _ = do
 -- GRPC_CALL_ERROR_TOO_MANY_OPERATIONS error if we use the same 'Op' twice in
 -- the same batch, so we might want to change the list to a set. I don't think
 -- order matters within a batch. Need to check.
-
 runOps :: C.Call
           -- ^ 'Call' that this batch is associated with. One call can be
           -- associated with many batches.
@@ -232,6 +243,12 @@ runOps call cq ops =
               fmap (Right . catMaybes) $ mapM resultFromOpContext contexts
             Left err -> return $ Left err
 
+runOps' :: C.Call
+        -> CompletionQueue
+        -> [Op]
+        -> ExceptT GRPCIOError IO [OpRecvResult]
+runOps' c cq = ExceptT . runOps c cq
+
 -- | If response status info is present in the given 'OpRecvResult's, returns
 -- a tuple of trailing metadata, status code, and status details.
 extractStatusInfo :: [OpRecvResult]
@@ -240,3 +257,100 @@ extractStatusInfo [] = Nothing
 extractStatusInfo (OpRecvStatusOnClientResult meta code details:_) =
   Just (meta, code, details)
 extractStatusInfo (_:xs) = extractStatusInfo xs
+
+--------------------------------------------------------------------------------
+-- Types and helpers for common ops batches
+
+type SendSingle a
+  =  C.Call
+  -> CompletionQueue
+  -> a
+  -> ExceptT GRPCIOError IO ()
+
+type RecvSingle a
+  =  C.Call
+  -> CompletionQueue
+  -> ExceptT GRPCIOError IO a
+
+sendSingle :: SendSingle Op
+sendSingle c cq op = void (runOps' c cq [op])
+
+sendInitialMetadata :: SendSingle MetadataMap
+sendInitialMetadata c cq = sendSingle c cq . OpSendInitialMetadata
+
+sendStatusFromServer :: SendSingle (MetadataMap, C.StatusCode, StatusDetails)
+sendStatusFromServer c cq (md, st, ds) =
+  sendSingle c cq (OpSendStatusFromServer md st ds)
+
+recvInitialMetadata :: RecvSingle MetadataMap
+recvInitialMetadata c cq = runOps' c cq [OpRecvInitialMetadata] >>= \case
+  [OpRecvInitialMetadataResult md]
+    -> return md
+  _ -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMetadata")
+
+recvStatusOnClient :: RecvSingle (MetadataMap, C.StatusCode, StatusDetails)
+recvStatusOnClient c cq = runOps' c cq [OpRecvStatusOnClient] >>= \case
+  [OpRecvStatusOnClientResult md st ds]
+    -> return (md, st, StatusDetails ds)
+  _ -> throwE (GRPCIOInternalUnexpectedRecv "recvStatusOnClient")
+
+--------------------------------------------------------------------------------
+-- Streaming types and helpers
+
+-- | Requests use Nothing to denote read, Just to denote
+-- write. Right-constructed responses use Just to indicate a successful read,
+-- and Nothing to denote end of stream when reading or a successful write.
+type Streaming a =
+  P.Client (Maybe ByteString) (Either GRPCIOError (Maybe ByteString)) IO a
+
+-- | Run the given 'Streaming' operation via an appropriate upstream
+-- proxy. I.e., if called on the client side, the given 'Streaming' operation
+-- talks to a server proxy, and vice versa.
+runStreamingProxy :: String
+                     -- ^ context string for including in errors
+                  -> C.Call
+                     -- ^ the call associated with this streaming operation
+                  -> CompletionQueue
+                      -- ^ the completion queue for ops batches
+                  -> Streaming a
+                      -- ^ the requesting side of the streaming operation
+                  -> ExceptT GRPCIOError IO a
+runStreamingProxy nm c cq
+  = ExceptT . P.runEffect . (streamingProxy nm c cq P.+>>) . fmap Right
+
+streamingProxy :: String
+                  -- ^ context string for including in errors
+               -> C.Call
+                  -- ^ the call associated with this streaming operation
+               -> CompletionQueue
+                  -- ^ the completion queue for ops batches
+               -> Maybe ByteString
+                  -- ^ the request to the proxy
+               -> P.Server
+                    (Maybe ByteString)
+                    (Either GRPCIOError (Maybe ByteString))
+                    IO (Either GRPCIOError a)
+streamingProxy nm c cq = maybe recv send
+  where
+    recv = run [OpRecvMessage] >>= \case
+      RecvMsgRslt mr        -> rsp mr >>= streamingProxy nm c cq
+      Right{}               -> err (urecv "recv")
+      Left e                -> err e
+    send msg = run [OpSendMessage msg] >>= \case
+      Right [] -> rsp Nothing >>= streamingProxy nm c cq
+      Right _  -> err (urecv "send")
+      Left e   -> err e
+    err e = P.respond (Left e) >> return (Left e)
+    rsp   = P.respond . Right
+    run   = lift . runOps c cq
+    urecv = GRPCIOInternalUnexpectedRecv . (nm ++)
+
+type StreamRecv = Streaming (Either GRPCIOError (Maybe ByteString))
+streamRecv :: StreamRecv
+streamRecv = P.request Nothing
+
+type StreamSend = ByteString -> Streaming (Either GRPCIOError ())
+streamSend :: StreamSend
+streamSend = fmap void . P.request . Just
+
+pattern RecvMsgRslt mmsg <- Right [OpRecvMessageResult mmsg]

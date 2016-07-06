@@ -1,13 +1,17 @@
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TupleSections     #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 module LowLevelTests where
 
 import           Control.Concurrent                        (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Monad
+import           Control.Monad.Managed
 import           Data.ByteString                           (ByteString,
                                                             isPrefixOf,
                                                             isSuffixOf)
@@ -16,6 +20,8 @@ import           Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Client.Unregistered as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
+import           Pipes                                     ((>->))
+import qualified Pipes                                     as P
 import           Test.Tasty
 import           Test.Tasty.HUnit                          as HU (Assertion,
                                                                   assertBool,
@@ -42,26 +48,24 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
   , testCustomUserAgent
   , testClientCompression
   , testClientServerCompression
+  , testClientStreaming
+  , testServerStreaming
+  , testBiDiStreaming
   ]
 
 testGRPCBracket :: TestTree
 testGRPCBracket =
-  testCase "Start/stop GRPC" $ withGRPC nop
+  testCase "Start/stop GRPC" $ runManaged $ void mgdGRPC
 
 testCompletionQueueCreateDestroy :: TestTree
 testCompletionQueueCreateDestroy =
-  testCase "Create/destroy CQ" $ withGRPC $ \g ->
-  withCompletionQueue g nop
+  testCase "Create/destroy CQ" $ runManaged $ do
+    g <- mgdGRPC
+    liftIO (withCompletionQueue g nop)
 
 testClientCreateDestroy :: TestTree
 testClientCreateDestroy =
   clientOnlyTest "start/stop" nop
-
-testClientCall :: TestTree
-testClientCall =
-  clientOnlyTest "create/destroy call" $ \c -> do
-    r <- U.withClientCall c "/foo" 10 $ const $ return $ Right ()
-    r @?= Right ()
 
 testClientTimeoutNoServer :: TestTree
 testClientTimeoutNoServer =
@@ -97,13 +101,13 @@ testMixRegisteredUnregistered =
        concurrently regThread unregThread
        return ()
        where regThread = do
-               let rm = head (registeredMethods s)
+               let rm = head (normalMethods s)
                r <- serverHandleNormalCall s rm dummyMeta $ \_ body _ -> do
                  body @?= "Hello"
-                 return ("reply test", dummyMeta, StatusOk, StatusDetails "")
+                 return ("reply test", dummyMeta, StatusOk, "")
                return ()
              unregThread = do
-               r1 <- U.serverHandleNormalCall s mempty $ \call _ -> do
+               U.serverHandleNormalCall s mempty $ \call _ -> do
                  U.callMethod call @?= "/bar"
                  return ("", mempty, StatusOk,
                          StatusDetails "Wrong endpoint")
@@ -130,13 +134,11 @@ testPayload =
           initMD  @?= dummyMeta
           trailMD @?= dummyMeta
     server s = do
-      length (registeredMethods s) @?= 1
-      let rm = head (registeredMethods s)
+      let rm = head (normalMethods s)
       r <- serverHandleNormalCall s rm dummyMeta $ \_ reqBody reqMD -> do
         reqBody @?= "Hello!"
         checkMD "Server metadata mismatch" clientMD reqMD
-        return ("reply test", dummyMeta, StatusOk,
-                StatusDetails "details string")
+        return ("reply test", dummyMeta, StatusOk, "details string")
       r @?= Right ()
 
 testServerCancel :: TestTree
@@ -146,21 +148,130 @@ testServerCancel =
     client c = do
       rm <- clientRegisterMethod c "/foo" Normal
       res <- clientRequest c rm 10 "" mempty
-      res @?= Left (GRPCIOBadStatusCode StatusCancelled
-                                        (StatusDetails
-                                          "Received RST_STREAM err=8"))
+      res @?= badStatus StatusCancelled
     server s = do
-      let rm = head (registeredMethods s)
+      let rm = head (normalMethods s)
       r <- serverHandleNormalCall s rm mempty $ \c _ _ -> do
         serverCallCancel c StatusCancelled ""
         return (mempty, mempty, StatusCancelled, "")
       r @?= Right ()
 
+testServerStreaming :: TestTree
+testServerStreaming =
+  csTest "server streaming" client server [("/feed", ServerStreaming)]
+  where
+    clientInitMD = [("client","initmd")]
+    serverInitMD = [("server","initmd")]
+    clientPay    = "FEED ME!"
+    pays         = ["ONE", "TWO", "THREE", "FOUR"] :: [ByteString]
+
+    client c = do
+      rm <- clientRegisterMethod c "/feed" ServerStreaming
+      eea <- clientReader c rm 10 clientPay clientInitMD $ \initMD recv -> do
+        liftIO $ checkMD "Server initial metadata mismatch" serverInitMD initMD
+        forM_ pays $ \p -> recv `is` Right (Just p)
+        recv `is` Right Nothing
+      eea @?= Right (dummyMeta, StatusOk, "dtls")
+
+    server s = do
+      let rm = head (sstreamingMethods s)
+      eea <- serverWriter s rm serverInitMD $ \sc send -> do
+        liftIO $ do
+          checkMD "Client request metadata mismatch"
+            clientInitMD (requestMetadataRecv sc)
+          case optionalPayload sc of
+            Nothing  -> assertFailure "expected optional payload"
+            Just pay -> pay @?= clientPay
+        forM_ pays $ \p -> send p `is` Right ()
+        return (dummyMeta, StatusOk, "dtls")
+      eea @?= Right ()
+
+testClientStreaming :: TestTree
+testClientStreaming =
+  csTest "client streaming" client server [("/slurp", ClientStreaming)]
+  where
+    clientInitMD = [("a","b")]
+    serverInitMD = [("x","y")]
+    trailMD      = dummyMeta
+    serverRsp    = "serverReader reply"
+    serverDtls   = "deets"
+    serverStatus = StatusOk
+    pays         = ["P_ONE", "P_TWO", "P_THREE"] :: [ByteString]
+
+    client c = do
+      rm  <- clientRegisterMethod c "/slurp" ClientStreaming
+      eea <- clientWriter c rm 10 clientInitMD $ \send -> do
+        -- liftIO $ checkMD "Server initial metadata mismatch" serverInitMD initMD
+        forM_ pays $ \p -> send p `is` Right ()
+      eea @?= Right (Just serverRsp, serverInitMD, trailMD, serverStatus, serverDtls)
+
+    server s = do
+      let rm = head (cstreamingMethods s)
+      eea <- serverReader s rm serverInitMD $ \sc recv -> do
+        liftIO $ checkMD "Client request metadata mismatch"
+                   clientInitMD (requestMetadataRecv sc)
+        forM_ pays $ \p -> recv `is` Right (Just p)
+        recv `is` Right Nothing
+        return (Just serverRsp, trailMD, serverStatus, serverDtls)
+      eea @?= Right ()
+
+testBiDiStreaming :: TestTree
+testBiDiStreaming =
+  csTest "bidirectional streaming" client server [("/bidi", BiDiStreaming)]
+  where
+    clientInitMD = [("bidi-streaming","client")]
+    serverInitMD = [("bidi-streaming","server")]
+    trailMD      = dummyMeta
+    serverStatus = StatusOk
+    serverDtls   = "deets"
+
+    client c = do
+      rm  <- clientRegisterMethod c "/bidi" BiDiStreaming
+      eea <- clientRW c rm 10 clientInitMD $ \initMD recv send -> do
+        liftIO $ checkMD "Server initial metadata mismatch"
+                   serverInitMD initMD
+        send "cw0" `is` Right ()
+        recv       `is` Right (Just "sw0")
+        send "cw1" `is` Right ()
+        recv       `is` Right (Just "sw1")
+        recv       `is` Right (Just "sw2")
+        return ()
+      eea @?= Right (trailMD, serverStatus, serverDtls)
+
+    server s = do
+      let rm = head (bidiStreamingMethods s)
+      eea <- serverRW s rm serverInitMD $ \sc recv send -> do
+        liftIO $ checkMD "Client request metadata mismatch"
+                   clientInitMD (requestMetadataRecv sc)
+        recv       `is` Right (Just "cw0")
+        send "sw0" `is` Right ()
+        recv       `is` Right (Just "cw1")
+        send "sw1" `is` Right ()
+        send "sw2" `is` Right ()
+        recv       `is` Right Nothing
+        return (trailMD, serverStatus, serverDtls)
+      eea @?= Right ()
+
+--------------------------------------------------------------------------------
+-- Unregistered tests
+
+testClientCall :: TestTree
+testClientCall =
+  clientOnlyTest "create/destroy call" $ \c -> do
+    r <- U.withClientCall c "/foo" 10 $ const $ return $ Right ()
+    r @?= Right ()
+
+testServerCall :: TestTree
+testServerCall =
+  serverOnlyTest "create/destroy call" [] $ \s -> do
+    r <- U.withServerCall s $ const $ return $ Right ()
+    r @?= Left GRPCIOTimeout
+
 testPayloadUnregistered :: TestTree
 testPayloadUnregistered =
   csTest "unregistered normal request/response" client server []
   where
-    client c = do
+    client c =
       U.clientRequest c "/foo" 10 "Hello!" mempty >>= do
         checkReqRslt $ \NormalRequestResult{..} -> do
           rspCode @?= StatusOk
@@ -186,13 +297,13 @@ testGoaway =
       clientRequest c rm 10 "" mempty
       lastResult <- clientRequest c rm 1 "" mempty
       assertBool "Client handles server shutdown gracefully" $
-        lastResult == unavailableStatus
+        lastResult == badStatus StatusUnavailable
         ||
-        lastResult == deadlineExceededStatus
+        lastResult == badStatus StatusDeadlineExceeded
         ||
         lastResult == Left GRPCIOTimeout
     server s = do
-      let rm = head (registeredMethods s)
+      let rm = head (normalMethods s)
       serverHandleNormalCall s rm mempty dummyHandler
       serverHandleNormalCall s rm mempty dummyHandler
       return ()
@@ -204,9 +315,9 @@ testSlowServer =
     client c = do
       rm <- clientRegisterMethod c "/foo" Normal
       result <- clientRequest c rm 1 "" mempty
-      result @?= deadlineExceededStatus
+      result @?= badStatus StatusDeadlineExceeded
     server s = do
-      let rm = head (registeredMethods s)
+      let rm = head (normalMethods s)
       serverHandleNormalCall s rm mempty $ \_ _ _ -> do
         threadDelay (2*10^(6 :: Int))
         return dummyResp
@@ -221,7 +332,7 @@ testServerCallExpirationCheck =
       result <- clientRequest c rm 3 "" mempty
       return ()
     server s = do
-      let rm = head (registeredMethods s)
+      let rm = head (normalMethods s)
       serverHandleNormalCall s rm mempty $ \c _ _ -> do
         exp1 <- serverCallIsExpired c
         assertBool "Call isn't expired when handler starts" $ not exp1
@@ -245,7 +356,7 @@ testCustomUserAgent =
                  result <- clientRequest c rm 4 "" mempty
                  return ()
     server = TestServer (stdServerConf [("/foo", Normal)]) $ \s -> do
-      let rm = head (registeredMethods s)
+      let rm = head (normalMethods s)
       serverHandleNormalCall s rm mempty $ \_ _ meta -> do
         let ua = meta M.! "user-agent"
         assertBool "User agent prefix is present" $ isPrefixOf "prefix!" ua
@@ -266,8 +377,8 @@ testClientCompression =
         result <- clientRequest c rm 1 "hello" mempty
         return ()
     server = TestServer (stdServerConf [("/foo", Normal)]) $ \s -> do
-      let rm = head (registeredMethods s)
-      serverHandleNormalCall s rm mempty $ \c body _ -> do
+      let rm = head (normalMethods s)
+      serverHandleNormalCall s rm mempty $ \_ body _ -> do
         body @?= "hello"
         return dummyResp
       return ()
@@ -294,8 +405,8 @@ testClientServerCompression =
                          [("/foo", Normal)]
                          [CompressionAlgArg GrpcCompressDeflate]
     server = TestServer sconf $ \s -> do
-      let rm = head (registeredMethods s)
-      serverHandleNormalCall s rm dummyMeta $ \c body _ -> do
+      let rm = head (normalMethods s)
+      serverHandleNormalCall s rm dummyMeta $ \_sc body _ -> do
         body @?= "hello"
         return ("hello", dummyMeta, StatusOk, StatusDetails "")
       return ()
@@ -303,23 +414,28 @@ testClientServerCompression =
 --------------------------------------------------------------------------------
 -- Utilities and helpers
 
+is :: (Eq a, Show a, MonadIO m) => m a -> a -> m ()
+is act x = act >>= liftIO . (@?= x)
+
 dummyMeta :: M.Map ByteString ByteString
 dummyMeta = [("foo","bar")]
 
+dummyResp :: (ByteString, MetadataMap, StatusCode, StatusDetails)
 dummyResp = ("", mempty, StatusOk, StatusDetails "")
 
 dummyHandler :: ServerCall -> ByteString -> MetadataMap
                 -> IO (ByteString, MetadataMap, StatusCode, StatusDetails)
 dummyHandler _ _ _ = return dummyResp
 
-unavailableStatus :: Either GRPCIOError a
-unavailableStatus =
-  Left (GRPCIOBadStatusCode StatusUnavailable (StatusDetails ""))
+dummyResult' :: StatusDetails
+             -> IO (ByteString, MetadataMap, StatusCode, StatusDetails)
+dummyResult' = return . (mempty, mempty, StatusOk, )
 
-deadlineExceededStatus :: Either GRPCIOError a
-deadlineExceededStatus =
-  Left (GRPCIOBadStatusCode StatusDeadlineExceeded
-                            (StatusDetails "Deadline Exceeded"))
+badStatus :: StatusCode -> Either GRPCIOError a
+badStatus st = Left . GRPCIOBadStatusCode st $ case st of
+  StatusDeadlineExceeded -> "Deadline Exceeded"
+  StatusCancelled        -> "Received RST_STREAM err=8"
+  _ -> mempty
 
 nop :: Monad m => a -> m ()
 nop = const (return ())
@@ -354,8 +470,8 @@ csTest' nm tc ts =
 -- | @checkMD msg expected actual@ fails when keys from @expected@ are not in
 -- @actual@, or when values differ for matching keys.
 checkMD :: String -> MetadataMap -> MetadataMap -> Assertion
-checkMD desc expected actual = do
-  when (not $ M.null $ expected `diff` actual) $ do
+checkMD desc expected actual =
+  unless (M.null $ expected `diff` actual) $
     assertEqual desc expected (actual `M.intersection` expected)
   where
     diff = M.differenceWith $ \a b -> if a == b then Nothing else Just b
@@ -363,13 +479,19 @@ checkMD desc expected actual = do
 checkReqRslt :: Show a => (b -> Assertion) -> Either a b -> Assertion
 checkReqRslt = either clientFail
 
+-- | The consumer which asserts that the next value it consumes is equal to the
+-- given value; string parameter used as in 'assertEqual'.
+assertConsumeEq :: (Eq a, Show a) => String -> a -> P.Consumer a IO ()
+assertConsumeEq s v = P.lift . assertEqual s v =<< P.await
+
 clientFail :: Show a => a -> Assertion
 clientFail = assertFailure . ("Client error: " ++). show
 
 data TestClient = TestClient ClientConfig (Client -> IO ())
 
 runTestClient :: TestClient -> IO ()
-runTestClient (TestClient conf c) = withGRPC $ \g -> withClient g conf c
+runTestClient (TestClient conf f) =
+  runManaged $ mgdGRPC >>= mgdClient conf >>= liftIO . f
 
 stdTestClient :: (Client -> IO ()) -> TestClient
 stdTestClient = TestClient stdClientConf
@@ -380,7 +502,8 @@ stdClientConf = ClientConfig "localhost" 50051 []
 data TestServer = TestServer ServerConfig (Server -> IO ())
 
 runTestServer :: TestServer -> IO ()
-runTestServer (TestServer conf s) = withGRPC $ \g -> withServer g conf s
+runTestServer (TestServer conf f) =
+  runManaged $ mgdGRPC >>= mgdServer conf >>= liftIO . f
 
 stdTestServer :: [(MethodName, GRPCMethodType)] -> (Server -> IO ()) -> TestServer
 stdTestServer = TestServer . stdServerConf
@@ -388,6 +511,14 @@ stdTestServer = TestServer . stdServerConf
 stdServerConf :: [(MethodName, GRPCMethodType)] -> ServerConfig
 stdServerConf xs = ServerConfig "localhost" 50051 xs []
 
-
 threadDelaySecs :: Int -> IO ()
 threadDelaySecs = threadDelay . (* 10^(6::Int))
+
+mgdGRPC :: Managed GRPC
+mgdGRPC = managed withGRPC
+
+mgdClient :: ClientConfig -> GRPC -> Managed Client
+mgdClient conf g = managed $ withClient g conf
+
+mgdServer :: ServerConfig -> GRPC -> Managed Server
+mgdServer conf g = managed $ withServer g conf

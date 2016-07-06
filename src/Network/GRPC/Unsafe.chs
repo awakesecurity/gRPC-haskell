@@ -61,6 +61,8 @@ instance Storable Call where
   peek p = fmap Call (peek (castPtr p))
   poke p (Call r) = poke (castPtr p) r
 
+{#enum grpc_server_register_method_payload_handling as ServerRegisterMethodPayloadHandling {underscoreToCase} deriving (Eq, Show)#}
+
 -- | A 'Tag' is an identifier that is used with a 'CompletionQueue' to signal
 -- that the corresponding operation has completed.
 newtype Tag = Tag {unTag :: Ptr ()} deriving (Show, Eq)
@@ -235,7 +237,7 @@ getPeerPeek cstr = do
   {`GrpcChannelArgs',unReserved `Reserved'} -> `Server'#}
 
 {#fun grpc_server_register_method_ as ^
-  {`Server', `String', `String'} -> `CallHandle' CallHandle#}
+  {`Server', `String', `String', `ServerRegisterMethodPayloadHandling'} -> `CallHandle' CallHandle#}
 
 {#fun grpc_server_register_completion_queue as ^
   {`Server', `CompletionQueue', unReserved `Reserved'} -> `()'#}

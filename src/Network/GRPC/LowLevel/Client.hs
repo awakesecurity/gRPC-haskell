@@ -1,25 +1,33 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms   #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 
 -- | This module defines data structures and operations pertaining to registered
 -- clients using registered calls; for unregistered support, see
 -- `Network.GRPC.LowLevel.Client.Unregistered`.
 module Network.GRPC.LowLevel.Client where
 
+import           Control.Arrow
 import           Control.Exception                     (bracket, finally)
-import           Control.Monad                         (join)
+import           Control.Monad
+import           Control.Monad.Trans.Class             (MonadTrans(lift))
+import           Control.Monad.Trans.Except
 import           Data.ByteString                       (ByteString)
-import           Foreign.Ptr                           (nullPtr)
+import           Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.CompletionQueue
+import           Network.GRPC.LowLevel.GRPC
+import           Network.GRPC.LowLevel.Op
 import qualified Network.GRPC.Unsafe                   as C
 import qualified Network.GRPC.Unsafe.ChannelArgs       as C
 import qualified Network.GRPC.Unsafe.Constants         as C
 import qualified Network.GRPC.Unsafe.Op                as C
 import qualified Network.GRPC.Unsafe.Time              as C
 
-
-import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.CompletionQueue
-import           Network.GRPC.LowLevel.GRPC
-import           Network.GRPC.LowLevel.Op
+import qualified Pipes                                 as P
+import qualified Pipes.Core                            as P
 
 -- | Represents the context needed to perform client-side gRPC operations.
 data Client = Client {clientChannel :: C.Channel,
@@ -71,22 +79,20 @@ clientConnectivity Client{..} =
 -- | Register a method on the client so that we can call it with
 -- 'clientRequest'.
 clientRegisterMethod :: Client
-                        -> MethodName
-                        -- ^ method name, e.g. "/foo"
-                        -> GRPCMethodType
-                        -> IO RegisteredMethod
-clientRegisterMethod Client{..} meth Normal = do
+                     -> MethodName
+                     -> GRPCMethodType
+                     -> IO (RegisteredMethod mt)
+clientRegisterMethod Client{..} meth mty = do
   let e = clientEndpoint clientConfig
-  handle <- C.grpcChannelRegisterCall clientChannel
-              (unMethodName meth) (unEndpoint e) C.reserved
-  return $ RegisteredMethod Normal meth e handle
-clientRegisterMethod _ _ _ = error "Streaming methods not yet implemented."
+  RegisteredMethod mty meth e <$>
+    C.grpcChannelRegisterCall clientChannel
+      (unMethodName meth) (unEndpoint e) C.reserved
 
 -- | Create a new call on the client for a registered method.
 -- Returns 'Left' if the CQ is shutting down or if the job to create a call
 -- timed out.
 clientCreateCall :: Client
-                 -> RegisteredMethod
+                 -> RegisteredMethod mt
                  -> TimeoutSeconds
                  -> IO (Either GRPCIOError ClientCall)
 clientCreateCall c rm ts = clientCreateCallParent c rm ts Nothing
@@ -95,9 +101,9 @@ clientCreateCall c rm ts = clientCreateCallParent c rm ts Nothing
 -- a client call with an optional parent server call. This allows for cascading
 -- call cancellation from the `ServerCall` to the `ClientCall`.
 clientCreateCallParent :: Client
-                           -> RegisteredMethod
+                           -> RegisteredMethod mt
                            -> TimeoutSeconds
-                           -> (Maybe ServerCall)
+                           -> Maybe ServerCall
                            -- ^ Optional parent call for cascading cancellation.
                            -> IO (Either GRPCIOError ClientCall)
 clientCreateCallParent Client{..} RegisteredMethod{..} timeout parent = do
@@ -107,7 +113,7 @@ clientCreateCallParent Client{..} RegisteredMethod{..} timeout parent = do
 
 -- | Handles safe creation and cleanup of a client call
 withClientCall :: Client
-               -> RegisteredMethod
+               -> RegisteredMethod mt
                -> TimeoutSeconds
                -> (ClientCall -> IO (Either GRPCIOError a))
                -> IO (Either GRPCIOError a)
@@ -119,7 +125,7 @@ withClientCall client regmethod timeout f =
 -- `ServerCall` to the created `ClientCall`. Obviously, this is only useful if
 -- the given gRPC client is also a server.
 withClientCallParent :: Client
-                        -> RegisteredMethod
+                        -> RegisteredMethod mt
                         -> TimeoutSeconds
                         -> (Maybe ServerCall)
                         -- ^ Optional parent call for cascading cancellation.
@@ -135,8 +141,8 @@ withClientCallParent client regmethod timeout parent f = do
 
 data NormalRequestResult = NormalRequestResult
   { rspBody :: ByteString
-  , initMD  :: MetadataMap -- initial metadata
-  , trailMD :: MetadataMap       -- trailing metadata
+  , initMD  :: MetadataMap -- ^ initial metadata
+  , trailMD :: MetadataMap -- ^ trailing metadata
   , rspCode :: C.StatusCode
   , details :: StatusDetails
   }
@@ -156,58 +162,136 @@ compileNormalRequestResults x =
     Just (_meta, status, details) ->
       Left (GRPCIOBadStatusCode status (StatusDetails details))
 
+--------------------------------------------------------------------------------
+-- clientReader (client side of server streaming mode)
+
+-- | First parameter is initial server metadata.
+type ClientReaderHandler = MetadataMap -> StreamRecv -> Streaming ()
+
+clientReader :: Client
+             -> RegisteredMethod 'ServerStreaming
+             -> TimeoutSeconds
+             -> ByteString -- ^ The body of the request
+             -> MetadataMap -- ^ Metadata to send with the request
+             -> ClientReaderHandler
+             -> IO (Either GRPCIOError (MetadataMap, C.StatusCode, StatusDetails))
+clientReader cl@Client{ clientCQ = cq } rm tm body initMeta f =
+  withClientCall cl rm tm go
+  where
+    go cc@(unClientCall -> c) = runExceptT $ do
+      lift (debugClientCall cc)
+      runOps' c cq [ OpSendInitialMetadata initMeta
+                   , OpSendMessage body
+                   , OpSendCloseFromClient
+                   ]
+      srvMD <- recvInitialMetadata c cq
+      runStreamingProxy "clientReader'" c cq (f srvMD streamRecv)
+      recvStatusOnClient c cq
+
+--------------------------------------------------------------------------------
+-- clientWriter (client side of client streaming mode)
+
+type ClientWriterHandler = StreamSend -> Streaming ()
+type ClientWriterResult  = (Maybe ByteString, MetadataMap, MetadataMap,
+                              C.StatusCode, StatusDetails)
+
+clientWriter :: Client
+             -> RegisteredMethod 'ClientStreaming
+             -> TimeoutSeconds
+             -> MetadataMap -- ^ Initial client metadata
+             -> ClientWriterHandler
+             -> IO (Either GRPCIOError ClientWriterResult)
+clientWriter cl rm tm initMeta =
+  withClientCall cl rm tm . clientWriterCmn cl initMeta
+
+clientWriterCmn :: Client -- ^ The active client
+                -> MetadataMap -- ^ Initial client metadata
+                -> ClientWriterHandler
+                -> ClientCall -- ^ The active client call
+                -> IO (Either GRPCIOError ClientWriterResult)
+clientWriterCmn (clientCQ -> cq) initMeta f cc@(unClientCall -> c) =
+  runExceptT $ do
+    lift (debugClientCall cc)
+    sendInitialMetadata c cq initMeta
+    runStreamingProxy "clientWriterCmn" c cq (f streamSend)
+    sendSingle c cq OpSendCloseFromClient
+    let ops = [OpRecvInitialMetadata, OpRecvMessage, OpRecvStatusOnClient]
+    runOps' c cq ops >>= \case
+      CWRFinal mmsg initMD trailMD st ds
+        -> return (mmsg, initMD, trailMD, st, ds)
+      _ -> throwE (GRPCIOInternalUnexpectedRecv "clientWriter")
+
+pattern CWRFinal mmsg initMD trailMD st ds
+  <- [ OpRecvInitialMetadataResult initMD
+     , OpRecvMessageResult mmsg
+     , OpRecvStatusOnClientResult trailMD st (StatusDetails -> ds)
+     ]
+
+--------------------------------------------------------------------------------
+-- clientRW (client side of bidirectional streaming mode)
+
+-- | First parameter is initial server metadata.
+type ClientRWHandler = MetadataMap -> StreamRecv -> StreamSend -> Streaming ()
+
+-- | For bidirectional-streaming registered requests
+clientRW :: Client
+         -> RegisteredMethod 'BiDiStreaming
+         -> TimeoutSeconds
+         -> MetadataMap
+            -- ^ request metadata
+         -> ClientRWHandler
+         -> IO (Either GRPCIOError (MetadataMap, C.StatusCode, StatusDetails))
+clientRW c@Client{ clientCQ = cq } rm tm initMeta f =
+  withClientCall c rm tm go
+  where
+    go cc@(unClientCall -> call) = runExceptT $ do
+      lift (debugClientCall cc)
+      sendInitialMetadata call cq initMeta
+      srvMeta <- recvInitialMetadata call cq
+      runStreamingProxy "clientRW" call cq (f srvMeta streamRecv streamSend)
+      runOps' call cq [OpSendCloseFromClient] -- WritesDone()
+      recvStatusOnClient call cq -- Finish()
+
+--------------------------------------------------------------------------------
+-- clientRequest (client side of normal request/response)
+
 -- | Make a request of the given method with the given body. Returns the
--- server's response. TODO: This is preliminary until we figure out how many
--- different variations on sending request ops will be needed for full gRPC
--- functionality.
+-- server's response.
 clientRequest :: Client
-              -> RegisteredMethod
+              -> RegisteredMethod 'Normal
               -> TimeoutSeconds
-              -- ^ Timeout of both the grpc_call and the max time to wait for
-              -- the completion of the batch. TODO: I think we will need to
-              -- decouple the lifetime of the call from the queue deadline once
-              -- we expose functionality for streaming calls, where one call
-              -- object persists across many batches.
               -> ByteString
               -- ^ The body of the request
               -> MetadataMap
               -- ^ Metadata to send with the request
               -> IO (Either GRPCIOError NormalRequestResult)
-clientRequest client@(Client{..}) rm@(RegisteredMethod{..})
-              timeLimit body meta =
-  fmap join $ case methodType of
-    Normal -> withClientCall client rm timeLimit $ \call -> do
-                grpcDebug "clientRequest(R): created call."
-                debugClientCall call
-                let call' = unClientCall call
-                -- NOTE: sendOps and recvOps *must* be in separate batches or
-                -- the client hangs when the server can't be reached.
-                let sendOps = [OpSendInitialMetadata meta
-                           , OpSendMessage body
-                           , OpSendCloseFromClient]
-                sendRes <- runOps call' clientCQ sendOps
-                case sendRes of
-                  Left x -> do grpcDebug "clientRequest(R) : batch error sending."
-                               return $ Left x
-                  Right rs -> do
-                    let recvOps = [OpRecvInitialMetadata,
-                                   OpRecvMessage,
-                                   OpRecvStatusOnClient]
-                    recvRes <- runOps call' clientCQ recvOps
-                    case recvRes of
-                      Left x -> do
-                        grpcDebug "clientRequest(R): batch error receiving."
-                        return $ Left x
-                      Right rs' -> do
-                        grpcDebug $ "clientRequest(R): got " ++ show rs'
-                        return $ Right $ compileNormalRequestResults (rs ++ rs')
-    _ -> error "Streaming methods not yet implemented."
-
-clientNormalRequestOps :: ByteString -> MetadataMap -> [Op]
-clientNormalRequestOps body metadata =
-  [OpSendInitialMetadata metadata,
-   OpSendMessage body,
-   OpSendCloseFromClient,
-   OpRecvInitialMetadata,
-   OpRecvMessage,
-   OpRecvStatusOnClient]
+clientRequest c@Client{ clientCQ = cq } rm tm body initMeta =
+  withClientCall c rm tm (fmap join . go)
+  where
+    go cc@(unClientCall -> call) = do
+      grpcDebug "clientRequest(R): created call."
+      debugClientCall cc
+      -- NB: the send and receive operations below *must* be in separate
+      -- batches, or the client hangs when the server can't be reached.
+      runOps call cq
+        [ OpSendInitialMetadata initMeta
+        , OpSendMessage body
+        , OpSendCloseFromClient
+        ]
+        >>= \case
+          Left x -> do
+            grpcDebug "clientRequest(R) : batch error sending."
+            return $ Left x
+          Right rs ->
+            runOps call cq
+              [ OpRecvInitialMetadata
+              , OpRecvMessage
+              , OpRecvStatusOnClient
+              ]
+              >>= \case
+                Left x -> do
+                  grpcDebug "clientRequest(R): batch error receiving.."
+                  return $ Left x
+                Right rs' -> do
+                  grpcDebug $ "clientRequest(R): got " ++ show rs'
+                  return $ Right $ compileNormalRequestResults (rs ++ rs')

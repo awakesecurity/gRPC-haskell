@@ -5,6 +5,9 @@ module Network.GRPC.LowLevel.Call.Unregistered where
 import           Control.Monad
 import           Foreign.Marshal.Alloc        (free)
 import           Foreign.Ptr                  (Ptr)
+#ifdef DEBUG
+import           Foreign.Storable             (peek)
+#endif
 import           System.Clock                 (TimeSpec)
 
 import           Network.GRPC.LowLevel.Call   (Host (..), MethodName (..))
@@ -30,14 +33,14 @@ serverCallCancel sc code reason =
 
 debugServerCall :: ServerCall -> IO ()
 #ifdef DEBUG
-debugServerCall call@ServerCall{..} = do
-  let (C.Call ptr) = unServerCall
-  grpcDebug $ "debugServerCall(U): server call: " ++ (show ptr)
+debugServerCall ServerCall{..} = do
+  let C.Call ptr = unServerCall
+  grpcDebug $ "debugServerCall(U): server call: " ++ show ptr
   grpcDebug $ "debugServerCall(U): metadata: "
               ++ show requestMetadataRecv
   forM_ parentPtr $ \parentPtr' -> do
     grpcDebug $ "debugServerCall(U): parent ptr: " ++ show parentPtr'
-    (C.Call parent) <- peek parentPtr'
+    C.Call parent <- peek parentPtr'
     grpcDebug $ "debugServerCall(U): parent: " ++ show parent
   grpcDebug $ "debugServerCall(U): deadline: " ++ show callDeadline
   grpcDebug $ "debugServerCall(U): method: " ++ show callMethod

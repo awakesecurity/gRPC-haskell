@@ -137,8 +137,9 @@ char* call_details_get_host(grpc_call_details* details);
 
 gpr_timespec* call_details_get_deadline(grpc_call_details* details);
 
-void* grpc_server_register_method_(grpc_server* server, const char* method,
-                                   const char* host);
+void* grpc_server_register_method_(
+  grpc_server* server, const char* method, const char* host,
+  grpc_server_register_method_payload_handling payload_handling);
 
 //c2hs doesn't support #const pragmas referring to #define'd strings, so we use
 //this enum as a workaround. These are converted into actual GRPC #defines in

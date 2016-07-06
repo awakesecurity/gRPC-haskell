@@ -1,16 +1,19 @@
+{-# LANGUAGE DataKinds                  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures             #-}
 {-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE FlexibleInstances          #-}
 
 -- | This module defines data structures and operations pertaining to registered
 -- calls; for unregistered call support, see
 -- `Network.GRPC.LowLevel.Call.Unregistered`.
 module Network.GRPC.LowLevel.Call where
 
-import           Control.Monad
 import           Data.ByteString                (ByteString)
 import           Data.String                    (IsString)
-import           Foreign.Marshal.Alloc          (free)
-import           Foreign.Ptr                    (Ptr)
+#ifdef DEBUG
+import           Foreign.Storable               (peek)
+#endif
 import           System.Clock
 
 import qualified Network.GRPC.Unsafe            as C
@@ -18,9 +21,13 @@ import qualified Network.GRPC.Unsafe.Op         as C
 
 import           Network.GRPC.LowLevel.GRPC     (MetadataMap, grpcDebug)
 
--- | Models the four types of RPC call supported by gRPC. We currently only
--- support the first alternative, and only in a preliminary fashion.
-data GRPCMethodType = Normal | ClientStreaming | ServerStreaming | BiDiStreaming
+-- | Models the four types of RPC call supported by gRPC (and correspond to
+-- DataKinds phantom types on RegisteredMethods).
+data GRPCMethodType
+  = Normal
+  | ClientStreaming
+  | ServerStreaming
+  | BiDiStreaming
   deriving (Show, Eq, Ord, Enum)
 
 newtype MethodName = MethodName {unMethodName :: String}
@@ -40,15 +47,18 @@ endpoint :: Host -> Port -> Endpoint
 endpoint (Host h) (Port p) = Endpoint (h ++ ":" ++ show p)
 
 -- | Represents a registered method. Methods can optionally be registered in
--- order to make the C-level request/response code simpler.
--- Before making or awaiting a registered call, the
--- method must be registered with the client (see 'clientRegisterMethod') and
--- the server (see 'serverRegisterMethod').
--- Contains state for identifying that method in the underlying gRPC library.
-data RegisteredMethod = RegisteredMethod {methodType :: GRPCMethodType,
-                                          methodName :: MethodName,
-                                          methodEndpoint :: Endpoint,
-                                          methodHandle :: C.CallHandle}
+-- order to make the C-level request/response code simpler.  Before making or
+-- awaiting a registered call, the method must be registered with the client
+-- (see 'clientRegisterMethod') and the server (see 'serverRegisterMethod').
+-- Contains state for identifying that method in the underlying gRPC
+-- library. Note that we use a DataKind-ed phantom type to help constrain use of
+-- different kinds of registered methods.
+data RegisteredMethod (mt :: GRPCMethodType) = RegisteredMethod
+  { methodType     :: GRPCMethodType
+  , methodName     :: MethodName
+  , methodEndpoint :: Endpoint
+  , methodHandle   :: C.CallHandle
+  }
 
 -- | Represents one GRPC call (i.e. request) on the client.
 -- This is used to associate send/receive 'Op's with a request.
@@ -69,6 +79,14 @@ data ServerCall = ServerCall
 serverCallCancel :: ServerCall -> C.StatusCode -> String -> IO ()
 serverCallCancel sc code reason =
   C.grpcCallCancelWithStatus (unServerCall sc) code reason C.reserved
+
+-- | NB: For now, we've assumed that the method type is all the info we need to
+-- decide the server payload handling method.
+payloadHandling :: GRPCMethodType -> C.ServerRegisterMethodPayloadHandling
+payloadHandling Normal          = C.SrmPayloadReadInitialByteBuffer
+payloadHandling ClientStreaming = C.SrmPayloadNone
+payloadHandling ServerStreaming = C.SrmPayloadReadInitialByteBuffer
+payloadHandling BiDiStreaming   = C.SrmPayloadNone
 
 serverCallIsExpired :: ServerCall -> IO Bool
 serverCallIsExpired sc = do
