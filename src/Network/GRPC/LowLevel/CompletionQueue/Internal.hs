@@ -3,14 +3,19 @@
 module Network.GRPC.LowLevel.CompletionQueue.Internal where
 
 import           Control.Concurrent.STM        (atomically, retry)
-import           Control.Concurrent.STM.TVar   (TVar, modifyTVar', readTVar)
+import           Control.Concurrent.STM.TVar   (TVar, modifyTVar', readTVar,
+                                                writeTVar)
+import           Control.Monad.IO.Class
 import           Control.Exception             (bracket)
+import           Control.Monad
 import           Data.IORef                    (IORef, atomicModifyIORef')
 import           Foreign.Ptr                   (nullPtr, plusPtr)
 import           Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe           as C
 import qualified Network.GRPC.Unsafe.Constants as C
 import qualified Network.GRPC.Unsafe.Time      as C
+
+import Debug.Trace
 
 -- NOTE: the concurrency requirements for a CompletionQueue are a little
 -- complicated. There are two read operations: next and pluck. We can either
@@ -74,26 +79,27 @@ newTag CompletionQueue{..} = do
 -- | Safely brackets an operation that pushes work onto or plucks results from
 -- the given 'CompletionQueue'.
 withPermission :: CQOpType
-                  -> CompletionQueue
-                  -> IO (Either GRPCIOError a)
-                  -> IO (Either GRPCIOError a)
-withPermission op cq f =
-  bracket acquire release doOp
-  where acquire = atomically $ do
-          isShuttingDown <- readTVar (shuttingDown cq)
-          if isShuttingDown
-             then return False
-             else do currCount <- readTVar $ getCount op cq
-                     if currCount < getLimit op
-                        then modifyTVar' (getCount op cq) (+1) >> return True
-                        else retry
-        doOp gotResource = if gotResource
-                              then f
-                              else return $ Left GRPCIOShutdown
-        release gotResource =
-          if gotResource
-             then atomically $ modifyTVar' (getCount op cq) (subtract 1)
-             else return ()
+               -> CompletionQueue
+               -> IO (Either GRPCIOError a)
+               -> IO (Either GRPCIOError a)
+withPermission op cq act = bracket acquire release doOp
+  where
+    acquire = atomically $ do
+      isShuttingDown <- readTVar (shuttingDown cq)
+      if isShuttingDown
+        then return False
+        else do currCount <- readTVar (getCount op cq)
+                if currCount < getLimit op
+                then do
+                  writeTVar (getCount op cq) (currCount+1)
+                  return True
+                else retry
+
+    doOp gotResource =
+      if gotResource then act else return (Left GRPCIOShutdown)
+
+    release gotResource = when gotResource $
+      atomically $ modifyTVar' (getCount op cq) (subtract 1)
 
 -- | Waits for the given number of seconds for the given tag to appear on the
 -- completion queue. Throws 'GRPCIOShutdown' if the completion queue is shutting
@@ -103,17 +109,21 @@ withPermission op cq f =
 -- 'serverRequestCall', this will block forever unless a timeout is given.
 pluck :: CompletionQueue -> C.Tag -> Maybe TimeoutSeconds
          -> IO (Either GRPCIOError ())
-pluck cq@CompletionQueue{..} tag waitSeconds = do
-  grpcDebug $ "pluck: called with tag: " ++ show tag
-              ++ " and wait: " ++ show waitSeconds
-  withPermission Pluck cq $
-    case waitSeconds of
-      Nothing -> C.withInfiniteDeadline go
-      Just seconds -> C.withDeadlineSeconds seconds go
-    where go deadline = do
-            ev <- C.grpcCompletionQueuePluck unsafeCQ tag deadline C.reserved
-            grpcDebug $ "pluck: finished. Event: " ++ show ev
-            return $ if isEventSuccessful ev then Right () else eventToError ev
+pluck cq@CompletionQueue{..} tag mwait = do
+  grpcDebug $ "pluck: called with tag=" ++ show tag ++ ",mwait=" ++ show mwait
+  withPermission Pluck cq $ pluck' cq tag mwait
+
+-- Variant of pluck' which assumes pluck permission has been granted.
+pluck' :: CompletionQueue
+       -> C.Tag
+       -> Maybe TimeoutSeconds
+       -> IO (Either GRPCIOError ())
+pluck' CompletionQueue{..} tag mwait =
+  maybe C.withInfiniteDeadline C.withDeadlineSeconds mwait $ \dead -> do
+    grpcDebug $ "pluck: blocking on grpc_completion_queue_pluck for tag=" ++ show tag
+    ev <- C.grpcCompletionQueuePluck unsafeCQ tag dead C.reserved
+    grpcDebug $ "pluck finished: " ++ show ev
+    return $ if isEventSuccessful ev then Right () else eventToError ev
 
 -- | Translate 'C.Event' to an error. The caller is responsible for ensuring
 -- that the event actually corresponds to an error condition; a successful event
@@ -133,9 +143,9 @@ maxWorkPushers :: Int
 maxWorkPushers = 100 --TODO: figure out what this should be.
 
 getCount :: CQOpType -> CompletionQueue -> TVar Int
-getCount Push = currentPushers
+getCount Push  = currentPushers
 getCount Pluck = currentPluckers
 
 getLimit :: CQOpType -> Int
-getLimit Push = maxWorkPushers
+getLimit Push  = maxWorkPushers
 getLimit Pluck = C.maxCompletionQueuePluckers
