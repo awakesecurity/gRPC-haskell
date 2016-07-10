@@ -85,9 +85,7 @@ startBatch cq@CompletionQueue{..} call opArray opArraySize tag =
     withPermission Push cq $ fmap throwIfCallError $ do
       grpcDebug $ "startBatch: calling grpc_call_start_batch with pointers: "
                   ++ show call ++ " " ++ show opArray
-      grpcDebug "About to enter grpc_call_start_batch"
       res <- C.grpcCallStartBatch call opArray opArraySize tag C.reserved
-      grpcDebug "Returned from grpc_call_start_batch"
       grpcDebug "startBatch: grpc_call_start_batch call returned."
       return res
 
