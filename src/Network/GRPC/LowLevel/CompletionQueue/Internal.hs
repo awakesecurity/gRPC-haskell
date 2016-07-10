@@ -15,8 +15,6 @@ import qualified Network.GRPC.Unsafe           as C
 import qualified Network.GRPC.Unsafe.Constants as C
 import qualified Network.GRPC.Unsafe.Time      as C
 
-import Debug.Trace
-
 -- NOTE: the concurrency requirements for a CompletionQueue are a little
 -- complicated. There are two read operations: next and pluck. We can either
 -- call next on a CQ or call pluck up to 'maxCompletionQueuePluckers' times
@@ -82,22 +80,17 @@ withPermission :: CQOpType
                -> CompletionQueue
                -> IO (Either GRPCIOError a)
                -> IO (Either GRPCIOError a)
-withPermission op cq act = bracket acquire release doOp
+withPermission op cq act = bracket acquire release $ \gotResource ->
+  if gotResource then act else return (Left GRPCIOShutdown)
   where
     acquire = atomically $ do
       isShuttingDown <- readTVar (shuttingDown cq)
-      if isShuttingDown
-        then return False
-        else do currCount <- readTVar (getCount op cq)
-                if currCount < getLimit op
-                then do
-                  writeTVar (getCount op cq) (currCount+1)
-                  return True
-                else retry
-
-    doOp gotResource =
-      if gotResource then act else return (Left GRPCIOShutdown)
-
+      unless isShuttingDown $ do
+        currCount <- readTVar (getCount op cq)
+        if currCount < getLimit op
+          then writeTVar (getCount op cq) (currCount + 1)
+          else retry
+      return (not isShuttingDown)
     release gotResource = when gotResource $
       atomically $ modifyTVar' (getCount op cq) (subtract 1)
 
