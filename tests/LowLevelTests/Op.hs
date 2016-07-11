@@ -20,27 +20,7 @@ import           Network.GRPC.LowLevel.CompletionQueue
 
 lowLevelOpTests :: TestTree
 lowLevelOpTests = testGroup "Synchronous unit tests of low-level Op interface"
-  [testCancelWhileHandling
-  ,testCancelFromServer]
-
-testCancelWhileHandling :: TestTree
-testCancelWhileHandling =
-  testCase "Client/Server - cancel after handler starts does nothing" $
-  runSerialTest $ \grpc ->
-    withClientServerUnaryCall grpc $
-    \(Client{..}, Server{..}, cc@ClientCall{..}, ServerCall{..}) -> do
-      withOpArrayAndCtxts serverEmptyRecvOps $ \(opArray, ctxts) -> do
-        tag <- newTag serverCQ
-        startBatch serverCQ unServerCall opArray 3 tag
-        pluck serverCQ tag (Just 1)
-        let (OpRecvCloseOnServerContext pcancelled) = last ctxts
-        cancelledBefore <- peek pcancelled
-        cancelledBefore @?= 0
-        clientCallCancel cc
-        threadDelay 1000000
-        cancelledAfter <- peek pcancelled
-        cancelledAfter @?= 0
-        return $ Right ()
+  [testCancelFromServer]
 
 testCancelFromServer :: TestTree
 testCancelFromServer =

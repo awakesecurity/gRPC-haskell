@@ -49,19 +49,19 @@ import           Data.List                                      (intersperse)
 import           Foreign.Marshal.Alloc                          (free, malloc)
 import           Foreign.Ptr                                    (Ptr, nullPtr)
 import           Foreign.Storable                               (Storable, peek)
+import           Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.CompletionQueue.Internal
+import           Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe                            as C
+import qualified Network.GRPC.Unsafe.ByteBuffer                 as C
 import qualified Network.GRPC.Unsafe.Constants                  as C
 import qualified Network.GRPC.Unsafe.Metadata                   as C
 import qualified Network.GRPC.Unsafe.Op                         as C
 import qualified Network.GRPC.Unsafe.Time                       as C
 import           System.Clock                                   (Clock (..),
                                                                  getTime)
+import           System.Info                                    (os)
 import           System.Timeout                                 (timeout)
-
-import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.CompletionQueue.Internal
-import           Network.GRPC.LowLevel.GRPC
-import qualified Network.GRPC.Unsafe.ByteBuffer                 as C
 
 withCompletionQueue :: GRPC -> (CompletionQueue -> IO a) -> IO a
 withCompletionQueue grpc = bracket (createCompletionQueue grpc)
@@ -184,6 +184,14 @@ serverRequestCall s cq@CompletionQueue{.. } rm =
     toBS p  = peek p >>= \bb@(C.ByteBuffer rawPtr) ->
       if | rawPtr == nullPtr -> return Nothing
          | otherwise         -> Just <$> C.copyByteBufferToByteString bb
+    convertDeadline deadline = do
+      deadline' <- C.timeSpec <$> peek deadline
+      --On OS X, gRPC gives us a deadline that is just a delta, so we
+      --convert it to an actual deadline.
+      if os == "darwin"
+        then do now <- getTime Monotonic
+                return $ now + deadline'
+        else return deadline'
 
 -- | Register the server's completion queue. Must be done before the server is
 -- started.
