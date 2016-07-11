@@ -10,11 +10,12 @@
 -- implementation details to both are kept in
 -- `Network.GRPC.LowLevel.CompletionQueue.Internal`.
 
-{-# LANGUAGE LambdaCase      #-}
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE MultiWayIf          #-}
+{-# LANGUAGE PolyKinds           #-}
+{-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections       #-}
 
 module Network.GRPC.LowLevel.CompletionQueue
   ( CompletionQueue
@@ -33,32 +34,34 @@ module Network.GRPC.LowLevel.CompletionQueue
   )
 where
 
-import           Control.Concurrent.STM                  (atomically, check)
-import           Control.Concurrent.STM.TVar             (newTVarIO, readTVar,
-                                                          writeTVar)
-import           Control.Exception                       (bracket)
-import           Control.Monad.Trans.Class               (MonadTrans(lift))
-import           Control.Monad.Trans.Except
-import           Control.Monad                           (liftM2)
+import           Control.Concurrent.STM                         (atomically,
+                                                                 check)
+import           Control.Concurrent.STM.TVar                    (newTVarIO,
+                                                                 readTVar,
+                                                                 writeTVar)
+import           Control.Exception                              (bracket)
+import           Control.Monad                                  (liftM2)
 import           Control.Monad.Managed
-import           Data.IORef                              (newIORef)
-import           Data.List                               (intersperse)
-import           Foreign.Marshal.Alloc                   (free, malloc)
-import           Foreign.Ptr                             (Ptr, nullPtr)
-import           Foreign.Storable                        (Storable, peek)
-import qualified Network.GRPC.Unsafe                     as C
-import qualified Network.GRPC.Unsafe.Constants           as C
-import qualified Network.GRPC.Unsafe.Metadata            as C
-import qualified Network.GRPC.Unsafe.Op                  as C
-import qualified Network.GRPC.Unsafe.Time                as C
-import           System.Clock                            (getTime, Clock(..))
-import           System.Info                             (os)
-import           System.Timeout                          (timeout)
-
+import           Control.Monad.Trans.Class                      (MonadTrans (lift))
+import           Control.Monad.Trans.Except
+import           Data.IORef                                     (newIORef)
+import           Data.List                                      (intersperse)
+import           Foreign.Marshal.Alloc                          (free, malloc)
+import           Foreign.Ptr                                    (Ptr, nullPtr)
+import           Foreign.Storable                               (Storable, peek)
 import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.CompletionQueue.Internal
-import qualified Network.GRPC.Unsafe.ByteBuffer as C
+import           Network.GRPC.LowLevel.GRPC
+import qualified Network.GRPC.Unsafe                            as C
+import qualified Network.GRPC.Unsafe.ByteBuffer                 as C
+import qualified Network.GRPC.Unsafe.Constants                  as C
+import qualified Network.GRPC.Unsafe.Metadata                   as C
+import qualified Network.GRPC.Unsafe.Op                         as C
+import qualified Network.GRPC.Unsafe.Time                       as C
+import           System.Clock                                   (Clock (..),
+                                                                 getTime)
+import           System.Info                                    (os)
+import           System.Timeout                                 (timeout)
 
 withCompletionQueue :: GRPC -> (CompletionQueue -> IO a) -> IO a
 withCompletionQueue grpc = bracket (createCompletionQueue grpc)
@@ -94,8 +97,9 @@ startBatch cq@CompletionQueue{..} call opArray opArraySize tag =
 shutdownCompletionQueue :: CompletionQueue -> IO (Either GRPCIOError ())
 shutdownCompletionQueue CompletionQueue{..} = do
   atomically $ writeTVar shuttingDown True
-  atomically $ readTVar currentPushers >>= \x -> check (x == 0)
-  atomically $ readTVar currentPluckers >>= \x -> check (x == 0)
+  atomically $ do
+    readTVar currentPushers  >>= check . (==0)
+    readTVar currentPluckers >>= check . (==0)
   --drain the queue
   C.grpcCompletionQueueShutdown unsafeCQ
   loopRes <- timeout (5*10^(6::Int)) drainLoop
@@ -140,32 +144,34 @@ serverRequestCall :: C.Server
                   -> CompletionQueue
                   -> RegisteredMethod mt
                   -> IO (Either GRPCIOError ServerCall)
-serverRequestCall s cq@CompletionQueue{.. } RegisteredMethod{..} =
+serverRequestCall s cq@CompletionQueue{.. } rm =
   -- NB: The method type dictates whether or not a payload is present, according
   -- to the payloadHandling function. We do not allocate a buffer for the
   -- payload when it is not present.
   withPermission Push cq . with allocs $ \(dead, call, pay, meta) -> do
-    md  <- peek meta
-    tag <- newTag cq
-    dbug $ "tag is " ++ show tag
-    ce <- C.grpcServerRequestRegisteredCall s methodHandle call
-            dead md pay unsafeCQ unsafeCQ tag
-    dbug $ "callError: " ++ show ce
-    runExceptT $ case ce of
-      C.CallOk -> do
-        ExceptT $ do
-          r <- pluck cq tag Nothing
-          dbug $ "pluck finished:" ++ show r
-          return r
-        lift $
-          ServerCall
-          <$> peek call
-          <*> C.getAllMetadataArray md
-          <*> (if havePay then toBS pay else return Nothing)
-          <*> convertDeadline dead
-              -- gRPC gives us a deadline that is just a delta, so we convert it
-              -- to a proper deadline.
-      _ -> throwE (GRPCIOCallError ce)
+    dbug "pre-pluck block"
+    withPermission Pluck cq $ do
+      md  <- peek meta
+      tag <- newTag cq
+      dbug $ "got pluck permission, registering call for tag=" ++ show tag
+      ce <- C.grpcServerRequestRegisteredCall s (methodHandle rm) call dead md pay unsafeCQ unsafeCQ tag
+      runExceptT $ case ce of
+        C.CallOk -> do
+          ExceptT $ do
+            r <- pluck' cq tag Nothing
+            dbug $ "pluck' finished:" ++ show r
+            return r
+          lift $
+            ServerCall
+            <$> peek call
+            <*> C.getAllMetadataArray md
+            <*> (if havePay then toBS pay else return Nothing)
+            <*> liftM2 (+) (getTime Monotonic) (C.timeSpec <$> peek dead)
+                -- gRPC gives us a deadline that is just a delta, so we convert
+                -- it to a proper deadline.
+        _ -> do
+          lift $ dbug $ "Throwing callError: " ++ show ce
+          throwE (GRPCIOCallError ce)
   where
     allocs = (,,,) <$> ptr <*> ptr <*> pay <*> md
       where
@@ -174,7 +180,7 @@ serverRequestCall s cq@CompletionQueue{.. } RegisteredMethod{..} =
         ptr :: forall a. Storable a => Managed (Ptr a)
         ptr = managed (bracket malloc free)
     dbug    = grpcDebug . ("serverRequestCall(R): " ++)
-    havePay = payloadHandling methodType /= C.SrmPayloadNone
+    havePay = payloadHandling (methodType rm) /= C.SrmPayloadNone
     toBS p  = peek p >>= \bb@(C.ByteBuffer rawPtr) ->
       if | rawPtr == nullPtr -> return Nothing
          | otherwise         -> Just <$> C.copyByteBufferToByteString bb

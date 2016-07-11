@@ -4,7 +4,7 @@
 
 module Network.GRPC.LowLevel.GRPC where
 
-import           Control.Concurrent     (threadDelay)
+import           Control.Concurrent     (threadDelay, myThreadId)
 import           Control.Exception
 import           Data.String            (IsString)
 import qualified Data.ByteString        as B
@@ -59,11 +59,16 @@ throwIfCallError x = Left $ GRPCIOCallError x
 grpcDebug :: String -> IO ()
 {-# INLINE grpcDebug #-}
 #ifdef DEBUG
-grpcDebug str = do tid <- myThreadId
-                   putStrLn $ (show tid) ++ ": " ++ str
+grpcDebug = grpcDebug'
 #else
 grpcDebug _ = return ()
 #endif
+
+grpcDebug' :: String -> IO ()
+{-# INLINE grpcDebug' #-}
+grpcDebug' str = do
+  tid <- myThreadId
+  putStrLn $ "[" ++ show tid ++ "]: " ++ str
 
 threadDelaySecs :: Int -> IO ()
 threadDelaySecs = threadDelay . (* 10^(6::Int))
