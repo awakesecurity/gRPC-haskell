@@ -36,36 +36,37 @@ serverRequestCall server cq@CompletionQueue{..} =
   withPermission Push cq $
     bracket malloc free $ \callPtr ->
       C.withMetadataArrayPtr $ \metadataArrayPtr ->
-        C.withCallDetails $ \callDetails -> do
-          grpcDebug $ "serverRequestCall: callPtr is " ++ show callPtr
-          metadataArray <- peek metadataArrayPtr
-          tag <- newTag cq
-          callError <- C.grpcServerRequestCall server callPtr callDetails
-                         metadataArray unsafeCQ unsafeCQ tag
-          grpcDebug $ "serverRequestCall: callError was " ++ show callError
-          if callError /= C.CallOk
-             then do grpcDebug "serverRequestCall: got call error; cleaning up."
-                     return $ Left $ GRPCIOCallError callError
-             else do pluckResult <- pluck cq tag Nothing
-                     grpcDebug $ "serverRequestCall: pluckResult was "
-                                 ++ show pluckResult
-                     case pluckResult of
-                       Left x -> do
-                         grpcDebug "serverRequestCall: pluck error."
-                         return $ Left x
-                       Right () -> do
-                         rawCall <- peek callPtr
-                         metadata <- C.getAllMetadataArray metadataArray
-                         deadline <- getDeadline callDetails
-                         method <- getMethod callDetails
-                         host <- getHost callDetails
-                         let call = U.ServerCall rawCall
-                                                 metadata
-                                                 Nothing
-                                                 deadline
-                                                 method
-                                                 host
-                         return $ Right call
+        C.withCallDetails $ \callDetails ->
+          withPermission Pluck cq $ do
+            grpcDebug $ "serverRequestCall: callPtr is " ++ show callPtr
+            metadataArray <- peek metadataArrayPtr
+            tag <- newTag cq
+            callError <- C.grpcServerRequestCall server callPtr callDetails
+                           metadataArray unsafeCQ unsafeCQ tag
+            grpcDebug $ "serverRequestCall: callError was " ++ show callError
+            if callError /= C.CallOk
+               then do grpcDebug "serverRequestCall: got call error; cleaning up."
+                       return $ Left $ GRPCIOCallError callError
+               else do pluckResult <- pluck cq tag Nothing
+                       grpcDebug $ "serverRequestCall: pluckResult was "
+                                   ++ show pluckResult
+                       case pluckResult of
+                         Left x -> do
+                           grpcDebug "serverRequestCall: pluck error."
+                           return $ Left x
+                         Right () -> do
+                           rawCall <- peek callPtr
+                           metadata <- C.getAllMetadataArray metadataArray
+                           deadline <- getDeadline callDetails
+                           method <- getMethod callDetails
+                           host <- getHost callDetails
+                           let call = U.ServerCall rawCall
+                                                   metadata
+                                                   Nothing
+                                                   deadline
+                                                   method
+                                                   host
+                           return $ Right call
 
       where getDeadline callDetails = do
               C.timeSpec <$> C.callDetailsGetDeadline callDetails
