@@ -166,9 +166,7 @@ serverRequestCall s cq@CompletionQueue{.. } rm =
             <$> peek call
             <*> C.getAllMetadataArray md
             <*> (if havePay then toBS pay else return Nothing)
-            <*> liftM2 (+) (getTime Monotonic) (C.timeSpec <$> peek dead)
-                -- gRPC gives us a deadline that is just a delta, so we convert
-                -- it to a proper deadline.
+            <*> convertDeadline dead
         _ -> do
           lift $ dbug $ "Throwing callError: " ++ show ce
           throwE (GRPCIOCallError ce)
@@ -186,8 +184,8 @@ serverRequestCall s cq@CompletionQueue{.. } rm =
          | otherwise         -> Just <$> C.copyByteBufferToByteString bb
     convertDeadline deadline = do
       deadline' <- C.timeSpec <$> peek deadline
-      --On OS X, gRPC gives us a deadline that is just a delta, so we
-      --convert it to an actual deadline.
+      -- On OS X, gRPC gives us a deadline that is just a delta, so we convert
+      -- it to an actual deadline.
       if os == "darwin"
         then do now <- getTime Monotonic
                 return $ now + deadline'
