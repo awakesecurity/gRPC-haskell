@@ -12,6 +12,7 @@ import System.Clock
 {#context prefix = "grp" #}
 
 newtype CTimeSpec = CTimeSpec { timeSpec :: TimeSpec }
+  deriving (Eq, Show)
 
 instance Storable CTimeSpec where
   sizeOf _ = {#sizeof gpr_timespec #}

@@ -2,6 +2,7 @@
 
 module UnsafeTests (unsafeTests) where
 
+import           Control.Concurrent                        (threadDelay)
 import           Control.Concurrent.Async
 import           Control.Exception (bracket_)
 import           Control.Monad
@@ -17,8 +18,10 @@ import           Network.GRPC.Unsafe.Op
 import           Network.GRPC.Unsafe.Slice
 import           Network.GRPC.Unsafe.Time
 import           Network.GRPC.Unsafe.ChannelArgs
+import           System.Clock
 import           Test.Tasty
-import           Test.Tasty.HUnit               as HU (testCase, (@?=))
+import           Test.Tasty.HUnit               as HU (testCase, (@?=),
+                                                       assertBool)
 
 unsafeTests :: TestTree
 unsafeTests = testGroup "Unit tests for unsafe C bindings"
@@ -26,12 +29,12 @@ unsafeTests = testGroup "Unit tests for unsafe C bindings"
   , roundtripByteBuffer "Hwaet! We gardena in geardagum..."
   , roundtripSlice largeByteString
   , roundtripByteBuffer largeByteString
+  , roundtripTimeSpec (TimeSpec 123 123)
   , testMetadata
   , testNow
   , testCreateDestroyMetadata
   , testCreateDestroyMetadataKeyVals
   , testCreateDestroyDeadline
-  , testPayload
   , testCreateDestroyChannelArgs
   ]
 
@@ -58,6 +61,15 @@ roundtripByteBuffer bs = testCase "ByteBuffer roundtrip" $ do
   byteBufferReaderDestroy reader
   grpcByteBufferDestroy buffer
   freeSlice readSlice
+
+roundtripTimeSpec :: TimeSpec -> TestTree
+roundtripTimeSpec t = testCase "CTimeSpec roundtrip" $ do
+  p <- malloc
+  let c = CTimeSpec t
+  poke p c
+  c' <- peek p
+  c' @?= c
+  free p
 
 testMetadata :: TestTree
 testMetadata = testCase "Metadata setter/getter roundtrip" $ do
@@ -115,131 +127,8 @@ assertCqEventComplete e = do
   eventCompletionType e HU.@?= OpComplete
   eventSuccess e HU.@?= True
 
-payloadClient :: IO ()
-payloadClient = do
-  client <- grpcInsecureChannelCreate "localhost:50051" nullPtr reserved
-  cq <- grpcCompletionQueueCreate reserved
-  withMetadataArrayPtr $ \initialMetadataRecv -> do
-    withMetadataArrayPtr $ \trailingMetadataRecv -> do
-      withByteBufferPtr $ \clientRecvBB -> do
-        deadline <- secondsToDeadline 5
-        pluckDeadline <- secondsToDeadline 10
-        clientCall <- grpcChannelCreateCall
-                        client (Call nullPtr) propagateDefaults cq
-                        "/foo" "localhost" deadline reserved
-        --send request
-        withOpArray 6 $ \ops -> do
-          opSendInitialMetadataEmpty ops 0
-          withByteStringAsByteBuffer "hello world" $ \requestPayload -> do
-            opSendMessage ops 1 requestPayload
-            opSendCloseClient ops 2
-            opRecvInitialMetadata ops 3 initialMetadataRecv
-            opRecvMessage ops 4 clientRecvBB
-            statusCodePtr <- createStatusCodePtr
-            let cstringCapacity = 32
-            cStringPtr <- malloc
-            cstring <- mallocBytes cstringCapacity
-            poke cStringPtr cstring
-            opRecvStatusClient ops 5 trailingMetadataRecv statusCodePtr
-                               cStringPtr
-                               cstringCapacity
-            --send client request
-            requestError <- grpcCallStartBatch clientCall ops 6 (tag 1) reserved
-            clientRequestCqEvent <- grpcCompletionQueuePluck
-                                      cq (tag 1) pluckDeadline reserved
-            assertCqEventComplete clientRequestCqEvent
-            requestError HU.@?= CallOk
-            free cstring
-            free cStringPtr
-            destroyStatusCodePtr statusCodePtr
-        --verify response received
-        responseRecv <- peek clientRecvBB
-        let (ByteBuffer rawPtr) = responseRecv
-        if rawPtr == nullPtr
-           then error "Client got null pointer for received response!"
-           else do responseRecvBS <- copyByteBufferToByteString responseRecv
-                   responseRecvBS HU.@?= "hello you"
-        grpcCompletionQueueShutdown cq
-        grpcCallDestroy clientCall
-        --TODO: the grpc test drains the cq here
-        grpcCompletionQueueDestroy cq
-        grpcChannelDestroy client
-
-payloadServer :: IO ()
-payloadServer = do
-  server <- grpcServerCreate nullPtr reserved
-  cq <- grpcCompletionQueueCreate reserved
-  grpcServerRegisterCompletionQueue server cq reserved
-  _ <- grpcServerAddInsecureHttp2Port server "localhost:50051"
-  grpcServerStart server
-  serverCallPtr <- malloc
-  withMetadataArrayPtr $ \requestMetadataRecv -> do
-    withByteBufferPtr $ \recvBufferPtr -> do
-      callDetails <- createCallDetails
-      requestMetadataRecv' <- peek requestMetadataRecv
-      recvRequestError <- grpcServerRequestCall
-                            server serverCallPtr callDetails
-                            requestMetadataRecv' cq cq (tag 101)
-      pluckDeadline' <- secondsToDeadline 10
-      requestCallCqEvent <- grpcCompletionQueuePluck cq (tag 101)
-                                                     pluckDeadline'
-                                                     reserved
-      assertCqEventComplete requestCallCqEvent
-      recvRequestError HU.@?= CallOk
-      destroyCallDetails callDetails
-      --receive request
-      withOpArray 2 $ \recvOps -> do
-        opSendInitialMetadataEmpty recvOps 0
-        opRecvMessage recvOps 1 recvBufferPtr
-        serverCall <- peek serverCallPtr
-        recvBatchError <- grpcCallStartBatch serverCall recvOps 2
-                                             (tag 102) reserved
-        recvBatchError HU.@?= CallOk
-        pluckDeadline'' <- secondsToDeadline 10
-        recvCqEvent <- grpcCompletionQueuePluck cq (tag 102)
-                                                pluckDeadline''
-                                                reserved
-        assertCqEventComplete recvCqEvent
-      --send response
-      withOpArray 3 $ \respOps -> do
-        withByteStringAsByteBuffer "hello you" $ \respbb -> do
-          cancelledPtr <- malloc
-          opRecvCloseServer respOps 0 cancelledPtr
-          opSendMessage respOps 1 respbb
-          B.useAsCString "ok" $ \detailsStr ->
-            opSendStatusServer respOps 2 0 (MetadataKeyValPtr nullPtr)
-                               StatusOk detailsStr
-          serverCall <- peek serverCallPtr
-          respBatchError <- grpcCallStartBatch serverCall respOps 3
-                                               (tag 103) reserved
-          respBatchError HU.@?= CallOk
-          pluckDeadline''' <- secondsToDeadline 10
-          respCqEvent <- grpcCompletionQueuePluck cq (tag 103)
-                                                  pluckDeadline'''
-                                                  reserved
-          assertCqEventComplete respCqEvent
-      --verify data was received
-      serverRecv <- peek recvBufferPtr
-      serverRecvBS <- copyByteBufferToByteString serverRecv
-      serverRecvBS HU.@?= "hello world"
-      --shut down
-      grpcServerShutdownAndNotify server cq (tag 0)
-      pluckDeadline'''' <- secondsToDeadline 10
-      shutdownEvent <- grpcCompletionQueuePluck cq (tag 0) pluckDeadline''''
-                                                reserved
-      assertCqEventComplete shutdownEvent
-      grpcServerCancelAllCalls server
-      grpcServerDestroy server
-      grpcCompletionQueueShutdown cq
-      grpcCompletionQueueDestroy cq
-      free serverCallPtr
-
--- | Straightforward translation of the gRPC core test end2end/tests/payload.c
--- This is intended to test the low-level C bindings, so we use only a few
--- minimal abstractions on top of it.
-testPayload :: TestTree
-testPayload = testCase "Unsafe request/response" $ do
-  grpc $ payloadClient `concurrently` payloadServer
-
 grpc :: IO a -> IO ()
 grpc = bracket_ grpcInit grpcShutdown . void
+
+threadDelaySecs :: Int -> IO ()
+threadDelaySecs = threadDelay . (* 10^(6::Int))

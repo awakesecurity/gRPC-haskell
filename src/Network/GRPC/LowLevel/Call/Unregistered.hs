@@ -38,10 +38,6 @@ debugServerCall ServerCall{..} = do
   grpcDebug $ "debugServerCall(U): server call: " ++ show ptr
   grpcDebug $ "debugServerCall(U): metadata: "
               ++ show requestMetadataRecv
-  forM_ parentPtr $ \parentPtr' -> do
-    grpcDebug $ "debugServerCall(U): parent ptr: " ++ show parentPtr'
-    C.Call parent <- peek parentPtr'
-    grpcDebug $ "debugServerCall(U): parent: " ++ show parent
   grpcDebug $ "debugServerCall(U): deadline: " ++ show callDeadline
   grpcDebug $ "debugServerCall(U): method: " ++ show callMethod
   grpcDebug $ "debugServerCall(U): host: " ++ show callHost

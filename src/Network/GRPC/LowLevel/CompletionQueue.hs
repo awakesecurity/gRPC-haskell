@@ -52,6 +52,7 @@ import qualified Network.GRPC.Unsafe.Metadata            as C
 import qualified Network.GRPC.Unsafe.Op                  as C
 import qualified Network.GRPC.Unsafe.Time                as C
 import           System.Clock                            (getTime, Clock(..))
+import           System.Info                             (os)
 import           System.Timeout                          (timeout)
 
 import           Network.GRPC.LowLevel.Call
@@ -161,7 +162,7 @@ serverRequestCall s cq@CompletionQueue{.. } RegisteredMethod{..} =
           <$> peek call
           <*> C.getAllMetadataArray md
           <*> (if havePay then toBS pay else return Nothing)
-          <*> liftM2 (+) (getTime Monotonic) (C.timeSpec <$> peek dead)
+          <*> convertDeadline dead
               -- gRPC gives us a deadline that is just a delta, so we convert it
               -- to a proper deadline.
       _ -> throwE (GRPCIOCallError ce)
@@ -177,6 +178,14 @@ serverRequestCall s cq@CompletionQueue{.. } RegisteredMethod{..} =
     toBS p  = peek p >>= \bb@(C.ByteBuffer rawPtr) ->
       if | rawPtr == nullPtr -> return Nothing
          | otherwise         -> Just <$> C.copyByteBufferToByteString bb
+    convertDeadline deadline = do
+      deadline' <- C.timeSpec <$> peek deadline
+      --On OS X, gRPC gives us a deadline that is just a delta, so we
+      --convert it to an actual deadline.
+      if os == "darwin"
+        then do now <- getTime Monotonic
+                return $ now + deadline'
+        else return deadline'
 
 -- | Register the server's completion queue. Must be done before the server is
 -- started.

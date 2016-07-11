@@ -127,6 +127,7 @@ test-suite test
     , pipes ==4.1.*
     , transformers
     , safe
+    , clock ==0.6.*
   other-modules:
     LowLevelTests,
     LowLevelTests.Op,
