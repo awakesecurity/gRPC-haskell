@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ViewPatterns    #-}
 
 module Network.GRPC.LowLevel.Client.Unregistered where
 
@@ -59,15 +60,17 @@ clientRequest :: Client
               -> MetadataMap
               -- ^ Request metadata.
               -> IO (Either GRPCIOError NormalRequestResult)
-clientRequest client@Client{..} meth timeLimit body meta =
-  fmap join $ withClientCall client meth timeLimit $ \call -> do
-    results <- runOps (unClientCall call) clientCQ
-                 [ OpSendInitialMetadata meta
-                 , OpSendMessage body
-                 , OpSendCloseFromClient
-                 , OpRecvInitialMetadata
-                 , OpRecvMessage
-                 , OpRecvStatusOnClient
-                 ]
-    grpcDebug "clientRequest(U): ops ran."
-    return $ right compileNormalRequestResults results
+clientRequest cl@(clientCQ -> cq) meth tm body initMeta =
+  join <$> withClientCall cl meth tm go
+  where
+    go (unsafeCC -> c) = do
+      results <- runOps c cq
+                   [ OpSendInitialMetadata initMeta
+                   , OpSendMessage body
+                   , OpSendCloseFromClient
+                   , OpRecvInitialMetadata
+                   , OpRecvMessage
+                   , OpRecvStatusOnClient
+                   ]
+      grpcDebug "clientRequest(U): ops ran."
+      return $ right compileNormalRequestResults results

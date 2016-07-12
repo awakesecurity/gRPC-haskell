@@ -36,6 +36,8 @@ void protobuf_AddDesc_echo_2eproto();
 void protobuf_AssignDesc_echo_2eproto();
 void protobuf_ShutdownFile_echo_2eproto();
 
+class AddRequest;
+class AddResponse;
 class EchoRequest;
 
 // ===================================================================
@@ -121,6 +123,169 @@ class EchoRequest : public ::google::protobuf::Message {
   void InitAsDefaultInstance();
   static EchoRequest* default_instance_;
 };
+// -------------------------------------------------------------------
+
+class AddRequest : public ::google::protobuf::Message {
+ public:
+  AddRequest();
+  virtual ~AddRequest();
+
+  AddRequest(const AddRequest& from);
+
+  inline AddRequest& operator=(const AddRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor();
+  static const AddRequest& default_instance();
+
+  void Swap(AddRequest* other);
+
+  // implements Message ----------------------------------------------
+
+  inline AddRequest* New() const { return New(NULL); }
+
+  AddRequest* New(::google::protobuf::Arena* arena) const;
+  void CopyFrom(const ::google::protobuf::Message& from);
+  void MergeFrom(const ::google::protobuf::Message& from);
+  void CopyFrom(const AddRequest& from);
+  void MergeFrom(const AddRequest& from);
+  void Clear();
+  bool IsInitialized() const;
+
+  int ByteSize() const;
+  bool MergePartialFromCodedStream(
+      ::google::protobuf::io::CodedInputStream* input);
+  void SerializeWithCachedSizes(
+      ::google::protobuf::io::CodedOutputStream* output) const;
+  ::google::protobuf::uint8* SerializeWithCachedSizesToArray(::google::protobuf::uint8* output) const;
+  int GetCachedSize() const { return _cached_size_; }
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(AddRequest* other);
+  private:
+  inline ::google::protobuf::Arena* GetArenaNoVirtual() const {
+    return _internal_metadata_.arena();
+  }
+  inline void* MaybeArenaPtr() const {
+    return _internal_metadata_.raw_arena_ptr();
+  }
+  public:
+
+  ::google::protobuf::Metadata GetMetadata() const;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // optional fixed32 addX = 1;
+  void clear_addx();
+  static const int kAddXFieldNumber = 1;
+  ::google::protobuf::uint32 addx() const;
+  void set_addx(::google::protobuf::uint32 value);
+
+  // optional fixed32 addY = 2;
+  void clear_addy();
+  static const int kAddYFieldNumber = 2;
+  ::google::protobuf::uint32 addy() const;
+  void set_addy(::google::protobuf::uint32 value);
+
+  // @@protoc_insertion_point(class_scope:echo.AddRequest)
+ private:
+
+  ::google::protobuf::internal::InternalMetadataWithArena _internal_metadata_;
+  bool _is_default_instance_;
+  ::google::protobuf::uint32 addx_;
+  ::google::protobuf::uint32 addy_;
+  mutable int _cached_size_;
+  friend void  protobuf_AddDesc_echo_2eproto();
+  friend void protobuf_AssignDesc_echo_2eproto();
+  friend void protobuf_ShutdownFile_echo_2eproto();
+
+  void InitAsDefaultInstance();
+  static AddRequest* default_instance_;
+};
+// -------------------------------------------------------------------
+
+class AddResponse : public ::google::protobuf::Message {
+ public:
+  AddResponse();
+  virtual ~AddResponse();
+
+  AddResponse(const AddResponse& from);
+
+  inline AddResponse& operator=(const AddResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+
+  static const ::google::protobuf::Descriptor* descriptor();
+  static const AddResponse& default_instance();
+
+  void Swap(AddResponse* other);
+
+  // implements Message ----------------------------------------------
+
+  inline AddResponse* New() const { return New(NULL); }
+
+  AddResponse* New(::google::protobuf::Arena* arena) const;
+  void CopyFrom(const ::google::protobuf::Message& from);
+  void MergeFrom(const ::google::protobuf::Message& from);
+  void CopyFrom(const AddResponse& from);
+  void MergeFrom(const AddResponse& from);
+  void Clear();
+  bool IsInitialized() const;
+
+  int ByteSize() const;
+  bool MergePartialFromCodedStream(
+      ::google::protobuf::io::CodedInputStream* input);
+  void SerializeWithCachedSizes(
+      ::google::protobuf::io::CodedOutputStream* output) const;
+  ::google::protobuf::uint8* SerializeWithCachedSizesToArray(::google::protobuf::uint8* output) const;
+  int GetCachedSize() const { return _cached_size_; }
+  private:
+  void SharedCtor();
+  void SharedDtor();
+  void SetCachedSize(int size) const;
+  void InternalSwap(AddResponse* other);
+  private:
+  inline ::google::protobuf::Arena* GetArenaNoVirtual() const {
+    return _internal_metadata_.arena();
+  }
+  inline void* MaybeArenaPtr() const {
+    return _internal_metadata_.raw_arena_ptr();
+  }
+  public:
+
+  ::google::protobuf::Metadata GetMetadata() const;
+
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+
+  // optional fixed32 answer = 1;
+  void clear_answer();
+  static const int kAnswerFieldNumber = 1;
+  ::google::protobuf::uint32 answer() const;
+  void set_answer(::google::protobuf::uint32 value);
+
+  // @@protoc_insertion_point(class_scope:echo.AddResponse)
+ private:
+
+  ::google::protobuf::internal::InternalMetadataWithArena _internal_metadata_;
+  bool _is_default_instance_;
+  ::google::protobuf::uint32 answer_;
+  mutable int _cached_size_;
+  friend void  protobuf_AddDesc_echo_2eproto();
+  friend void protobuf_AssignDesc_echo_2eproto();
+  friend void protobuf_ShutdownFile_echo_2eproto();
+
+  void InitAsDefaultInstance();
+  static AddResponse* default_instance_;
+};
 // ===================================================================
 
 
@@ -172,7 +337,61 @@ inline void EchoRequest::set_allocated_message(::std::string* message) {
   // @@protoc_insertion_point(field_set_allocated:echo.EchoRequest.message)
 }
 
+// -------------------------------------------------------------------
+
+// AddRequest
+
+// optional fixed32 addX = 1;
+inline void AddRequest::clear_addx() {
+  addx_ = 0u;
+}
+inline ::google::protobuf::uint32 AddRequest::addx() const {
+  // @@protoc_insertion_point(field_get:echo.AddRequest.addX)
+  return addx_;
+}
+inline void AddRequest::set_addx(::google::protobuf::uint32 value) {
+  
+  addx_ = value;
+  // @@protoc_insertion_point(field_set:echo.AddRequest.addX)
+}
+
+// optional fixed32 addY = 2;
+inline void AddRequest::clear_addy() {
+  addy_ = 0u;
+}
+inline ::google::protobuf::uint32 AddRequest::addy() const {
+  // @@protoc_insertion_point(field_get:echo.AddRequest.addY)
+  return addy_;
+}
+inline void AddRequest::set_addy(::google::protobuf::uint32 value) {
+  
+  addy_ = value;
+  // @@protoc_insertion_point(field_set:echo.AddRequest.addY)
+}
+
+// -------------------------------------------------------------------
+
+// AddResponse
+
+// optional fixed32 answer = 1;
+inline void AddResponse::clear_answer() {
+  answer_ = 0u;
+}
+inline ::google::protobuf::uint32 AddResponse::answer() const {
+  // @@protoc_insertion_point(field_get:echo.AddResponse.answer)
+  return answer_;
+}
+inline void AddResponse::set_answer(::google::protobuf::uint32 value) {
+  
+  answer_ = value;
+  // @@protoc_insertion_point(field_set:echo.AddResponse.answer)
+}
+
 #endif  // !PROTOBUF_INLINE_NOT_IN_HEADERS
+// -------------------------------------------------------------------
+
+// -------------------------------------------------------------------
+
 
 // @@protoc_insertion_point(namespace_scope)
 

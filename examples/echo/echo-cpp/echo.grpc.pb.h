@@ -17,6 +17,7 @@
 
 namespace grpc {
 class CompletionQueue;
+class Channel;
 class RpcService;
 class ServerCompletionQueue;
 class ServerContext;
@@ -60,7 +61,7 @@ class Echo GRPC_FINAL {
   template <class BaseClass>
   class WithAsyncMethod_DoEcho : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service *service) {}
    public:
     WithAsyncMethod_DoEcho() {
       ::grpc::Service::MarkMethodAsync(0);
@@ -81,7 +82,7 @@ class Echo GRPC_FINAL {
   template <class BaseClass>
   class WithGenericMethod_DoEcho : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service *service) {}
    public:
     WithGenericMethod_DoEcho() {
       ::grpc::Service::MarkMethodGeneric(0);
@@ -91,6 +92,79 @@ class Echo GRPC_FINAL {
     }
     // disable synchronous version of this method
     ::grpc::Status DoEcho(::grpc::ServerContext* context, const ::echo::EchoRequest* request, ::echo::EchoRequest* response) GRPC_FINAL GRPC_OVERRIDE {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+};
+
+class Add GRPC_FINAL {
+ public:
+  class StubInterface {
+   public:
+    virtual ~StubInterface() {}
+    virtual ::grpc::Status DoAdd(::grpc::ClientContext* context, const ::echo::AddRequest& request, ::echo::AddResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::echo::AddResponse>> AsyncDoAdd(::grpc::ClientContext* context, const ::echo::AddRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::echo::AddResponse>>(AsyncDoAddRaw(context, request, cq));
+    }
+  private:
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::echo::AddResponse>* AsyncDoAddRaw(::grpc::ClientContext* context, const ::echo::AddRequest& request, ::grpc::CompletionQueue* cq) = 0;
+  };
+  class Stub GRPC_FINAL : public StubInterface {
+   public:
+    Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel);
+    ::grpc::Status DoAdd(::grpc::ClientContext* context, const ::echo::AddRequest& request, ::echo::AddResponse* response) GRPC_OVERRIDE;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::echo::AddResponse>> AsyncDoAdd(::grpc::ClientContext* context, const ::echo::AddRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::echo::AddResponse>>(AsyncDoAddRaw(context, request, cq));
+    }
+
+   private:
+    std::shared_ptr< ::grpc::ChannelInterface> channel_;
+    ::grpc::ClientAsyncResponseReader< ::echo::AddResponse>* AsyncDoAddRaw(::grpc::ClientContext* context, const ::echo::AddRequest& request, ::grpc::CompletionQueue* cq) GRPC_OVERRIDE;
+    const ::grpc::RpcMethod rpcmethod_DoAdd_;
+  };
+  static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
+
+  class Service : public ::grpc::Service {
+   public:
+    Service();
+    virtual ~Service();
+    virtual ::grpc::Status DoAdd(::grpc::ServerContext* context, const ::echo::AddRequest* request, ::echo::AddResponse* response);
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_DoAdd : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service *service) {}
+   public:
+    WithAsyncMethod_DoAdd() {
+      ::grpc::Service::MarkMethodAsync(0);
+    }
+    ~WithAsyncMethod_DoAdd() GRPC_OVERRIDE {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status DoAdd(::grpc::ServerContext* context, const ::echo::AddRequest* request, ::echo::AddResponse* response) GRPC_FINAL GRPC_OVERRIDE {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestDoAdd(::grpc::ServerContext* context, ::echo::AddRequest* request, ::grpc::ServerAsyncResponseWriter< ::echo::AddResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(0, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_DoAdd<Service > AsyncService;
+  template <class BaseClass>
+  class WithGenericMethod_DoAdd : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service *service) {}
+   public:
+    WithGenericMethod_DoAdd() {
+      ::grpc::Service::MarkMethodGeneric(0);
+    }
+    ~WithGenericMethod_DoAdd() GRPC_OVERRIDE {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status DoAdd(::grpc::ServerContext* context, const ::echo::AddRequest* request, ::echo::AddResponse* response) GRPC_FINAL GRPC_OVERRIDE {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }

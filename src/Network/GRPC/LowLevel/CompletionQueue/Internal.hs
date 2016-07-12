@@ -5,7 +5,6 @@ module Network.GRPC.LowLevel.CompletionQueue.Internal where
 import           Control.Concurrent.STM        (atomically, retry)
 import           Control.Concurrent.STM.TVar   (TVar, modifyTVar', readTVar,
                                                 writeTVar)
-import           Control.Monad.IO.Class
 import           Control.Exception             (bracket)
 import           Control.Monad
 import           Data.IORef                    (IORef, atomicModifyIORef')
@@ -61,6 +60,8 @@ data CompletionQueue = CompletionQueue {unsafeCQ        :: C.CompletionQueue,
                                         -- ^ Used to supply unique tags for work
                                         -- items pushed onto the queue.
                                        }
+
+instance Show CompletionQueue where show = show . unsafeCQ
 
 type TimeoutSeconds = Int
 

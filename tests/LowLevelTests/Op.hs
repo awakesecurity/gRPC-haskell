@@ -4,9 +4,7 @@
 
 module LowLevelTests.Op where
 
-import           Control.Concurrent             (threadDelay)
-import           Data.ByteString                (isPrefixOf)
-import           Foreign.Storable               (peek)
+import           Data.ByteString                (ByteString, isPrefixOf)
 import           Test.Tasty
 import           Test.Tasty.HUnit               as HU (testCase, (@?=),
                                                        assertBool)
@@ -16,7 +14,6 @@ import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.Client
 import           Network.GRPC.LowLevel.Server
 import           Network.GRPC.LowLevel.Op
-import           Network.GRPC.LowLevel.CompletionQueue
 
 lowLevelOpTests :: TestTree
 lowLevelOpTests = testGroup "Synchronous unit tests of low-level Op interface"
@@ -29,7 +26,7 @@ testCancelFromServer =
     withClientServerUnaryCall grpc $
     \(Client{..}, Server{..}, ClientCall{..}, sc@ServerCall{..}) -> do
       serverCallCancel sc StatusPermissionDenied "TestStatus"
-      clientRes <- runOps unClientCall clientCQ clientRecvOps
+      clientRes <- runOps unsafeCC clientCQ clientRecvOps
       case clientRes of
         Left x -> error $ "Client recv error: " ++ show x
         Right [_,_,OpRecvStatusOnClientResult _ code details] -> do
@@ -48,12 +45,13 @@ runSerialTest f =
                        Right () -> return ()
 
 withClientServerUnaryCall :: GRPC
-                             -> ((Client, Server, ClientCall, ServerCall)
+                             -> ((Client, Server, ClientCall,
+                                  ServerCall ByteString)
                                  -> IO (Either GRPCIOError a))
                              -> IO (Either GRPCIOError a)
 withClientServerUnaryCall grpc f = do
   withClient grpc clientConf $ \c -> do
-    crm <- clientRegisterMethod c "/foo" Normal
+    crm <- clientRegisterMethodNormal c "/foo"
     withServer grpc serverConf $ \s ->
       withClientCall c crm 10 $ \cc -> do
         let srm = head (normalMethods s)
@@ -61,12 +59,12 @@ withClientServerUnaryCall grpc f = do
         -- because registered methods try to do recv ops immediately when
         -- created. If later we want to send payloads or metadata, we'll need
         -- to tweak this.
-        _clientRes <- runOps (unClientCall cc) (clientCQ c) clientEmptySendOps
+        _clientRes <- runOps (unsafeCC cc) (clientCQ c) clientEmptySendOps
         withServerCall s srm $ \sc ->
           f (c, s, cc, sc)
 
 serverConf :: ServerConfig
-serverConf = ServerConfig "localhost" 50051 [("/foo", Normal)] []
+serverConf = ServerConfig "localhost" 50051 [("/foo")] [] [] [] []
 
 clientConf :: ClientConfig
 clientConf = ClientConfig "localhost" 50051 []

@@ -11,7 +11,7 @@ import qualified Data.ByteString        as B
 import qualified Data.Map               as M
 import qualified Network.GRPC.Unsafe    as C
 import qualified Network.GRPC.Unsafe.Op as C
-
+import           Proto3.Wire.Decode     (ParseError)
 
 #ifdef DEBUG
 import           GHC.Conc              (myThreadId)
@@ -47,7 +47,7 @@ data GRPCIOError = GRPCIOCallError C.CallError
                    -- reasonable amount of time.
                    | GRPCIOUnknownError
                    | GRPCIOBadStatusCode C.StatusCode StatusDetails
-
+                   | GRPCIODecodeError ParseError
                    | GRPCIOInternalMissingExpectedPayload
                    | GRPCIOInternalUnexpectedRecv String -- debugging description
   deriving (Show, Eq)

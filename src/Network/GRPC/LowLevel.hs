@@ -29,6 +29,7 @@ GRPC
 -- * Configuration options
 , Arg(..)
 , CompressionAlgorithm(..)
+, Port
 
 -- * Server
 , ServerConfig(..)
@@ -37,12 +38,16 @@ GRPC
 , ServerCall(optionalPayload, requestMetadataRecv)
 , withServer
 , serverHandleNormalCall
+, ServerHandler
 , withServerCall
 , serverCallCancel
 , serverCallIsExpired
 , serverReader -- for client streaming
+, ServerReaderHandler
 , serverWriter -- for server streaming
+, ServerWriterHandler
 , serverRW     -- for bidirectional streaming
+, ServerRWHandler
 
 -- * Client
 , ClientConfig(..)
@@ -51,7 +56,10 @@ GRPC
 , ConnectivityState(..)
 , clientConnectivity
 , withClient
-, clientRegisterMethod
+, clientRegisterMethodNormal
+, clientRegisterMethodClientStreaming
+, clientRegisterMethodServerStreaming
+, clientRegisterMethodBiDiStreaming
 , clientRequest
 , clientReader -- for server streaming
 , clientWriter -- for client streaming
@@ -63,6 +71,11 @@ GRPC
 -- * Ops
 , Op(..)
 , OpRecvResult(..)
+
+-- * Streaming utilities
+, Streaming
+, StreamSend
+, StreamRecv
 
 ) where
 

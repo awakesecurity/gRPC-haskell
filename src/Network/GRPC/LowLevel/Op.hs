@@ -345,12 +345,12 @@ streamingProxy nm c cq = maybe recv send
     run   = lift . runOps c cq
     urecv = GRPCIOInternalUnexpectedRecv . (nm ++)
 
-type StreamRecv = Streaming (Either GRPCIOError (Maybe ByteString))
-streamRecv :: StreamRecv
+type StreamRecv a = Streaming (Either GRPCIOError (Maybe a))
+streamRecv :: StreamRecv ByteString
 streamRecv = P.request Nothing
 
-type StreamSend = ByteString -> Streaming (Either GRPCIOError ())
-streamSend :: StreamSend
+type StreamSend a = a -> Streaming (Either GRPCIOError ())
+streamSend :: StreamSend ByteString
 streamSend = fmap void . P.request . Just
 
 pattern RecvMsgRslt mmsg <- Right [OpRecvMessageResult mmsg]

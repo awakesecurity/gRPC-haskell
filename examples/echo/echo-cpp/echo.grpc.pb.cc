@@ -37,6 +37,7 @@ Echo::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel)
 }
 
 Echo::Service::Service() {
+  (void)Echo_method_names;
   AddMethod(new ::grpc::RpcServiceMethod(
       Echo_method_names[0],
       ::grpc::RpcMethod::NORMAL_RPC,
@@ -48,6 +49,47 @@ Echo::Service::~Service() {
 }
 
 ::grpc::Status Echo::Service::DoEcho(::grpc::ServerContext* context, const ::echo::EchoRequest* request, ::echo::EchoRequest* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+
+static const char* Add_method_names[] = {
+  "/echo.Add/DoAdd",
+};
+
+std::unique_ptr< Add::Stub> Add::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
+  std::unique_ptr< Add::Stub> stub(new Add::Stub(channel));
+  return stub;
+}
+
+Add::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel)
+  : channel_(channel), rpcmethod_DoAdd_(Add_method_names[0], ::grpc::RpcMethod::NORMAL_RPC, channel)
+  {}
+
+::grpc::Status Add::Stub::DoAdd(::grpc::ClientContext* context, const ::echo::AddRequest& request, ::echo::AddResponse* response) {
+  return ::grpc::BlockingUnaryCall(channel_.get(), rpcmethod_DoAdd_, context, request, response);
+}
+
+::grpc::ClientAsyncResponseReader< ::echo::AddResponse>* Add::Stub::AsyncDoAddRaw(::grpc::ClientContext* context, const ::echo::AddRequest& request, ::grpc::CompletionQueue* cq) {
+  return new ::grpc::ClientAsyncResponseReader< ::echo::AddResponse>(channel_.get(), cq, rpcmethod_DoAdd_, context, request);
+}
+
+Add::Service::Service() {
+  (void)Add_method_names;
+  AddMethod(new ::grpc::RpcServiceMethod(
+      Add_method_names[0],
+      ::grpc::RpcMethod::NORMAL_RPC,
+      new ::grpc::RpcMethodHandler< Add::Service, ::echo::AddRequest, ::echo::AddResponse>(
+          std::mem_fn(&Add::Service::DoAdd), this)));
+}
+
+Add::Service::~Service() {
+}
+
+::grpc::Status Add::Service::DoAdd(::grpc::ServerContext* context, const ::echo::AddRequest* request, ::echo::AddResponse* response) {
   (void) context;
   (void) request;
   (void) response;

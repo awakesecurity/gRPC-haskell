@@ -1,25 +1,34 @@
 {-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures             #-}
 {-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 -- | This module defines data structures and operations pertaining to registered
 -- calls; for unregistered call support, see
 -- `Network.GRPC.LowLevel.Call.Unregistered`.
 module Network.GRPC.LowLevel.Call where
 
-import           Data.ByteString                (ByteString)
-import           Data.String                    (IsString)
-#ifdef DEBUG
-import           Foreign.Storable               (peek)
-#endif
+import           Control.Monad.Managed                          (Managed, managed)
+import           Control.Exception                              (bracket)
+import           Data.ByteString                                (ByteString)
+import           Data.List                                      (intersperse)
+import           Data.String                                    (IsString)
+import           Foreign.Marshal.Alloc                          (free, malloc)
+import           Foreign.Ptr                                    (Ptr, nullPtr)
+import           Foreign.Storable                               (Storable, peek)
+import           Network.GRPC.LowLevel.CompletionQueue.Internal
+import           Network.GRPC.LowLevel.GRPC                     (MetadataMap,
+                                                                 grpcDebug)
+import qualified Network.GRPC.Unsafe                            as C
+import qualified Network.GRPC.Unsafe.ByteBuffer                 as C
+import qualified Network.GRPC.Unsafe.Op                         as C
 import           System.Clock
-
-import qualified Network.GRPC.Unsafe            as C
-import qualified Network.GRPC.Unsafe.Op         as C
-
-import           Network.GRPC.LowLevel.GRPC     (MetadataMap, grpcDebug)
 
 -- | Models the four types of RPC call supported by gRPC (and correspond to
 -- DataKinds phantom types on RegisteredMethods).
@@ -29,6 +38,23 @@ data GRPCMethodType
   | ServerStreaming
   | BiDiStreaming
   deriving (Show, Eq, Ord, Enum)
+
+type family MethodPayload a where
+  MethodPayload 'Normal = ByteString
+  MethodPayload 'ClientStreaming = ()
+  MethodPayload 'ServerStreaming = ByteString
+  MethodPayload 'BiDiStreaming = ()
+
+--TODO: try replacing this class with a plain old function so we don't have the
+-- Payloadable constraint everywhere.
+
+payload :: RegisteredMethod mt -> Ptr C.ByteBuffer -> IO (MethodPayload mt)
+payload (RegisteredMethodNormal _ _ _) p =
+  peek p >>= C.copyByteBufferToByteString
+payload (RegisteredMethodClientStreaming _ _ _) _ = return ()
+payload (RegisteredMethodServerStreaming _ _ _) p =
+  peek p >>= C.copyByteBufferToByteString
+payload (RegisteredMethodBiDiStreaming _ _ _) _ = return ()
 
 newtype MethodName = MethodName {unMethodName :: String}
   deriving (Show, Eq, IsString)
@@ -53,32 +79,82 @@ endpoint (Host h) (Port p) = Endpoint (h ++ ":" ++ show p)
 -- Contains state for identifying that method in the underlying gRPC
 -- library. Note that we use a DataKind-ed phantom type to help constrain use of
 -- different kinds of registered methods.
-data RegisteredMethod (mt :: GRPCMethodType) = RegisteredMethod
-  { methodType     :: GRPCMethodType
-  , methodName     :: MethodName
-  , methodEndpoint :: Endpoint
-  , methodHandle   :: C.CallHandle
-  }
+data RegisteredMethod (mt :: GRPCMethodType) where
+  RegisteredMethodNormal :: MethodName
+                            -> Endpoint
+                            -> C.CallHandle
+                            -> RegisteredMethod 'Normal
+  RegisteredMethodClientStreaming :: MethodName
+                                     -> Endpoint
+                                     -> C.CallHandle
+                                     -> RegisteredMethod 'ClientStreaming
+  RegisteredMethodServerStreaming :: MethodName
+                                     -> Endpoint
+                                     -> C.CallHandle
+                                     -> RegisteredMethod 'ServerStreaming
+  RegisteredMethodBiDiStreaming :: MethodName
+                                   -> Endpoint
+                                   -> C.CallHandle
+                                   -> RegisteredMethod 'BiDiStreaming
+
+instance Show (RegisteredMethod a) where
+  show (RegisteredMethodNormal x y z) =
+    "RegisteredMethodNormal "
+    ++ concat (intersperse " " [show x, show y, show z])
+  show (RegisteredMethodClientStreaming x y z) =
+    "RegisteredMethodClientStreaming "
+    ++ concat (intersperse " " [show x, show y, show z])
+  show (RegisteredMethodServerStreaming x y z) =
+    "RegisteredMethodServerStreaming "
+    ++ concat (intersperse " " [show x, show y, show z])
+  show (RegisteredMethodBiDiStreaming x y z) =
+    "RegisteredMethodBiDiStreaming "
+    ++ concat (intersperse " " [show x, show y, show z])
+
+methodName :: RegisteredMethod mt -> MethodName
+methodName (RegisteredMethodNormal x _ _) = x
+methodName (RegisteredMethodClientStreaming x _ _) = x
+methodName (RegisteredMethodServerStreaming x _ _) = x
+methodName (RegisteredMethodBiDiStreaming x _ _) = x
+
+methodEndpoint :: RegisteredMethod mt -> Endpoint
+methodEndpoint (RegisteredMethodNormal _ x _) = x
+methodEndpoint (RegisteredMethodClientStreaming _ x _) = x
+methodEndpoint (RegisteredMethodServerStreaming _ x _) = x
+methodEndpoint (RegisteredMethodBiDiStreaming _ x _) = x
+
+methodHandle :: RegisteredMethod mt -> C.CallHandle
+methodHandle (RegisteredMethodNormal _ _ x) = x
+methodHandle (RegisteredMethodClientStreaming _ _ x) = x
+methodHandle (RegisteredMethodServerStreaming _ _ x) = x
+methodHandle (RegisteredMethodBiDiStreaming _ _ x) = x
+
+methodType :: RegisteredMethod mt -> GRPCMethodType
+methodType (RegisteredMethodNormal _ _ _)          = Normal
+methodType (RegisteredMethodClientStreaming _ _ _) = ClientStreaming
+methodType (RegisteredMethodServerStreaming _ _ _) = ServerStreaming
+methodType (RegisteredMethodBiDiStreaming _ _ _)   = BiDiStreaming
 
 -- | Represents one GRPC call (i.e. request) on the client.
 -- This is used to associate send/receive 'Op's with a request.
-data ClientCall = ClientCall { unClientCall :: C.Call }
+data ClientCall = ClientCall { unsafeCC :: C.Call }
 
 clientCallCancel :: ClientCall -> IO ()
-clientCallCancel cc = C.grpcCallCancel (unClientCall cc) C.reserved
+clientCallCancel cc = C.grpcCallCancel (unsafeCC cc) C.reserved
 
 -- | Represents one registered GRPC call on the server. Contains pointers to all
 -- the C state needed to respond to a registered call.
-data ServerCall = ServerCall
-  { unServerCall        :: C.Call,
-    requestMetadataRecv :: MetadataMap,
-    optionalPayload     :: Maybe ByteString,
-    callDeadline        :: TimeSpec
-  }
+data ServerCall a = ServerCall
+  { unsafeSC            :: C.Call
+  , callCQ              :: CompletionQueue
+  , requestMetadataRecv :: MetadataMap
+  , optionalPayload     :: a
+  , callDeadline        :: TimeSpec
+  } deriving (Functor, Show)
 
-serverCallCancel :: ServerCall -> C.StatusCode -> String -> IO ()
+serverCallCancel :: ServerCall a -> C.StatusCode -> String -> IO ()
 serverCallCancel sc code reason =
-  C.grpcCallCancelWithStatus (unServerCall sc) code reason C.reserved
+  C.grpcCallCancelWithStatus (unsafeSC sc) code reason C.reserved
 
 -- | NB: For now, we've assumed that the method type is all the info we need to
 -- decide the server payload handling method.
@@ -88,7 +164,17 @@ payloadHandling ClientStreaming = C.SrmPayloadNone
 payloadHandling ServerStreaming = C.SrmPayloadReadInitialByteBuffer
 payloadHandling BiDiStreaming   = C.SrmPayloadNone
 
-serverCallIsExpired :: ServerCall -> IO Bool
+-- | Optionally allocate a managed byte buffer for a payload, depending on the
+-- given method type. If no payload is needed, the returned pointer is null
+mgdPayload :: GRPCMethodType -> Managed (Ptr C.ByteBuffer)
+mgdPayload mt
+  | payloadHandling mt == C.SrmPayloadNone = return nullPtr
+  | otherwise                              = managed C.withByteBufferPtr
+
+mgdPtr :: forall a. Storable a => Managed (Ptr a)
+mgdPtr = managed (bracket malloc free)
+
+serverCallIsExpired :: ServerCall a -> IO Bool
 serverCallIsExpired sc = do
   currTime <- getTime Monotonic
   return $ currTime > (callDeadline sc)
@@ -102,27 +188,27 @@ debugClientCall (ClientCall (C.Call ptr)) =
 debugClientCall = const $ return ()
 #endif
 
-debugServerCall :: ServerCall -> IO ()
+debugServerCall :: ServerCall a -> IO ()
 #ifdef DEBUG
-debugServerCall call@(ServerCall (C.Call ptr) _ _ _) = do
-  grpcDebug $ "debugServerCall(R): server call: " ++ (show ptr)
-  grpcDebug $ "debugServerCall(R): metadata ptr: "
-              ++ show (requestMetadataRecv call)
-  grpcDebug $ "debugServerCall(R): payload ptr: " ++ show (optionalPayload call)
-  grpcDebug $ "debugServerCall(R): deadline ptr: " ++ show (callDeadline call)
+debugServerCall sc@(ServerCall (C.Call ptr) _ _ _ _) = do
+  let dbug = grpcDebug . ("debugServerCall(R): " ++)
+  dbug $ "server call: "  ++ show ptr
+  dbug $ "callCQ: "       ++ show (callCQ sc)
+  dbug $ "metadata ptr: " ++ show (requestMetadataRecv sc)
+  dbug $ "deadline ptr: " ++ show (callDeadline sc)
 #else
 {-# INLINE debugServerCall #-}
 debugServerCall = const $ return ()
 #endif
 
 destroyClientCall :: ClientCall -> IO ()
-destroyClientCall ClientCall{..} = do
+destroyClientCall cc = do
   grpcDebug "Destroying client-side call object."
-  C.grpcCallDestroy unClientCall
+  C.grpcCallDestroy (unsafeCC cc)
 
-destroyServerCall :: ServerCall -> IO ()
-destroyServerCall call@ServerCall{..} = do
+destroyServerCall :: ServerCall a -> IO ()
+destroyServerCall sc@ServerCall{ unsafeSC = c } = do
   grpcDebug "destroyServerCall(R): entered."
-  debugServerCall call
-  grpcDebug $ "Destroying server-side call object: " ++ show unServerCall
-  C.grpcCallDestroy unServerCall
+  debugServerCall sc
+  grpcDebug $ "Destroying server-side call object: " ++ show c
+  C.grpcCallDestroy c

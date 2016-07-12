@@ -1,21 +1,53 @@
-{-# LANGUAGE LambdaCase                      #-}
-{-# LANGUAGE OverloadedStrings               #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds       #-}
 
 import           Control.Monad
+import qualified Data.ByteString.Lazy                      as BL
+import           Data.Protobuf.Wire.Class
+import qualified Data.Text                                 as T
+import           Data.Word
+import           GHC.Generics                              (Generic)
 import           Network.GRPC.LowLevel
-import           Network.GRPC.LowLevel.Call
 import qualified Network.GRPC.LowLevel.Client.Unregistered as U
-import           System.Environment
 
 echoMethod = MethodName "/echo.Echo/DoEcho"
 
 _unregistered c = U.clientRequest c echoMethod 1 "hi" mempty
 
-main = withGRPC $ \g ->
+regMain = withGRPC $ \g ->
   withClient g (ClientConfig "localhost" 50051 []) $ \c -> do
-  rm <- clientRegisterMethod c echoMethod Normal
+  rm <- clientRegisterMethodNormal c echoMethod
   replicateM_ 100000 $ clientRequest c rm 5 "hi" mempty >>= \case
     Left e -> error $ "Got client error: " ++ show e
-    _      -> return ()
+    Right r
+      | rspBody r == "hi" -> return ()
+      | otherwise -> error $ "Got unexpected payload: " ++ show r
+
+-- NB: If you change these, make sure to change them in the server as well.
+-- TODO: Put these in a common location (or just hack around it until CG is working)
+data EchoRequest = EchoRequest {message :: T.Text} deriving (Show, Eq, Ord, Generic)
+instance Message EchoRequest
+data AddRequest = AddRequest {addX :: Word32, addY :: Word32} deriving (Show, Eq, Ord, Generic)
+instance Message AddRequest
+data AddResponse = AddResponse {answer :: Word32} deriving (Show, Eq, Ord, Generic)
+instance Message AddResponse
+
+-- TODO: Create Network.GRPC.HighLevel.Client w/ request variants
+
+highlevelMain = withGRPC $ \g ->
+    withClient g (ClientConfig "localhost" 50051 []) $ \c -> do
+    rm <- clientRegisterMethodNormal c echoMethod
+    let pay = EchoRequest "hi"
+        enc = BL.toStrict . toLazyByteString $ pay
+    replicateM_ 1 $ clientRequest c rm 5 enc mempty >>= \case
+      Left e  -> error $ "Got client error: " ++ show e
+      Right r -> case fromByteString (rspBody r) of
+        Left e -> error $ "Got decoding error: " ++ show e
+        Right dec
+          | dec == pay -> return ()
+          | otherwise -> error $ "Got unexpected payload: " ++ show dec
+
+main = highlevelMain

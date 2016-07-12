@@ -1,7 +1,8 @@
-{-# LANGUAGE DataKinds                       #-}
-{-# LANGUAGE OverloadedLists                 #-}
-{-# LANGUAGE OverloadedStrings               #-}
-{-# LANGUAGE RecordWildCards                 #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds       #-}
 
@@ -9,10 +10,14 @@ import           Control.Concurrent
 import           Control.Concurrent.Async
 import           Control.Monad
 import           Data.ByteString                           (ByteString)
+import           Data.Protobuf.Wire.Class
+import qualified Data.Text                                 as T
+import           Data.Word
+import           GHC.Generics                              (Generic)
+import           Network.GRPC.HighLevel.Server
 import           Network.GRPC.LowLevel
-import           Network.GRPC.LowLevel.Call
+import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
-import qualified Network.GRPC.LowLevel.Call.Unregistered as U
 
 serverMeta :: MetadataMap
 serverMeta = [("test_meta", "test_meta_value")]
@@ -27,7 +32,7 @@ handler U.ServerCall{..} reqBody = do
 
 unregMain :: IO ()
 unregMain = withGRPC $ \grpc -> do
-  withServer grpc (ServerConfig "localhost" 50051 [] []) $ \server -> forever $ do
+  withServer grpc defConfig $ \server -> forever $ do
     result <- U.serverHandleNormalCall server serverMeta handler
     case result of
       Left x -> putStrLn $ "handle call result error: " ++ show x
@@ -35,8 +40,8 @@ unregMain = withGRPC $ \grpc -> do
 
 regMain :: IO ()
 regMain = withGRPC $ \grpc -> do
-  let methods = [(MethodName "/echo.Echo/DoEcho", Normal)]
-  withServer grpc (ServerConfig "localhost" 50051 methods []) $ \server ->
+  let ms = [(MethodName "/echo.Echo/DoEcho")]
+  withServer grpc (defConfig {methodsToRegisterNormal = ms}) $ \server ->
     forever $ do
       let method = head (normalMethods server)
       result <- serverHandleNormalCall server method serverMeta $
@@ -63,13 +68,56 @@ regLoop server method = forever $ do
 regMainThreaded :: IO ()
 regMainThreaded = do
   withGRPC $ \grpc -> do
-    let methods = [(MethodName "/echo.Echo/DoEcho", Normal)]
-    withServer grpc (ServerConfig "localhost" 50051 methods []) $ \server -> do
+    let ms = [(MethodName "/echo.Echo/DoEcho")]
+    withServer grpc (defConfig {methodsToRegisterNormal = ms}) $ \server -> do
       let method = head (normalMethods server)
       tids <- replicateM 7 $ async $ do tputStrLn "starting handler"
                                         regLoop server method
       waitAnyCancel tids
       tputStrLn "finishing"
 
+-- NB: If you change these, make sure to change them in the client as well.
+-- TODO: Put these in a common location (or just hack around it until CG is working)
+data EchoRequest = EchoRequest {message :: T.Text} deriving (Show, Eq, Ord, Generic)
+instance Message EchoRequest
+data AddRequest = AddRequest {addX :: Word32, addY :: Word32} deriving (Show, Eq, Ord, Generic)
+instance Message AddRequest
+data AddResponse = AddResponse {answer :: Word32} deriving (Show, Eq, Ord, Generic)
+instance Message AddResponse
+
+highlevelMain :: IO ()
+highlevelMain =
+  serverLoop defaultOptions{optNormalHandlers = [echoHandler, addHandler]}
+  where echoHandler =
+          UnaryHandler "/echo.Echo/DoEcho" $
+            \_c body m -> do
+              tputStrLn $ "UnaryHandler for DoEcho hit, body=" ++ show body
+              return ( body :: EchoRequest
+                     , m
+                     , StatusOk
+                     , StatusDetails ""
+                     )
+        addHandler =
+          --TODO: I can't get this one to execute. Is the generated method
+          --name different?
+
+          -- static const char* Add_method_names[] = {
+          --   "/echo.Add/DoAdd",
+          -- };
+
+          UnaryHandler "/echo.Add/DoAdd" $
+            \_c b m -> do
+              tputStrLn $ "UnaryHandler for DoAdd hit, b=" ++ show b
+              print (addX b)
+              print (addY b)
+              return ( AddResponse $ addX b + addY b
+                     , m
+                     , StatusOk
+                     , StatusDetails ""
+                     )
+
 main :: IO ()
-main = regMainThreaded
+main = highlevelMain
+
+defConfig :: ServerConfig
+defConfig = ServerConfig "localhost" 50051 [] [] [] [] []

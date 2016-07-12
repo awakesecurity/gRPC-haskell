@@ -7,6 +7,14 @@ resolver: lts-5.10
 # Local packages, usually specified by relative directory name
 packages:
 - '.'
+- location:
+    git: git@github.mv.awakenetworks.net:awakenetworks/protobuf-wire.git
+    commit: e5a6985eeb5eb1eded7b46b2892874000e2ae835
+  extra-dep: true
+- location:
+    git: git@github.mv.awakenetworks.net:awakenetworks/proto3-wire.git
+    commit: 9898a793ab61fd582b5b7172d349ffd248b20095
+  extra-dep: true
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 extra-deps: [managed-1.0.5]
 

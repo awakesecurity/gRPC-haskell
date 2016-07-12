@@ -9,3 +9,16 @@ service Echo {
 message EchoRequest {
   string message = 1;
 }
+
+message AddRequest {
+  fixed32 addX = 1;
+  fixed32 addY = 2;
+}
+
+message AddResponse {
+  fixed32 answer = 1;
+}
+
+service Add {
+  rpc DoAdd (AddRequest) returns (AddResponse) {}
+}

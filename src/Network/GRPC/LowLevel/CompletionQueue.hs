@@ -16,6 +16,7 @@
 {-# LANGUAGE RecordWildCards     #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE ViewPatterns        #-}
 
 module Network.GRPC.LowLevel.CompletionQueue
   ( CompletionQueue
@@ -40,7 +41,6 @@ import           Control.Concurrent.STM.TVar                    (newTVarIO,
                                                                  readTVar,
                                                                  writeTVar)
 import           Control.Exception                              (bracket)
-import           Control.Monad                                  (liftM2)
 import           Control.Monad.Managed
 import           Control.Monad.Trans.Class                      (MonadTrans (lift))
 import           Control.Monad.Trans.Except
@@ -120,7 +120,7 @@ shutdownCompletionQueue CompletionQueue{..} = do
             C.OpComplete -> drainLoop
 
 channelCreateCall :: C.Channel
-                  -> (Maybe ServerCall)
+                  -> Maybe (ServerCall a)
                   -> C.PropagationMask
                   -> CompletionQueue
                   -> C.CallHandle
@@ -129,7 +129,7 @@ channelCreateCall :: C.Channel
 channelCreateCall
   chan parent mask cq@CompletionQueue{..} handle deadline =
   withPermission Push cq $ do
-    let parentPtr = maybe (C.Call nullPtr) unServerCall parent
+    let parentPtr = maybe (C.Call nullPtr) unsafeSC parent
     grpcDebug $ "channelCreateCall: call with "
                 ++ concat (intersperse " " [show chan, show parentPtr,
                                             show mask,
@@ -140,56 +140,50 @@ channelCreateCall
     return $ Right $ ClientCall call
 
 -- | Create the call object to handle a registered call.
-serverRequestCall :: C.Server
-                  -> CompletionQueue
-                  -> RegisteredMethod mt
-                  -> IO (Either GRPCIOError ServerCall)
-serverRequestCall s cq@CompletionQueue{.. } rm =
+serverRequestCall :: RegisteredMethod mt
+                  -> C.Server
+                  -> CompletionQueue -- ^ server CQ
+                  -> CompletionQueue -- ^ call CQ
+                  -> IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
+serverRequestCall rm s scq ccq =
   -- NB: The method type dictates whether or not a payload is present, according
   -- to the payloadHandling function. We do not allocate a buffer for the
   -- payload when it is not present.
-  withPermission Push cq . with allocs $ \(dead, call, pay, meta) -> do
-    dbug "pre-pluck block"
-    withPermission Pluck cq $ do
+  withPermission Push scq . with allocs $ \(dead, call, pay, meta) ->
+    withPermission Pluck scq $ do
       md  <- peek meta
-      tag <- newTag cq
+      tag <- newTag scq
       dbug $ "got pluck permission, registering call for tag=" ++ show tag
-      ce <- C.grpcServerRequestRegisteredCall s (methodHandle rm) call dead md pay unsafeCQ unsafeCQ tag
+      ce <- C.grpcServerRequestRegisteredCall s (methodHandle rm) call dead md
+              pay (unsafeCQ ccq) (unsafeCQ scq) tag
       runExceptT $ case ce of
         C.CallOk -> do
           ExceptT $ do
-            r <- pluck' cq tag Nothing
+            r <- pluck' scq tag Nothing
             dbug $ "pluck' finished:" ++ show r
             return r
           lift $
             ServerCall
             <$> peek call
+            <*> return ccq
             <*> C.getAllMetadataArray md
-            <*> (if havePay then toBS pay else return Nothing)
+            <*> payload rm pay
             <*> convertDeadline dead
         _ -> do
           lift $ dbug $ "Throwing callError: " ++ show ce
           throwE (GRPCIOCallError ce)
   where
-    allocs = (,,,) <$> ptr <*> ptr <*> pay <*> md
-      where
-        md  = managed C.withMetadataArrayPtr
-        pay = if havePay then managed C.withByteBufferPtr else return nullPtr
-        ptr :: forall a. Storable a => Managed (Ptr a)
-        ptr = managed (bracket malloc free)
-    dbug    = grpcDebug . ("serverRequestCall(R): " ++)
-    havePay = payloadHandling (methodType rm) /= C.SrmPayloadNone
-    toBS p  = peek p >>= \bb@(C.ByteBuffer rawPtr) ->
-      if | rawPtr == nullPtr -> return Nothing
-         | otherwise         -> Just <$> C.copyByteBufferToByteString bb
-    convertDeadline deadline = do
-      deadline' <- C.timeSpec <$> peek deadline
-      -- On OS X, gRPC gives us a deadline that is just a delta, so we convert
-      -- it to an actual deadline.
-      if os == "darwin"
-        then do now <- getTime Monotonic
-                return $ now + deadline'
-        else return deadline'
+    allocs = (,,,)
+      <$> mgdPtr
+      <*> mgdPtr
+      <*> mgdPayload (methodType rm)
+      <*> managed C.withMetadataArrayPtr
+    dbug = grpcDebug . ("serverRequestCall(R): " ++)
+    -- On OS X, gRPC gives us a deadline that is just a delta, so we convert
+    -- it to an actual deadline.
+    convertDeadline (fmap C.timeSpec . peek -> d)
+      | os == "darwin" = (+) <$> d <*> getTime Monotonic
+      | otherwise      = d
 
 -- | Register the server's completion queue. Must be done before the server is
 -- started.
