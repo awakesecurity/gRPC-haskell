@@ -105,8 +105,8 @@ testMixRegisteredUnregistered =
        return ()
        where regThread = do
                let rm = head (normalMethods s)
-               r <- serverHandleNormalCall s rm dummyMeta $ \_ body _ -> do
-                 body @?= "Hello"
+               r <- serverHandleNormalCall s rm dummyMeta $ \c -> do
+                 payload c @?= "Hello"
                  return ("reply test", dummyMeta, StatusOk, "")
                return ()
              unregThread = do
@@ -138,9 +138,9 @@ testPayload =
           trailMD @?= dummyMeta
     server s = do
       let rm = head (normalMethods s)
-      r <- serverHandleNormalCall s rm dummyMeta $ \_ reqBody reqMD -> do
-        reqBody @?= "Hello!"
-        checkMD "Server metadata mismatch" clientMD reqMD
+      r <- serverHandleNormalCall s rm dummyMeta $ \c -> do
+        payload c @?= "Hello!"
+        checkMD "Server metadata mismatch" clientMD (metadata c)
         return ("reply test", dummyMeta, StatusOk, "details string")
       r @?= Right ()
 
@@ -154,7 +154,7 @@ testServerCancel =
       res @?= badStatus StatusCancelled
     server s = do
       let rm = head (normalMethods s)
-      r <- serverHandleNormalCall s rm mempty $ \c _ _ -> do
+      r <- serverHandleNormalCall s rm mempty $ \c -> do
         serverCallCancel c StatusCancelled ""
         return (mempty, mempty, StatusCancelled, "")
       r @?= Right ()
@@ -181,8 +181,8 @@ testServerStreaming =
       r <- serverWriter s rm serverInitMD $ \sc send -> do
         liftIO $ do
           checkMD "Server request metadata mismatch"
-            clientInitMD (requestMetadataRecv sc)
-          optionalPayload sc @?= clientPay
+            clientInitMD (metadata sc)
+          payload sc @?= clientPay
         forM_ pays $ \p -> send p `is` Right ()
         return (dummyMeta, StatusOk, "dtls")
       r @?= Right ()
@@ -212,8 +212,8 @@ testServerStreamingUnregistered =
       r <- U.serverWriter s call serverInitMD $ \sc send -> do
         liftIO $ do
           checkMD "Server request metadata mismatch"
-            clientInitMD (requestMetadataRecv sc)
-          optionalPayload sc @?= clientPay
+            clientInitMD (metadata sc)
+          payload sc @?= clientPay
         forM_ pays $ \p -> send p `is` Right ()
         return (dummyMeta, StatusOk, "dtls")
       r @?= Right ()
@@ -241,7 +241,7 @@ testClientStreaming =
       let rm = head (cstreamingMethods s)
       eea <- serverReader s rm serverInitMD $ \sc recv -> do
         liftIO $ checkMD "Client request metadata mismatch"
-                   clientInitMD (requestMetadataRecv sc)
+                   clientInitMD (metadata sc)
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
         return (Just serverRsp, trailMD, serverStatus, serverDtls)
@@ -269,7 +269,7 @@ testClientStreamingUnregistered =
     server s = U.withServerCallAsync s $ \call -> do
       eea <- U.serverReader s call serverInitMD $ \sc recv -> do
         liftIO $ checkMD "Client request metadata mismatch"
-                   clientInitMD (requestMetadataRecv sc)
+                   clientInitMD (metadata sc)
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
         return (Just serverRsp, trailMD, serverStatus, serverDtls)
@@ -301,7 +301,7 @@ testBiDiStreaming =
       let rm = head (bidiStreamingMethods s)
       eea <- serverRW s rm serverInitMD $ \sc recv send -> do
         liftIO $ checkMD "Client request metadata mismatch"
-                   clientInitMD (requestMetadataRecv sc)
+                   clientInitMD (metadata sc)
         recv       `is` Right (Just "cw0")
         send "sw0" `is` Right ()
         recv       `is` Right (Just "cw1")
@@ -336,7 +336,7 @@ testBiDiStreamingUnregistered =
     server s = U.withServerCallAsync s $ \call -> do
       eea <- U.serverRW s call serverInitMD $ \sc recv send -> do
         liftIO $ checkMD "Client request metadata mismatch"
-                   clientInitMD (requestMetadataRecv sc)
+                   clientInitMD (metadata sc)
         recv       `is` Right (Just "cw0")
         send "sw0" `is` Right ()
         recv       `is` Right (Just "cw1")
@@ -412,7 +412,7 @@ testSlowServer =
       result @?= badStatus StatusDeadlineExceeded
     server s = do
       let rm = head (normalMethods s)
-      serverHandleNormalCall s rm mempty $ \_ _ _ -> do
+      serverHandleNormalCall s rm mempty $ \_ -> do
         threadDelay (2*10^(6 :: Int))
         return dummyResp
       return ()
@@ -427,7 +427,7 @@ testServerCallExpirationCheck =
       return ()
     server s = do
       let rm = head (normalMethods s)
-      serverHandleNormalCall s rm mempty $ \c _ _ -> do
+      serverHandleNormalCall s rm mempty $ \c -> do
         exp1 <- serverCallIsExpired c
         assertBool "Call isn't expired when handler starts" $ not exp1
         threadDelaySecs 1
@@ -451,8 +451,8 @@ testCustomUserAgent =
                  return ()
     server = TestServer (serverConf (["/foo"],[],[],[])) $ \s -> do
       let rm = head (normalMethods s)
-      serverHandleNormalCall s rm mempty $ \_ _ meta -> do
-        let ua = meta M.! "user-agent"
+      serverHandleNormalCall s rm mempty $ \c -> do
+        let ua = (metadata c) M.! "user-agent"
         assertBool "User agent prefix is present" $ isPrefixOf "prefix!" ua
         assertBool "User agent suffix is present" $ isSuffixOf "suffix!" ua
         return dummyResp
@@ -472,8 +472,8 @@ testClientCompression =
         return ()
     server = TestServer (serverConf (["/foo"],[],[],[])) $ \s -> do
       let rm = head (normalMethods s)
-      serverHandleNormalCall s rm mempty $ \_ body _ -> do
-        body @?= "hello"
+      serverHandleNormalCall s rm mempty $ \c -> do
+        payload c @?= "hello"
         return dummyResp
       return ()
 
@@ -500,8 +500,8 @@ testClientServerCompression =
                          [CompressionAlgArg GrpcCompressDeflate]
     server = TestServer sconf $ \s -> do
       let rm = head (normalMethods s)
-      serverHandleNormalCall s rm dummyMeta $ \_sc body _ -> do
-        body @?= "hello"
+      serverHandleNormalCall s rm dummyMeta $ \sc -> do
+        payload sc @?= "hello"
         return ("hello", dummyMeta, StatusOk, StatusDetails "")
       return ()
 
@@ -517,9 +517,9 @@ dummyMeta = [("foo","bar")]
 dummyResp :: (ByteString, MetadataMap, StatusCode, StatusDetails)
 dummyResp = ("", mempty, StatusOk, StatusDetails "")
 
-dummyHandler :: ServerCall a -> ByteString -> MetadataMap
+dummyHandler :: ServerCall a
                 -> IO (ByteString, MetadataMap, StatusCode, StatusDetails)
-dummyHandler _ _ _ = return dummyResp
+dummyHandler _ = return dummyResp
 
 dummyResult' :: StatusDetails
              -> IO (ByteString, MetadataMap, StatusCode, StatusDetails)

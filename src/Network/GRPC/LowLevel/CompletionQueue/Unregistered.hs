@@ -8,13 +8,10 @@
 
 module Network.GRPC.LowLevel.CompletionQueue.Unregistered where
 
-import           Control.Exception                              (bracket)
 import           Control.Monad.Managed
 import           Control.Monad.Trans.Class                      (MonadTrans (lift))
 import           Control.Monad.Trans.Except
-import           Foreign.Marshal.Alloc                          (free, malloc)
-import           Foreign.Ptr                                    (Ptr)
-import           Foreign.Storable                               (Storable, peek)
+import           Foreign.Storable                               (peek)
 import           Network.GRPC.LowLevel.Call
 import qualified Network.GRPC.LowLevel.Call.Unregistered        as U
 import           Network.GRPC.LowLevel.CompletionQueue.Internal

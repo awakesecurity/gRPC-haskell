@@ -25,8 +25,7 @@ import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
                                                         serverRegisterCompletionQueue,
                                                         serverRequestCall,
                                                         serverShutdownAndNotify,
-                                                        shutdownCompletionQueue,
-                                                        withCompletionQueue)
+                                                        shutdownCompletionQueue)
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
 import qualified Network.GRPC.Unsafe                   as C
@@ -249,7 +248,7 @@ withServerCall s rm f =
 --------------------------------------------------------------------------------
 -- serverReader (server side of client streaming mode)
 
-type ServerReaderHandler
+type ServerReaderHandlerLL
   =  ServerCall ()
   -> StreamRecv ByteString
   -> Streaming (Maybe ByteString, MetadataMap, C.StatusCode, StatusDetails)
@@ -257,7 +256,7 @@ type ServerReaderHandler
 serverReader :: Server
              -> RegisteredMethod 'ClientStreaming
              -> MetadataMap -- ^ initial server metadata
-             -> ServerReaderHandler
+             -> ServerReaderHandlerLL
              -> IO (Either GRPCIOError ())
 serverReader s rm initMeta f = withServerCall s rm go
   where
@@ -273,7 +272,7 @@ serverReader s rm initMeta f = withServerCall s rm go
 --------------------------------------------------------------------------------
 -- serverWriter (server side of server streaming mode)
 
-type ServerWriterHandler
+type ServerWriterHandlerLL
   =  ServerCall ByteString
   -> StreamSend ByteString
   -> Streaming (MetadataMap, C.StatusCode, StatusDetails)
@@ -283,7 +282,7 @@ serverWriter :: Server
              -> RegisteredMethod 'ServerStreaming
              -> MetadataMap
              -- ^ Initial server metadata
-             -> ServerWriterHandler
+             -> ServerWriterHandlerLL
              -> IO (Either GRPCIOError ())
 serverWriter s rm initMeta f = withServerCall s rm go
   where
@@ -295,7 +294,7 @@ serverWriter s rm initMeta f = withServerCall s rm go
 --------------------------------------------------------------------------------
 -- serverRW (server side of bidirectional streaming mode)
 
-type ServerRWHandler
+type ServerRWHandlerLL
   =  ServerCall ()
   -> StreamRecv ByteString
   -> StreamSend ByteString
@@ -305,7 +304,7 @@ serverRW :: Server
          -> RegisteredMethod 'BiDiStreaming
          -> MetadataMap
             -- ^ initial server metadata
-         -> ServerRWHandler
+         -> ServerRWHandlerLL
          -> IO (Either GRPCIOError ())
 serverRW s rm initMeta f = withServerCall s rm go
   where
@@ -323,10 +322,8 @@ serverRW s rm initMeta f = withServerCall s rm go
 -- values in the result tuple being the initial and trailing metadata
 -- respectively. We pass in the 'ServerCall' so that the server can call
 -- 'serverCallCancel' on it if needed.
-type ServerHandler
+type ServerHandlerLL
   =  ServerCall ByteString
-  -> ByteString
-  -> MetadataMap
   -> IO (ByteString, MetadataMap, C.StatusCode, StatusDetails)
 
 -- | Wait for and then handle a normal (non-streaming) call.
@@ -334,13 +331,13 @@ serverHandleNormalCall :: Server
                        -> RegisteredMethod 'Normal
                        -> MetadataMap
                        -- ^ Initial server metadata
-                       -> ServerHandler
+                       -> ServerHandlerLL
                        -> IO (Either GRPCIOError ())
 serverHandleNormalCall s rm initMeta f =
   withServerCall s rm go
   where
     go sc@ServerCall{..} = do
-      (rsp, trailMeta, st, ds) <- f sc optionalPayload requestMetadataRecv
+      (rsp, trailMeta, st, ds) <- f sc
       void <$> runOps unsafeSC callCQ
                  [ OpSendInitialMetadata initMeta
                  , OpRecvCloseOnServer

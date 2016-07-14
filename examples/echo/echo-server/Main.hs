@@ -47,8 +47,7 @@ regMain = withGRPC $ \grpc -> do
     forever $ do
       let method = head (normalMethods server)
       result <- serverHandleNormalCall server method serverMeta $
-        \_call reqBody _reqMeta -> return (reqBody, serverMeta, StatusOk,
-                                           StatusDetails "")
+        \call -> return (payload call, serverMeta, StatusOk, StatusDetails "")
       case result of
         Left x -> putStrLn $ "registered call result error: " ++ show x
         Right _ -> return ()
@@ -61,8 +60,8 @@ regLoop :: Server -> RegisteredMethod 'Normal -> IO ()
 regLoop server method = forever $ do
 --  tputStrLn "about to block on call handler"
   result <- serverHandleNormalCall server method serverMeta $
-    \_call reqBody _reqMeta ->
-      return (reqBody, serverMeta, StatusOk, StatusDetails "")
+    \call ->
+      return (payload call, serverMeta, StatusOk, StatusDetails "")
   case result of
     Left x -> error $! "registered call result error: " ++ show x
     Right _ -> return ()
@@ -75,7 +74,7 @@ regMainThreaded = do
       let method = head (normalMethods server)
       tids <- replicateM 7 $ async $ do tputStrLn "starting handler"
                                         regLoop server method
-      waitAnyCancel tids
+      _ <- waitAnyCancel tids
       tputStrLn "finishing"
 
 -- NB: If you change these, make sure to change them in the client as well.
@@ -86,9 +85,9 @@ instance Message EchoRequest
 echoHandler :: Handler 'Normal
 echoHandler =
         UnaryHandler "/echo.Echo/DoEcho" $
-          \_c body m -> do
-            return ( body :: EchoRequest
-                   , m
+          \call -> do
+            return ( payload call :: EchoRequest
+                   , metadata call
                    , StatusOk
                    , StatusDetails ""
                    )
@@ -104,12 +103,13 @@ instance Message AddResponse
 addHandler :: Handler 'Normal
 addHandler =
   UnaryHandler "/echo.Add/DoAdd" $
-    \_c b m -> do
+    \c -> do
       --tputStrLn $ "UnaryHandler for DoAdd hit, b=" ++ show b
+      let b = payload c
       print (addX b)
       print (addY b)
       return ( AddResponse $ addX b + addY b
-             , m
+             , metadata c
              , StatusOk
              , StatusDetails ""
              )

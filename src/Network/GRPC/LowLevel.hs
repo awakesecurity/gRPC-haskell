@@ -35,19 +35,19 @@ GRPC
 , ServerConfig(..)
 , Server(normalMethods, sstreamingMethods, cstreamingMethods,
          bidiStreamingMethods)
-, ServerCall(optionalPayload, requestMetadataRecv)
+, ServerCall(payload, metadata)
 , withServer
 , serverHandleNormalCall
-, ServerHandler
+, ServerHandlerLL
 , withServerCall
 , serverCallCancel
 , serverCallIsExpired
 , serverReader -- for client streaming
-, ServerReaderHandler
+, ServerReaderHandlerLL
 , serverWriter -- for server streaming
-, ServerWriterHandler
+, ServerWriterHandlerLL
 , serverRW     -- for bidirectional streaming
-, ServerRWHandler
+, ServerRWHandlerLL
 
 -- * Client
 , ClientConfig(..)

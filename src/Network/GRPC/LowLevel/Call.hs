@@ -48,13 +48,15 @@ type family MethodPayload a where
 --TODO: try replacing this class with a plain old function so we don't have the
 -- Payloadable constraint everywhere.
 
-payload :: RegisteredMethod mt -> Ptr C.ByteBuffer -> IO (MethodPayload mt)
-payload (RegisteredMethodNormal _ _ _) p =
+extractPayload :: RegisteredMethod mt
+                  -> Ptr C.ByteBuffer
+                  -> IO (MethodPayload mt)
+extractPayload (RegisteredMethodNormal _ _ _) p =
   peek p >>= C.copyByteBufferToByteString
-payload (RegisteredMethodClientStreaming _ _ _) _ = return ()
-payload (RegisteredMethodServerStreaming _ _ _) p =
+extractPayload (RegisteredMethodClientStreaming _ _ _) _ = return ()
+extractPayload (RegisteredMethodServerStreaming _ _ _) p =
   peek p >>= C.copyByteBufferToByteString
-payload (RegisteredMethodBiDiStreaming _ _ _) _ = return ()
+extractPayload (RegisteredMethodBiDiStreaming _ _ _) _ = return ()
 
 newtype MethodName = MethodName {unMethodName :: String}
   deriving (Show, Eq, IsString)
@@ -147,8 +149,8 @@ clientCallCancel cc = C.grpcCallCancel (unsafeCC cc) C.reserved
 data ServerCall a = ServerCall
   { unsafeSC            :: C.Call
   , callCQ              :: CompletionQueue
-  , requestMetadataRecv :: MetadataMap
-  , optionalPayload     :: a
+  , metadata            :: MetadataMap
+  , payload             :: a
   , callDeadline        :: TimeSpec
   } deriving (Functor, Show)
 
@@ -194,7 +196,7 @@ debugServerCall sc@(ServerCall (C.Call ptr) _ _ _ _) = do
   let dbug = grpcDebug . ("debugServerCall(R): " ++)
   dbug $ "server call: "  ++ show ptr
   dbug $ "callCQ: "       ++ show (callCQ sc)
-  dbug $ "metadata ptr: " ++ show (requestMetadataRecv sc)
+  dbug $ "metadata: " ++ show (metadata sc)
   dbug $ "deadline ptr: " ++ show (callDeadline sc)
 #else
 {-# INLINE debugServerCall #-}

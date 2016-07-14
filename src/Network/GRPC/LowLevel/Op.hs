@@ -6,7 +6,6 @@
 
 module Network.GRPC.LowLevel.Op where
 
-import           Control.Arrow
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Trans.Class             (MonadTrans(lift))
@@ -28,7 +27,6 @@ import qualified Network.GRPC.Unsafe.ByteBuffer        as C
 import qualified Network.GRPC.Unsafe.Metadata          as C
 import qualified Network.GRPC.Unsafe.Op                as C
 import qualified Network.GRPC.Unsafe.Slice             as C (Slice, freeSlice)
-import           Pipes                                 ((>->))
 import qualified Pipes                                 as P
 import qualified Pipes.Core                            as P
 

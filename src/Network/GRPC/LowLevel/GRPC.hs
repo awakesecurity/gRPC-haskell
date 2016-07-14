@@ -13,10 +13,6 @@ import qualified Network.GRPC.Unsafe    as C
 import qualified Network.GRPC.Unsafe.Op as C
 import           Proto3.Wire.Decode     (ParseError)
 
-#ifdef DEBUG
-import           GHC.Conc              (myThreadId)
-#endif
-
 type MetadataMap = M.Map B.ByteString B.ByteString
 
 newtype StatusDetails = StatusDetails B.ByteString

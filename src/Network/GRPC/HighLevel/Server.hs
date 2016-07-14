@@ -15,45 +15,41 @@ import qualified Data.ByteString.Lazy                      as BL
 import           Data.Protobuf.Wire.Class
 import           Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
-import           Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
 
-type ServerHandler' a b =
-  forall c .
-  ServerCall c
-  -> a
-  -> MetadataMap
+type ServerHandler a b =
+  ServerCall a
   -> IO (b, MetadataMap, StatusCode, StatusDetails)
 
 convertServerHandler :: (Message a, Message b)
-                     => ServerHandler' a b
-                     -> ServerHandler
-convertServerHandler f c bs m = case fromByteString bs of
+                     => ServerHandler a b
+                     -> ServerHandlerLL
+convertServerHandler f c = case fromByteString (payload c) of
   Left x  -> error $ "Failed to deserialize message: " ++ show x
-  Right x -> do (y, tm, sc, sd) <- f c x m
+  Right x -> do (y, tm, sc, sd) <- f (fmap (const x) c)
                 return (toBS y, tm, sc, sd)
 
-type ServerReaderHandler' a b =
+type ServerReaderHandler a b =
   ServerCall ()
   -> StreamRecv a
   -> Streaming (Maybe b, MetadataMap, StatusCode, StatusDetails)
 
 convertServerReaderHandler :: (Message a, Message b)
-                           => ServerReaderHandler' a b
-                           -> ServerReaderHandler
+                           => ServerReaderHandler a b
+                           -> ServerReaderHandlerLL
 convertServerReaderHandler f c recv =
   serialize <$> f c (convertRecv recv)
   where
     serialize (mmsg, m, sc, sd) = (toBS <$> mmsg, m, sc, sd)
 
-type ServerWriterHandler' a b =
+type ServerWriterHandler a b =
   ServerCall a
   -> StreamSend b
   -> Streaming (MetadataMap, StatusCode, StatusDetails)
 
 convertServerWriterHandler :: (Message a, Message b) =>
-                              ServerWriterHandler' a b
-                              -> ServerWriterHandler
+                              ServerWriterHandler a b
+                              -> ServerWriterHandlerLL
 convertServerWriterHandler f c send =
   f (convert <$> c) (convertSend send)
   where
@@ -61,15 +57,15 @@ convertServerWriterHandler f c send =
       Left x  -> error $ "deserialization error: " ++ show x -- TODO FIXME
       Right x -> x
 
-type ServerRWHandler' a b =
+type ServerRWHandler a b =
   ServerCall ()
   -> StreamRecv a
   -> StreamSend b
   -> Streaming (MetadataMap, StatusCode, StatusDetails)
 
 convertServerRWHandler :: (Message a, Message b)
-                       => ServerRWHandler' a b
-                       -> ServerRWHandler
+                       => ServerRWHandler a b
+                       -> ServerRWHandlerLL
 convertServerRWHandler f c recv send =
   f c (convertRecv recv) (convertSend send)
 
@@ -93,25 +89,25 @@ data Handler (a :: GRPCMethodType) where
   UnaryHandler
     :: (Message c, Message d)
     => MethodName
-    -> ServerHandler' c d
+    -> ServerHandler c d
     -> Handler 'Normal
 
   ClientStreamHandler
     :: (Message c, Message d)
     => MethodName
-    -> ServerReaderHandler' c d
+    -> ServerReaderHandler c d
     -> Handler 'ClientStreaming
 
   ServerStreamHandler
     :: (Message c, Message d)
     => MethodName
-    -> ServerWriterHandler' c d
+    -> ServerWriterHandler c d
     -> Handler 'ServerStreaming
 
   BiDiStreamHandler
     :: (Message c, Message d)
     => MethodName
-    -> ServerRWHandler' c d
+    -> ServerRWHandler c d
     -> Handler 'BiDiStreaming
 
 data AnyHandler = forall (a :: GRPCMethodType) . AnyHandler (Handler a)

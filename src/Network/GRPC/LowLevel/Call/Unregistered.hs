@@ -2,15 +2,8 @@
 
 module Network.GRPC.LowLevel.Call.Unregistered where
 
-import           Control.Monad
-import           Foreign.Marshal.Alloc                          (free)
-import           Foreign.Ptr                                    (Ptr)
-#ifdef DEBUG
-import           Foreign.Storable             (peek)
-#endif
 import qualified Network.GRPC.LowLevel.Call                     as Reg
 import           Network.GRPC.LowLevel.CompletionQueue
-import           Network.GRPC.LowLevel.CompletionQueue.Internal
 import           Network.GRPC.LowLevel.GRPC                     (MetadataMap,
                                                                  grpcDebug)
 import qualified Network.GRPC.Unsafe                            as C
@@ -22,7 +15,7 @@ import           System.Clock                                   (TimeSpec)
 data ServerCall = ServerCall
   { unsafeSC            :: C.Call
   , callCQ              :: CompletionQueue
-  , requestMetadataRecv :: MetadataMap
+  , metadata            :: MetadataMap
   , callDeadline        :: TimeSpec
   , callMethod          :: Reg.MethodName
   , callHost            :: Reg.Host
@@ -30,7 +23,7 @@ data ServerCall = ServerCall
 
 convertCall :: ServerCall -> Reg.ServerCall ()
 convertCall ServerCall{..} =
-  Reg.ServerCall unsafeSC callCQ requestMetadataRecv () callDeadline
+  Reg.ServerCall unsafeSC callCQ metadata () callDeadline
 
 serverCallCancel :: ServerCall -> C.StatusCode -> String -> IO ()
 serverCallCancel sc code reason =
@@ -43,7 +36,7 @@ debugServerCall ServerCall{..} = do
       dbug = grpcDebug . ("debugServerCall(U): " ++)
 
   dbug $ "server call: " ++ show ptr
-  dbug $ "metadata: "    ++ show requestMetadataRecv
+  dbug $ "metadata: "    ++ show metadata
 
   dbug $ "deadline: " ++ show callDeadline
   dbug $ "method: "   ++ show callMethod

@@ -35,25 +35,19 @@ module Network.GRPC.LowLevel.CompletionQueue
   )
 where
 
-import           Control.Concurrent.STM                         (atomically,
-                                                                 check)
-import           Control.Concurrent.STM.TVar                    (newTVarIO,
-                                                                 readTVar,
-                                                                 writeTVar)
+import           Control.Concurrent.STM.TVar                    (newTVarIO)
 import           Control.Exception                              (bracket)
 import           Control.Monad.Managed
 import           Control.Monad.Trans.Class                      (MonadTrans (lift))
 import           Control.Monad.Trans.Except
 import           Data.IORef                                     (newIORef)
 import           Data.List                                      (intersperse)
-import           Foreign.Marshal.Alloc                          (free, malloc)
-import           Foreign.Ptr                                    (Ptr, nullPtr)
-import           Foreign.Storable                               (Storable, peek)
+import           Foreign.Ptr                                    (nullPtr)
+import           Foreign.Storable                               (peek)
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue.Internal
 import           Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe                            as C
-import qualified Network.GRPC.Unsafe.ByteBuffer                 as C
 import qualified Network.GRPC.Unsafe.Constants                  as C
 import qualified Network.GRPC.Unsafe.Metadata                   as C
 import qualified Network.GRPC.Unsafe.Op                         as C
@@ -136,7 +130,7 @@ serverRequestCall rm s scq ccq =
             <$> peek call
             <*> return ccq
             <*> C.getAllMetadataArray md
-            <*> payload rm pay
+            <*> extractPayload rm pay
             <*> convertDeadline dead
         _ -> do
           lift $ dbug $ "Throwing callError: " ++ show ce

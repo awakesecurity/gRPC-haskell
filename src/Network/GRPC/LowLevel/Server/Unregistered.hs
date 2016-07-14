@@ -9,9 +9,7 @@ import           Control.Monad
 import           Control.Monad.Trans.Except
 import           Data.ByteString                                    (ByteString)
 import           Network.GRPC.LowLevel.Call.Unregistered
-import           Network.GRPC.LowLevel.CompletionQueue              (CompletionQueue
-                                                                     , withCompletionQueue
-                                                                     , createCompletionQueue)
+import           Network.GRPC.LowLevel.CompletionQueue              (createCompletionQueue)
 import           Network.GRPC.LowLevel.CompletionQueue.Unregistered (serverRequestCall)
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op                           (Op (..)
@@ -25,9 +23,9 @@ import           Network.GRPC.LowLevel.Op                           (Op (..)
                                                                      , sendStatusFromServer
                                                                      , recvInitialMessage)
 import           Network.GRPC.LowLevel.Server                       (Server (..)
-                                                                     , ServerReaderHandler
-                                                                     , ServerWriterHandler
-                                                                     , ServerRWHandler)
+                                                                     , ServerReaderHandlerLL
+                                                                     , ServerWriterHandlerLL
+                                                                     , ServerRWHandlerLL)
 import qualified Network.GRPC.Unsafe.Op                             as C
 
 serverCreateCall :: Server
@@ -56,7 +54,7 @@ withServerCallAsync :: Server
                        -> IO ()
 withServerCallAsync s f =
   serverCreateCall s >>= \case
-    Left e -> return ()
+    Left _ -> return ()
     Right c -> void $ forkIO (f c `finally` do
       grpcDebug "withServerCallAsync: destroying."
       destroyServerCall c)
@@ -102,7 +100,7 @@ serverHandleNormalCall' :: Server
                         -> ServerHandler
                         -> IO (Either GRPCIOError ())
 serverHandleNormalCall'
-  s sc@ServerCall{ unsafeSC = c, callCQ = cq, .. } initMeta f = do
+  _ sc@ServerCall{ unsafeSC = c, callCQ = cq, .. } initMeta f = do
       grpcDebug "serverHandleNormalCall(U): starting batch."
       runOps c cq
         [ OpSendInitialMetadata initMeta
@@ -113,7 +111,7 @@ serverHandleNormalCall'
             grpcDebug "serverHandleNormalCall(U): ops failed; aborting"
             return $ Left x
           Right [OpRecvMessageResult (Just body)] -> do
-            grpcDebug $ "got client metadata: " ++ show requestMetadataRecv
+            grpcDebug $ "got client metadata: " ++ show metadata
             grpcDebug $ "call_details host is: " ++ show callHost
             (rsp, trailMeta, st, ds) <- f sc body
             runOps c cq
@@ -133,9 +131,9 @@ serverHandleNormalCall'
 serverReader :: Server
              -> ServerCall
              -> MetadataMap -- ^ initial server metadata
-             -> ServerReaderHandler
+             -> ServerReaderHandlerLL
              -> IO (Either GRPCIOError ())
-serverReader s sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
+serverReader _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
   runExceptT $ do
     (mmsg, trailMeta, st, ds) <-
       runStreamingProxy "serverReader" c ccq (f (convertCall sc) streamRecv)
@@ -149,9 +147,9 @@ serverWriter :: Server
              -> ServerCall
              -> MetadataMap
              -- ^ Initial server metadata
-             -> ServerWriterHandler
+             -> ServerWriterHandlerLL
              -> IO (Either GRPCIOError ())
-serverWriter s sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
+serverWriter _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
   runExceptT $ do
     bs <- recvInitialMessage c ccq
     sendInitialMetadata c ccq initMeta
@@ -163,9 +161,9 @@ serverRW :: Server
          -> ServerCall
          -> MetadataMap
             -- ^ initial server metadata
-         -> ServerRWHandler
+         -> ServerRWHandlerLL
          -> IO (Either GRPCIOError ())
-serverRW s sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
+serverRW _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
   runExceptT $ do
     sendInitialMetadata c ccq initMeta
     let regCall = convertCall sc

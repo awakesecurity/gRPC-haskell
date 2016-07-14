@@ -13,7 +13,6 @@ import           Data.Word
 import           GHC.Generics                              (Generic)
 import           Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Client.Unregistered as U
-import           Proto3.Wire.Decode                        (ParseError)
 
 echoMethod = MethodName "/echo.Echo/DoEcho"
 addMethod = MethodName "/echo.Add/DoAdd"
