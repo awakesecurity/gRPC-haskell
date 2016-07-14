@@ -175,9 +175,10 @@ resultFromOpContext (OpRecvMessageContext pbb) = do
   grpcDebug "resultFromOpContext: OpRecvMessageContext"
   bb@(C.ByteBuffer bbptr) <- peek pbb
   if bbptr == nullPtr
-     then return $ Just $ OpRecvMessageResult Nothing
+     then do grpcDebug "resultFromOpContext: WARNING: got empty message."
+             return $ Just $ OpRecvMessageResult Nothing
      else do bs <- C.copyByteBufferToByteString bb
-             grpcDebug "resultFromOpContext: bb copied."
+             grpcDebug $ "resultFromOpContext: bb copied: " ++ show bs
              return $ Just $ OpRecvMessageResult (Just bs)
 resultFromOpContext (OpRecvStatusOnClientContext pmetadata pcode pstr) = do
   grpcDebug "resultFromOpContext: OpRecvStatusOnClientContext"
@@ -293,6 +294,14 @@ recvStatusOnClient c cq = runOps' c cq [OpRecvStatusOnClient] >>= \case
   [OpRecvStatusOnClientResult md st ds]
     -> return (md, st, StatusDetails ds)
   _ -> throwE (GRPCIOInternalUnexpectedRecv "recvStatusOnClient")
+
+recvInitialMessage :: RecvSingle ByteString
+recvInitialMessage c cq = runOps' c cq [OpRecvMessage] >>= \case
+  [OpRecvMessageResult (Just bs)]
+    -> return bs
+  [OpRecvMessageResult Nothing]
+    -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMessage: no message.")
+  _ -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMessage")
 
 --------------------------------------------------------------------------------
 -- Streaming types and helpers

@@ -49,8 +49,11 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
   , testClientCompression
   , testClientServerCompression
   , testClientStreaming
+  , testClientStreamingUnregistered
   , testServerStreaming
+  , testServerStreamingUnregistered
   , testBiDiStreaming
+  , testBiDiStreamingUnregistered
   ]
 
 testGRPCBracket :: TestTree
@@ -184,6 +187,37 @@ testServerStreaming =
         return (dummyMeta, StatusOk, "dtls")
       r @?= Right ()
 
+-- TODO: these unregistered streaming tests are basically the same as the
+-- registered ones. Reduce duplication.
+-- TODO: Once client-side unregistered streaming functions are added, switch
+-- to using them in these tests.
+testServerStreamingUnregistered :: TestTree
+testServerStreamingUnregistered =
+  csTest "unregistered server streaming" client server ([],[],[],[])
+  where
+    clientInitMD = [("client","initmd")]
+    serverInitMD = [("server","initmd")]
+    clientPay    = "FEED ME!"
+    pays         = ["ONE", "TWO", "THREE", "FOUR"] :: [ByteString]
+
+    client c = do
+      rm <- clientRegisterMethodServerStreaming c "/feed"
+      eea <- clientReader c rm 10 clientPay clientInitMD $ \initMD recv -> do
+        liftIO $ checkMD "Server initial metadata mismatch" serverInitMD initMD
+        forM_ pays $ \p -> recv `is` Right (Just p)
+        recv `is` Right Nothing
+      eea @?= Right (dummyMeta, StatusOk, "dtls")
+
+    server s = U.withServerCallAsync s $ \call -> do
+      r <- U.serverWriter s call serverInitMD $ \sc send -> do
+        liftIO $ do
+          checkMD "Server request metadata mismatch"
+            clientInitMD (requestMetadataRecv sc)
+          optionalPayload sc @?= clientPay
+        forM_ pays $ \p -> send p `is` Right ()
+        return (dummyMeta, StatusOk, "dtls")
+      r @?= Right ()
+
 testClientStreaming :: TestTree
 testClientStreaming =
   csTest "client streaming" client server ([],["/slurp"],[],[])
@@ -206,6 +240,34 @@ testClientStreaming =
     server s = do
       let rm = head (cstreamingMethods s)
       eea <- serverReader s rm serverInitMD $ \sc recv -> do
+        liftIO $ checkMD "Client request metadata mismatch"
+                   clientInitMD (requestMetadataRecv sc)
+        forM_ pays $ \p -> recv `is` Right (Just p)
+        recv `is` Right Nothing
+        return (Just serverRsp, trailMD, serverStatus, serverDtls)
+      eea @?= Right ()
+
+testClientStreamingUnregistered :: TestTree
+testClientStreamingUnregistered =
+  csTest "unregistered client streaming" client server ([],[],[],[])
+  where
+    clientInitMD = [("a","b")]
+    serverInitMD = [("x","y")]
+    trailMD      = dummyMeta
+    serverRsp    = "serverReader reply"
+    serverDtls   = "deets"
+    serverStatus = StatusOk
+    pays         = ["P_ONE", "P_TWO", "P_THREE"] :: [ByteString]
+
+    client c = do
+      rm  <- clientRegisterMethodClientStreaming c "/slurp"
+      eea <- clientWriter c rm 10 clientInitMD $ \send -> do
+        -- liftIO $ checkMD "Server initial metadata mismatch" serverInitMD initMD
+        forM_ pays $ \p -> send p `is` Right ()
+      eea @?= Right (Just serverRsp, serverInitMD, trailMD, serverStatus, serverDtls)
+
+    server s = U.withServerCallAsync s $ \call -> do
+      eea <- U.serverReader s call serverInitMD $ \sc recv -> do
         liftIO $ checkMD "Client request metadata mismatch"
                    clientInitMD (requestMetadataRecv sc)
         forM_ pays $ \p -> recv `is` Right (Just p)
@@ -238,6 +300,41 @@ testBiDiStreaming =
     server s = do
       let rm = head (bidiStreamingMethods s)
       eea <- serverRW s rm serverInitMD $ \sc recv send -> do
+        liftIO $ checkMD "Client request metadata mismatch"
+                   clientInitMD (requestMetadataRecv sc)
+        recv       `is` Right (Just "cw0")
+        send "sw0" `is` Right ()
+        recv       `is` Right (Just "cw1")
+        send "sw1" `is` Right ()
+        send "sw2" `is` Right ()
+        recv       `is` Right Nothing
+        return (trailMD, serverStatus, serverDtls)
+      eea @?= Right ()
+
+testBiDiStreamingUnregistered :: TestTree
+testBiDiStreamingUnregistered =
+  csTest "unregistered bidirectional streaming" client server ([],[],[],[])
+  where
+    clientInitMD = [("bidi-streaming","client")]
+    serverInitMD = [("bidi-streaming","server")]
+    trailMD      = dummyMeta
+    serverStatus = StatusOk
+    serverDtls   = "deets"
+    is act x     = act >>= liftIO . (@?= x)
+
+    client c = do
+      rm  <- clientRegisterMethodBiDiStreaming c "/bidi"
+      eea <- clientRW c rm 10 clientInitMD $ \initMD recv send -> do
+        send "cw0" `is` Right ()
+        recv       `is` Right (Just "sw0")
+        send "cw1" `is` Right ()
+        recv       `is` Right (Just "sw1")
+        recv       `is` Right (Just "sw2")
+        return ()
+      eea @?= Right (trailMD, serverStatus, serverDtls)
+
+    server s = U.withServerCallAsync s $ \call -> do
+      eea <- U.serverRW s call serverInitMD $ \sc recv send -> do
         liftIO $ checkMD "Client request metadata mismatch"
                    clientInitMD (requestMetadataRecv sc)
         recv       `is` Right (Just "cw0")

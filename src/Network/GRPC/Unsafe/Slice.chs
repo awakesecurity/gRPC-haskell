@@ -33,7 +33,7 @@ deriving instance Show Slice
 -- slice.
 {#fun gpr_slice_start_ as ^ {`Slice'} -> `Ptr CChar' castPtr #}
 
-{#fun gpr_slice_from_copied_string_ as ^ {`CString'} -> `Slice'#}
+{#fun gpr_slice_from_copied_buffer_ as ^ {`CString', `Int'} -> `Slice'#}
 
 -- | Properly cleans up all memory used by a 'Slice'. Danger: the Slice should
 -- not be used after this function is called on it.
@@ -52,4 +52,4 @@ sliceToByteString slice = do
 
 -- | Copies a 'ByteString' to a 'Slice'.
 byteStringToSlice :: B.ByteString -> IO Slice
-byteStringToSlice bs = B.useAsCString bs gprSliceFromCopiedString
+byteStringToSlice bs = B.useAsCStringLen bs $ uncurry gprSliceFromCopiedBuffer

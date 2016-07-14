@@ -26,6 +26,7 @@ import           Test.Tasty.HUnit               as HU (testCase, (@?=),
 unsafeTests :: TestTree
 unsafeTests = testGroup "Unit tests for unsafe C bindings"
   [ roundtripSlice "Hello, world!"
+  , roundtripSlice "\NULabc\NUL"
   , roundtripByteBuffer "Hwaet! We gardena in geardagum..."
   , roundtripSlice largeByteString
   , roundtripByteBuffer largeByteString
@@ -45,7 +46,7 @@ roundtripSlice :: B.ByteString -> TestTree
 roundtripSlice bs = testCase "ByteString slice roundtrip" $ do
   slice <- byteStringToSlice bs
   unslice <- sliceToByteString slice
-  bs HU.@?= unslice
+  unslice HU.@?= bs
   freeSlice slice
 
 roundtripByteBuffer :: B.ByteString -> TestTree

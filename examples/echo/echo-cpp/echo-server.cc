@@ -1,4 +1,6 @@
 #include <string>
+#include <iostream>
+#include <atomic>
 
 #include <grpc++/grpc++.h>
 #include "echo.grpc.pb.h"
@@ -13,9 +15,15 @@ using grpc::Status;
 using echo::EchoRequest;
 using echo::Echo;
 
+atomic_int reqCount;
+
 class EchoServiceImpl final : public Echo::Service {
     Status DoEcho(ServerContext* ctx, const EchoRequest* req,
                   EchoRequest* resp) override {
+      reqCount++;
+      if(reqCount % 100 == 0){
+        cout<<reqCount<<endl;
+      }
       resp->set_message(req->message());
       return Status::OK;
     }

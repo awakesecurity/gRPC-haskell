@@ -8,8 +8,8 @@ import           Foreign.Ptr                                    (Ptr)
 #ifdef DEBUG
 import           Foreign.Storable             (peek)
 #endif
-import           Network.GRPC.LowLevel.Call                     (Host (..),
-                                                                 MethodName (..))
+import qualified Network.GRPC.LowLevel.Call                     as Reg
+import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.CompletionQueue.Internal
 import           Network.GRPC.LowLevel.GRPC                     (MetadataMap,
                                                                  grpcDebug)
@@ -23,11 +23,14 @@ data ServerCall = ServerCall
   { unsafeSC            :: C.Call
   , callCQ              :: CompletionQueue
   , requestMetadataRecv :: MetadataMap
-  , parentPtr           :: Maybe (Ptr C.Call)
   , callDeadline        :: TimeSpec
-  , callMethod          :: MethodName
-  , callHost            :: Host
+  , callMethod          :: Reg.MethodName
+  , callHost            :: Reg.Host
   }
+
+convertCall :: ServerCall -> Reg.ServerCall ()
+convertCall ServerCall{..} =
+  Reg.ServerCall unsafeSC callCQ requestMetadataRecv () callDeadline
 
 serverCallCancel :: ServerCall -> C.StatusCode -> String -> IO ()
 serverCallCancel sc code reason =
@@ -42,11 +45,6 @@ debugServerCall ServerCall{..} = do
   dbug $ "server call: " ++ show ptr
   dbug $ "metadata: "    ++ show requestMetadataRecv
 
-  forM_ parentPtr $ \parentPtr' -> do
-    dbug $ "parent ptr: " ++ show parentPtr'
-    C.Call parent <- peek parentPtr'
-    dbug $ "parent: "     ++ show parent
-
   dbug $ "deadline: " ++ show callDeadline
   dbug $ "method: "   ++ show callMethod
   dbug $ "host: "     ++ show callHost
@@ -60,6 +58,5 @@ destroyServerCall call@ServerCall{..} = do
   grpcDebug "destroyServerCall(U): entered."
   debugServerCall call
   grpcDebug $ "Destroying server-side call object: " ++ show unsafeSC
+  shutdownCompletionQueue callCQ
   C.grpcCallDestroy unsafeSC
-  grpcDebug $ "freeing parentPtr: " ++ show parentPtr
-  forM_ parentPtr free

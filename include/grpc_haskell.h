@@ -26,7 +26,7 @@ size_t gpr_slice_length_(gpr_slice *slice);
 
 uint8_t *gpr_slice_start_(gpr_slice *slice);
 
-gpr_slice* gpr_slice_from_copied_string_(const char *source);
+gpr_slice* gpr_slice_from_copied_buffer_(const char *source, size_t len);
 
 void free_slice(gpr_slice *slice);
 

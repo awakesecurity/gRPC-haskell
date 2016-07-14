@@ -1,9 +1,10 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE GADTs             #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DataKinds          #-}
+{-# LANGUAGE GADTs              #-}
+{-# LANGUAGE KindSignatures     #-}
+{-# LANGUAGE LambdaCase         #-}
+{-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE RankNTypes         #-}
+{-# LANGUAGE RecordWildCards    #-}
 
 module Network.GRPC.HighLevel.Server where
 
@@ -28,7 +29,7 @@ convertServerHandler :: (Message a, Message b)
                      => ServerHandler' a b
                      -> ServerHandler
 convertServerHandler f c bs m = case fromByteString bs of
-  Left{}  -> error "TODO: find a way to keep this from killing the server."
+  Left x  -> error $ "Failed to deserialize message: " ++ show x
   Right x -> do (y, tm, sc, sd) <- f c x m
                 return (toBS y, tm, sc, sd)
 
@@ -88,7 +89,7 @@ convertSend s = s . toBS
 toBS :: Message a => a -> ByteString
 toBS = BL.toStrict . toLazyByteString
 
-data Handler a where
+data Handler (a :: GRPCMethodType) where
   UnaryHandler
     :: (Message c, Message d)
     => MethodName
@@ -112,6 +113,11 @@ data Handler a where
     => MethodName
     -> ServerRWHandler' c d
     -> Handler 'BiDiStreaming
+
+data AnyHandler = forall (a :: GRPCMethodType) . AnyHandler (Handler a)
+
+anyHandlerMethodName :: AnyHandler -> MethodName
+anyHandlerMethodName (AnyHandler m) = handlerMethodName m
 
 handlerMethodName :: Handler a -> MethodName
 handlerMethodName (UnaryHandler m _) = m
@@ -142,21 +148,28 @@ handleCallError (Left GRPCIOShutdown) =
   return ()
 handleCallError (Left x) = logAskReport x
 
-loopWError :: IO (Either GRPCIOError a) -> IO ()
-loopWError f = forever $ f >>= handleCallError
+loopWError :: Int
+              -> IO (Either GRPCIOError a)
+              -> IO ()
+loopWError i f = do
+   when (i `mod` 100 == 0) $ putStrLn $ "i = " ++ show i
+   f >>= handleCallError
+   loopWError (i + 1) f
 
 --TODO: options for setting initial/trailing metadata
-handleLoop :: Server -> (Handler a, RegisteredMethod a) -> IO ()
+handleLoop :: Server
+              -> (Handler a, RegisteredMethod a)
+              -> IO ()
 handleLoop s (UnaryHandler _ f, rm) =
-  loopWError $ do
-    grpcDebug' "handleLoop about to block on serverHandleNormalCall"
+  loopWError 0 $ do
+    --grpcDebug' "handleLoop about to block on serverHandleNormalCall"
     serverHandleNormalCall s rm mempty $ convertServerHandler f
 handleLoop s (ClientStreamHandler _ f, rm) =
-  loopWError $ serverReader s rm mempty $ convertServerReaderHandler f
+  loopWError 0 $ serverReader s rm mempty $ convertServerReaderHandler f
 handleLoop s (ServerStreamHandler _ f, rm) =
-  loopWError $ serverWriter s rm mempty $ convertServerWriterHandler f
+  loopWError 0 $ serverWriter s rm mempty $ convertServerWriterHandler f
 handleLoop s (BiDiStreamHandler _ f, rm) =
-  loopWError $ serverRW s rm mempty $ convertServerRWHandler f
+  loopWError 0 $ serverRW s rm mempty $ convertServerRWHandler f
 
 data ServerOptions = ServerOptions
                      {optNormalHandlers       :: [Handler 'Normal],
@@ -194,7 +207,7 @@ serverLoop opts =
       asyncsCS <- mapM async $ map loop rmsCS
       asyncsSS <- mapM async $ map loop rmsSS
       asyncsB <- mapM async $ map loop rmsB
-      asyncUnk <- async $ loopWError $ unknownHandler server
+      asyncUnk <- async $ loopWError 0 $ unknownHandler server
       waitAnyCancel $ asyncUnk : asyncsN ++ asyncsCS ++ asyncsSS ++ asyncsB
       return ()
   where

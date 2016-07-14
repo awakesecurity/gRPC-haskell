@@ -50,10 +50,10 @@ uint8_t *gpr_slice_start_(gpr_slice *slice){
   return GPR_SLICE_START_PTR(*slice);
 }
 
-gpr_slice* gpr_slice_from_copied_string_(const char *source){
+gpr_slice* gpr_slice_from_copied_buffer_(const char *source, size_t len){
   gpr_slice* retval = malloc(sizeof(gpr_slice));
   //note: 'gpr_slice_from_copied_string' handles allocating space for 'source'.
-  *retval = gpr_slice_from_copied_string(source);
+  *retval = gpr_slice_from_copied_buffer(source, len);
   return retval;
 }
 

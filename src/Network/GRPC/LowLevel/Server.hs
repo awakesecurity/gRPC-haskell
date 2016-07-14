@@ -228,17 +228,17 @@ serverRegisterMethodBiDiStreaming internalServer meth e = do
 -- method.
 serverCreateCall :: Server
                  -> RegisteredMethod mt
-                 -> CompletionQueue -- ^ call CQ
                  -> IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
-serverCreateCall Server{..} rm = serverRequestCall rm unsafeServer serverCQ
+serverCreateCall Server{..} rm = do
+  callCQ <- createCompletionQueue serverGRPC
+  serverRequestCall rm unsafeServer serverCQ callCQ
 
 withServerCall :: Server
                -> RegisteredMethod mt
                -> (ServerCall (MethodPayload mt) -> IO (Either GRPCIOError a))
                -> IO (Either GRPCIOError a)
 withServerCall s rm f =
-  withCompletionQueue (serverGRPC s) $
-    serverCreateCall s rm >=> \case
+    serverCreateCall s rm >>= \case
       Left e  -> return (Left e)
       Right c -> do
         debugServerCall c

@@ -67,6 +67,7 @@ library
     Network.GRPC.LowLevel.Client
     Network.GRPC.HighLevel
     Network.GRPC.HighLevel.Server
+    Network.GRPC.HighLevel.Server.Unregistered
   extra-libraries:
     grpc
   includes:

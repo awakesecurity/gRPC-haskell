@@ -11,10 +11,12 @@ import           Control.Concurrent.Async
 import           Control.Monad
 import           Data.ByteString                           (ByteString)
 import           Data.Protobuf.Wire.Class
+import           Data.Protobuf.Wire.Types
 import qualified Data.Text                                 as T
 import           Data.Word
 import           GHC.Generics                              (Generic)
 import           Network.GRPC.HighLevel.Server
+import qualified Network.GRPC.HighLevel.Server.Unregistered as U
 import           Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
@@ -80,44 +82,48 @@ regMainThreaded = do
 -- TODO: Put these in a common location (or just hack around it until CG is working)
 data EchoRequest = EchoRequest {message :: T.Text} deriving (Show, Eq, Ord, Generic)
 instance Message EchoRequest
-data AddRequest = AddRequest {addX :: Word32, addY :: Word32} deriving (Show, Eq, Ord, Generic)
+
+echoHandler :: Handler 'Normal
+echoHandler =
+        UnaryHandler "/echo.Echo/DoEcho" $
+          \_c body m -> do
+            return ( body :: EchoRequest
+                   , m
+                   , StatusOk
+                   , StatusDetails ""
+                   )
+
+data AddRequest = AddRequest {addX :: Fixed Word32
+                              , addY :: Fixed Word32}
+  deriving (Show, Eq, Ord, Generic)
 instance Message AddRequest
-data AddResponse = AddResponse {answer :: Word32} deriving (Show, Eq, Ord, Generic)
+data AddResponse = AddResponse {answer :: Fixed Word32}
+  deriving (Show, Eq, Ord, Generic)
 instance Message AddResponse
+
+addHandler :: Handler 'Normal
+addHandler =
+  UnaryHandler "/echo.Add/DoAdd" $
+    \_c b m -> do
+      --tputStrLn $ "UnaryHandler for DoAdd hit, b=" ++ show b
+      print (addX b)
+      print (addY b)
+      return ( AddResponse $ addX b + addY b
+             , m
+             , StatusOk
+             , StatusDetails ""
+             )
 
 highlevelMain :: IO ()
 highlevelMain =
   serverLoop defaultOptions{optNormalHandlers = [echoHandler, addHandler]}
-  where echoHandler =
-          UnaryHandler "/echo.Echo/DoEcho" $
-            \_c body m -> do
-              tputStrLn $ "UnaryHandler for DoEcho hit, body=" ++ show body
-              return ( body :: EchoRequest
-                     , m
-                     , StatusOk
-                     , StatusDetails ""
-                     )
-        addHandler =
-          --TODO: I can't get this one to execute. Is the generated method
-          --name different?
 
-          -- static const char* Add_method_names[] = {
-          --   "/echo.Add/DoAdd",
-          -- };
-
-          UnaryHandler "/echo.Add/DoAdd" $
-            \_c b m -> do
-              tputStrLn $ "UnaryHandler for DoAdd hit, b=" ++ show b
-              print (addX b)
-              print (addY b)
-              return ( AddResponse $ addX b + addY b
-                     , m
-                     , StatusOk
-                     , StatusDetails ""
-                     )
+highlevelMainUnregistered :: IO ()
+highlevelMainUnregistered =
+  U.serverLoop defaultOptions{optNormalHandlers = [echoHandler, addHandler]}
 
 main :: IO ()
-main = highlevelMain
+main = highlevelMainUnregistered
 
 defConfig :: ServerConfig
 defConfig = ServerConfig "localhost" 50051 [] [] [] [] []

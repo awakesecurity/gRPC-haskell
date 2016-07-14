@@ -52,22 +52,23 @@ private:
 };
 
 int main(){
-  /*
+
   EchoClient client(grpc::CreateChannel("localhost:50051",
                                         grpc::InsecureChannelCredentials()));
   string msg("hi");
-  for(int i = 0; i < 100000; i++){
+  /*
+  while(true){
     Status status = client.DoEcho(msg);
     if(!status.ok()){
       cout<<"Error: "<<status.error_code()<<endl;
       return 1;
     }
   }
-*/
+  */
 
-  AddClient client (grpc::CreateChannel("localhost:50051",
+  AddClient addClient (grpc::CreateChannel("localhost:50051",
                                         grpc::InsecureChannelCredentials()));
-  AddResponse answer = client.DoAdd(1,2);
+  AddResponse answer = addClient.DoAdd(1,2);
   cout<<"Got answer: "<<answer.answer()<<endl;
   return 0;
 }

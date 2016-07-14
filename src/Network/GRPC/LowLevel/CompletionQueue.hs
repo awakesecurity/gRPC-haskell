@@ -61,7 +61,6 @@ import qualified Network.GRPC.Unsafe.Time                       as C
 import           System.Clock                                   (Clock (..),
                                                                  getTime)
 import           System.Info                                    (os)
-import           System.Timeout                                 (timeout)
 
 withCompletionQueue :: GRPC -> (CompletionQueue -> IO a) -> IO a
 withCompletionQueue grpc = bracket (createCompletionQueue grpc)
@@ -88,36 +87,6 @@ startBatch cq@CompletionQueue{..} call opArray opArraySize tag =
       res <- C.grpcCallStartBatch call opArray opArraySize tag C.reserved
       grpcDebug "startBatch: grpc_call_start_batch call returned."
       return res
-
-
--- | Shuts down the completion queue. See the comment above 'CompletionQueue'
--- for the strategy we use to ensure that no one tries to use the
--- queue after we begin the shutdown process. Errors with
--- 'GRPCIOShutdownFailure' if the queue can't be shut down within 5 seconds.
-shutdownCompletionQueue :: CompletionQueue -> IO (Either GRPCIOError ())
-shutdownCompletionQueue CompletionQueue{..} = do
-  atomically $ writeTVar shuttingDown True
-  atomically $ do
-    readTVar currentPushers  >>= check . (==0)
-    readTVar currentPluckers >>= check . (==0)
-  --drain the queue
-  C.grpcCompletionQueueShutdown unsafeCQ
-  loopRes <- timeout (5*10^(6::Int)) drainLoop
-  grpcDebug $ "Got CQ loop shutdown result of: " ++ show loopRes
-  case loopRes of
-    Nothing -> return $ Left GRPCIOShutdownFailure
-    Just () -> C.grpcCompletionQueueDestroy unsafeCQ >> return (Right ())
-
-  where drainLoop :: IO ()
-        drainLoop = do
-          grpcDebug "drainLoop: before next() call"
-          ev <- C.withDeadlineSeconds 1 $ \deadline ->
-                  C.grpcCompletionQueueNext unsafeCQ deadline C.reserved
-          grpcDebug $ "drainLoop: next() call got " ++ show ev
-          case C.eventCompletionType ev of
-            C.QueueShutdown -> return ()
-            C.QueueTimeout -> drainLoop
-            C.OpComplete -> drainLoop
 
 channelCreateCall :: C.Channel
                   -> Maybe (ServerCall a)
