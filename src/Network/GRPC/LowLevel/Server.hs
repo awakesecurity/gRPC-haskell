@@ -14,10 +14,24 @@
 -- `Network.GRPC.LowLevel.Server.Unregistered`.
 module Network.GRPC.LowLevel.Server where
 
+import           Control.Concurrent                    (ThreadId
+                                                        , forkFinally
+                                                        , myThreadId
+                                                        , killThread)
+import           Control.Concurrent.STM                (atomically
+                                                        , check)
+import           Control.Concurrent.STM.TVar           (TVar
+                                                        , modifyTVar'
+                                                        , readTVar
+                                                        , writeTVar
+                                                        , readTVarIO
+                                                        , newTVarIO)
 import           Control.Exception                     (bracket, finally)
-import           Control.Monad
+import           Control.Monad hiding (mapM_)
 import           Control.Monad.Trans.Except
 import           Data.ByteString                       (ByteString)
+import           Data.Foldable                         (mapM_)
+import qualified Data.Set as S
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
                                                         createCompletionQueue,
@@ -42,7 +56,40 @@ data Server = Server
   , cstreamingMethods    :: [RegisteredMethod 'ClientStreaming]
   , bidiStreamingMethods :: [RegisteredMethod 'BiDiStreaming]
   , serverConfig         :: ServerConfig
+  , outstandingForks     :: TVar (S.Set ThreadId)
+  , serverShuttingDown   :: TVar Bool
   }
+
+-- TODO: should we make a forkGRPC function instead? I am not sure if it would
+-- be safe to let the call handlers threads keep running after the server stops,
+-- so I'm taking the more conservative route of ensuring the server will
+-- stay alive. Experiment more when time permits.
+-- | Fork a thread from the server (presumably for a handler) with the guarantee
+-- that the server won't shut down while the thread is alive.
+-- Returns true if the fork happens successfully, and false if the server is
+-- already shutting down (in which case the function to fork is never executed).
+-- If the thread stays alive too long while the server is trying to shut down,
+-- the thread will be killed with 'killThread'.
+-- The purpose of this is to prevent memory access
+-- errors at the C level of the library, not to ensure that application layer
+-- operations in user code complete successfully.
+forkServer :: Server -> IO () -> IO Bool
+forkServer Server{..} f = do
+  shutdown <- readTVarIO serverShuttingDown
+  case shutdown of
+    True -> return False
+    False -> do
+      tid <- forkFinally f cleanup
+      atomically $ modifyTVar' outstandingForks (S.insert tid)
+      #ifdef DEBUG
+      currSet <- readTVarIO outstandingForks
+      grpcDebug $ "forkServer: number of outstandingForks is "
+                  ++ show (S.size currSet)
+      #endif
+      return True
+      where cleanup _ = do
+              tid <- myThreadId
+              atomically $ modifyTVar' outstandingForks (S.delete tid)
 
 -- | Configuration needed to start a server.
 data ServerConfig = ServerConfig
@@ -90,15 +137,18 @@ startServer grpc conf@ServerConfig{..} =
     bs <- mapM (\nm -> serverRegisterMethodBiDiStreaming server nm e)
                methodsToRegisterBiDiStreaming
     C.grpcServerStart server
-    return $ Server grpc server cq ns ss cs bs conf
+    forks <- newTVarIO S.empty
+    shutdown <- newTVarIO False
+    return $ Server grpc server cq ns ss cs bs conf forks shutdown
 
 stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?
-stopServer Server{ unsafeServer = s, serverCQ = scq } = do
+stopServer Server{ unsafeServer = s, serverCQ = scq, .. } = do
   grpcDebug "stopServer: calling shutdownNotify."
   shutdownNotify
   grpcDebug "stopServer: cancelling all calls."
   C.grpcServerCancelAllCalls s
+  cleanupForks
   grpcDebug "stopServer: call grpc_server_destroy."
   C.grpcServerDestroy s
   grpcDebug "stopServer: shutting down CQ."
@@ -122,6 +172,14 @@ stopServer Server{ unsafeServer = s, serverCQ = scq } = do
             (Left GRPCIOShutdown) -> error "Called stopServer twice!"
             (Left _) -> error "Failed to stop server."
             (Right _) -> return ()
+        cleanupForks = do
+          atomically $ writeTVar serverShuttingDown True
+          liveForks <- readTVarIO outstandingForks
+          grpcDebug $ "Server shutdown: killing threads: " ++ show liveForks
+          mapM_ killThread liveForks
+          --wait for threads to shut down.
+          atomically $ readTVar outstandingForks >>= (check . (==0) . S.size)
+          grpcDebug "Server shutdown: All forks cleaned up."
 
 -- Uses 'bracket' to safely start and stop a server, even if exceptions occur.
 withServer :: GRPC -> ServerConfig -> (Server -> IO a) -> IO a

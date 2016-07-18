@@ -3,9 +3,7 @@
 
 module Network.GRPC.LowLevel.Server.Unregistered where
 
-import           Control.Concurrent                                 (forkIO)
 import           Control.Exception                                  (finally)
-import           Control.Monad
 import           Control.Monad.Trans.Except
 import           Data.ByteString                                    (ByteString)
 import           Network.GRPC.LowLevel.Call.Unregistered
@@ -25,7 +23,8 @@ import           Network.GRPC.LowLevel.Op                           (Op (..)
 import           Network.GRPC.LowLevel.Server                       (Server (..)
                                                                      , ServerReaderHandlerLL
                                                                      , ServerWriterHandlerLL
-                                                                     , ServerRWHandlerLL)
+                                                                     , ServerRWHandlerLL
+                                                                     , forkServer)
 import qualified Network.GRPC.Unsafe.Op                             as C
 
 serverCreateCall :: Server
@@ -54,10 +53,24 @@ withServerCallAsync :: Server
                        -> IO ()
 withServerCallAsync s f =
   serverCreateCall s >>= \case
-    Left _ -> return ()
-    Right c -> void $ forkIO (f c `finally` do
-      grpcDebug "withServerCallAsync: destroying."
-      destroyServerCall c)
+    Left e -> do grpcDebug $ "withServerCallAsync: call error: " ++ show e
+                 return ()
+    Right c -> do wasForkSuccess <- forkServer s handler
+                  if wasForkSuccess
+                     then return ()
+                     else destroy
+                where handler = f c `finally` destroy
+                      --TODO: We sometimes never finish cleanup if the server
+                      -- is shutting down and calls killThread. This causes
+                      -- gRPC core to complain about leaks.
+                      -- I think the cause of this is that killThread gets
+                      -- called after we are already in destroyServerCall,
+                      -- and wrapping uninterruptibleMask doesn't seem to help.
+                      -- Doesn't crash, but does emit annoying log messages.
+                      destroy = do
+                        grpcDebug "withServerCallAsync: destroying."
+                        destroyServerCall c
+                        grpcDebug "withServerCallAsync: cleanup finished."
 
 -- | Sequence of 'Op's needed to receive a normal (non-streaming) call.
 -- TODO: We have to put 'OpRecvCloseOnServer' in the response ops, or else the
