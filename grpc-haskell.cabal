@@ -26,7 +26,7 @@ flag with-examples
 library
   build-depends:
       base ==4.8.*
-    , clock ==0.6.*
+    , clock >=0.6.0 && <=0.7.2
     , bytestring ==0.10.*
     , stm == 2.4.*
     , containers ==0.5.*
