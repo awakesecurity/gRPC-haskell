@@ -9,11 +9,11 @@ packages:
 - '.'
 - location:
     git: git@github.mv.awakenetworks.net:awakenetworks/protobuf-wire.git
-    commit: e5a6985eeb5eb1eded7b46b2892874000e2ae835
+    commit: 57490f59e90bd0881f28c7898a152d4bd25c9fcb
   extra-dep: true
 - location:
-    git: git@github.mv.awakenetworks.net:awakenetworks/proto3-wire.git
-    commit: 9898a793ab61fd582b5b7172d349ffd248b20095
+    git: git@github.com:awakenetworks/proto3-wire.git
+    commit: b5151914873b9ede230094e742953b5062566244
   extra-dep: true
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 extra-deps: [managed-1.0.5]
