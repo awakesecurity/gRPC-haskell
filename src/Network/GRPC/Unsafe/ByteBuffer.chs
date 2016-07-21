@@ -41,9 +41,9 @@ instance Storable ByteBuffer where
 
 -- | Creates a pointer to a 'ByteBuffer'. This is used to receive data when
 -- creating a GRPC_OP_RECV_MESSAGE op.
-{#fun create_receiving_byte_buffer as ^ {} -> `Ptr ByteBuffer' id#}
+{#fun unsafe create_receiving_byte_buffer as ^ {} -> `Ptr ByteBuffer' id#}
 
-{#fun destroy_receiving_byte_buffer as ^ {id `Ptr ByteBuffer'} -> `()'#}
+{#fun unsafe destroy_receiving_byte_buffer as ^ {id `Ptr ByteBuffer'} -> `()'#}
 
 withByteBufferPtr :: (Ptr ByteBuffer -> IO a) -> IO a
 withByteBufferPtr
@@ -56,24 +56,24 @@ withByteBufferPtr
 {#fun grpc_raw_compressed_byte_buffer_create as ^
   {`Slice', `CULong', `CompressionAlgorithm'} -> `ByteBuffer'#}
 
-{#fun grpc_byte_buffer_copy as ^ {`ByteBuffer'} -> `ByteBuffer'#}
+{#fun unsafe grpc_byte_buffer_copy as ^ {`ByteBuffer'} -> `ByteBuffer'#}
 
-{#fun grpc_byte_buffer_length as ^ {`ByteBuffer'} -> `CULong'#}
+{#fun unsafe grpc_byte_buffer_length as ^ {`ByteBuffer'} -> `CULong'#}
 
-{#fun grpc_byte_buffer_destroy as ^ {`ByteBuffer'} -> `()'#}
+{#fun unsafe grpc_byte_buffer_destroy as ^ {`ByteBuffer'} -> `()'#}
 
-{#fun byte_buffer_reader_create as ^ {`ByteBuffer'} -> `ByteBufferReader'#}
+{#fun unsafe byte_buffer_reader_create as ^ {`ByteBuffer'} -> `ByteBufferReader'#}
 
-{#fun byte_buffer_reader_destroy as ^ {`ByteBufferReader'} -> `()'#}
+{#fun unsafe byte_buffer_reader_destroy as ^ {`ByteBufferReader'} -> `()'#}
 
 {#fun grpc_byte_buffer_reader_next as ^
   {`ByteBufferReader', `Slice'} -> `CInt'#}
 
 -- | Returns a 'Slice' containing the entire contents of the 'ByteBuffer' being
 -- read by the given 'ByteBufferReader'.
-{#fun grpc_byte_buffer_reader_readall_ as ^ {`ByteBufferReader'} -> `Slice'#}
+{#fun unsafe grpc_byte_buffer_reader_readall_ as ^ {`ByteBufferReader'} -> `Slice'#}
 
-{#fun grpc_raw_byte_buffer_from_reader as ^
+{#fun unsafe grpc_raw_byte_buffer_from_reader as ^
   {`ByteBufferReader'} -> `ByteBuffer'#}
 
 withByteStringAsByteBuffer :: B.ByteString -> (ByteBuffer -> IO a) -> IO a

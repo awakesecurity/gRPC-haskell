@@ -51,6 +51,9 @@ data Server = Server
   { serverGRPC           :: GRPC
   , unsafeServer         :: C.Server
   , serverCQ             :: CompletionQueue
+  -- ^ CQ used for receiving new calls.
+  , serverCallCQ               :: CompletionQueue
+  -- ^ CQ for running ops on calls. Not used to receive new calls.
   , normalMethods        :: [RegisteredMethod 'Normal]
   , sstreamingMethods    :: [RegisteredMethod 'ServerStreaming]
   , cstreamingMethods    :: [RegisteredMethod 'ClientStreaming]
@@ -139,28 +142,32 @@ startServer grpc conf@ServerConfig{..} =
     C.grpcServerStart server
     forks <- newTVarIO S.empty
     shutdown <- newTVarIO False
-    return $ Server grpc server cq ns ss cs bs conf forks shutdown
+    ccq <- createCompletionQueue grpc
+    return $ Server grpc server cq ccq ns ss cs bs conf forks shutdown
+
+
 
 stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?
-stopServer Server{ unsafeServer = s, serverCQ = scq, .. } = do
+stopServer server@Server{ unsafeServer = s, .. } = do
   grpcDebug "stopServer: calling shutdownNotify."
-  shutdownNotify
+  shutdownNotify serverCQ
   grpcDebug "stopServer: cancelling all calls."
   C.grpcServerCancelAllCalls s
   cleanupForks
   grpcDebug "stopServer: call grpc_server_destroy."
   C.grpcServerDestroy s
   grpcDebug "stopServer: shutting down CQ."
-  shutdownCQ
+  shutdownCQ serverCQ
+  shutdownCQ serverCallCQ
 
-  where shutdownCQ = do
+  where shutdownCQ scq = do
           shutdownResult <- shutdownCompletionQueue scq
           case shutdownResult of
             Left _ -> do putStrLn "Warning: completion queue didn't shut down."
                          putStrLn "Trying to stop server anyway."
             Right _ -> return ()
-        shutdownNotify = do
+        shutdownNotify scq = do
           let shutdownTag = C.tag 0
           serverShutdownAndNotify s scq shutdownTag
           grpcDebug "called serverShutdownAndNotify; plucking."
@@ -286,9 +293,8 @@ serverRegisterMethodBiDiStreaming internalServer meth e = do
 serverCreateCall :: Server
                  -> RegisteredMethod mt
                  -> IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
-serverCreateCall Server{..} rm = do
-  callCQ <- createCompletionQueue serverGRPC
-  serverRequestCall rm unsafeServer serverCQ callCQ
+serverCreateCall Server{..} rm =
+  serverRequestCall rm unsafeServer serverCQ serverCallCQ
 
 withServerCall :: Server
                -> RegisteredMethod mt

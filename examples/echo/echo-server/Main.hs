@@ -104,10 +104,7 @@ addHandler :: Handler 'Normal
 addHandler =
   UnaryHandler "/echo.Add/DoAdd" $
     \c -> do
-      --tputStrLn $ "UnaryHandler for DoAdd hit, b=" ++ show b
       let b = payload c
-      print (addX b)
-      print (addY b)
       return ( AddResponse $ addX b + addY b
              , metadata c
              , StatusOk

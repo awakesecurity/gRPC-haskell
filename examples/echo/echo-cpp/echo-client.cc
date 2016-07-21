@@ -1,5 +1,6 @@
 #include <string>
 #include <iostream>
+#include <thread>
 
 #include <grpc++/grpc++.h>
 
@@ -51,24 +52,31 @@ private:
   unique_ptr<Add::Stub> stub_;
 };
 
+void do10k(EchoClient* client, AddClient* addClient){
+  string msg("hi");
+
+  for(int i = 0; i < 10000; i++){
+    Status status = client->DoEcho(msg);
+    if(!status.ok()){
+      cout<<"Error: "<<status.error_code()<<endl;
+    }
+    AddResponse answer = addClient->DoAdd(1,2);
+  }
+}
+
 int main(){
 
   EchoClient client(grpc::CreateChannel("localhost:50051",
                                         grpc::InsecureChannelCredentials()));
-  string msg("hi");
-  /*
-  while(true){
-    Status status = client.DoEcho(msg);
-    if(!status.ok()){
-      cout<<"Error: "<<status.error_code()<<endl;
-      return 1;
-    }
-  }
-  */
-
   AddClient addClient (grpc::CreateChannel("localhost:50051",
                                         grpc::InsecureChannelCredentials()));
-  AddResponse answer = addClient.DoAdd(1,2);
-  cout<<"Got answer: "<<answer.answer()<<endl;
+  thread unus(do10k,&client,&addClient);
+  thread duo(do10k,&client,&addClient);
+  thread tres(do10k,&client,&addClient);
+  thread quattuor(do10k,&client,&addClient);
+  unus.join();
+  duo.join();
+  tres.join();
+  quattuor.join();
   return 0;
 }

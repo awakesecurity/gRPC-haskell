@@ -29,18 +29,18 @@ deriving instance Show MetadataKeyValPtr
 
 deriving instance Show MetadataArray
 
-{#fun metadata_array_get_metadata as ^
+{#fun unsafe metadata_array_get_metadata as ^
   {`MetadataArray'} -> `MetadataKeyValPtr'#}
 
 -- | Overwrites the metadata in the given 'MetadataArray'. The given
 -- 'MetadataKeyValPtr' *must* have been created with 'createMetadata' in this
 -- module.
-{#fun metadata_array_set_metadata as ^
+{#fun unsafe metadata_array_set_metadata as ^
   {`MetadataArray', `MetadataKeyValPtr'} -> `()'#}
 
-{#fun metadata_array_get_count as ^ {`MetadataArray'} -> `Int'#}
+{#fun unsafe metadata_array_get_count as ^ {`MetadataArray'} -> `Int'#}
 
-{#fun metadata_array_get_capacity as ^ {`MetadataArray'} -> `Int'#}
+{#fun unsafe metadata_array_get_capacity as ^ {`MetadataArray'} -> `Int'#}
 
 instance Storable MetadataArray where
   sizeOf (MetadataArray r) = sizeOf r
@@ -50,28 +50,28 @@ instance Storable MetadataArray where
 
 -- | Create an empty 'MetadataArray'. Returns a pointer to it so that we can
 -- pass it to the appropriate op creation functions.
-{#fun metadata_array_create as ^ {} -> `Ptr MetadataArray' id#}
+{#fun unsafe metadata_array_create as ^ {} -> `Ptr MetadataArray' id#}
 
-{#fun metadata_array_destroy as ^ {id `Ptr MetadataArray'} -> `()'#}
+{#fun unsafe metadata_array_destroy as ^ {id `Ptr MetadataArray'} -> `()'#}
 
 -- Note: I'm pretty sure we must call out to C to allocate these
 -- because they are nested structs.
 -- | Allocates space for exactly n metadata key/value pairs.
-{#fun metadata_alloc as ^ {`Int'} -> `MetadataKeyValPtr'#}
+{#fun unsafe metadata_alloc as ^ {`Int'} -> `MetadataKeyValPtr'#}
 
-{#fun metadata_free as ^ {`MetadataKeyValPtr'} -> `()'#}
+{#fun unsafe metadata_free as ^ {`MetadataKeyValPtr'} -> `()'#}
 
 -- | Sets a metadata key/value pair at the given index in the
 -- 'MetadataKeyValPtr'. No error checking is performed to ensure the index is
 -- in bounds!
-{#fun set_metadata_key_val as setMetadataKeyVal
+{#fun unsafe set_metadata_key_val as setMetadataKeyVal
   {useAsCString* `ByteString', useAsCString* `ByteString',
    `MetadataKeyValPtr', `Int'} -> `()'#}
 
-{#fun get_metadata_key as getMetadataKey'
+{#fun unsafe get_metadata_key as getMetadataKey'
   {`MetadataKeyValPtr', `Int'} -> `CString'#}
 
-{#fun get_metadata_val as getMetadataVal'
+{#fun unsafe get_metadata_val as getMetadataVal'
   {`MetadataKeyValPtr', `Int'} -> `CString'#}
 
 --TODO: The test suggests this is leaking.

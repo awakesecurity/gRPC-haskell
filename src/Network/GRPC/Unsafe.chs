@@ -47,8 +47,8 @@ deriving instance Show Call
 
 deriving instance Show CallDetails
 
-{#fun create_call_details as ^ {} -> `CallDetails'#}
-{#fun destroy_call_details as ^ {`CallDetails'} -> `()'#}
+{#fun unsafe create_call_details as ^ {} -> `CallDetails'#}
+{#fun unsafe destroy_call_details as ^ {`CallDetails'} -> `()'#}
 
 withCallDetails :: (CallDetails -> IO a) -> IO a
 withCallDetails = bracket createCallDetails destroyCallDetails
@@ -210,7 +210,7 @@ castPeek p = do
 -- When complete, an event identified by the given 'Tag'
 -- will be pushed onto the 'CompletionQueue' that was associated with the given
 -- 'Call' when the 'Call' was created.
-{#fun grpc_call_start_batch as ^
+{#fun unsafe grpc_call_start_batch as ^
   {`Call', `OpArray', `Int', unTag `Tag',unReserved `Reserved'} -> `CallError'#}
 
 {#fun grpc_call_cancel as ^ {`Call',unReserved `Reserved'} -> `()'#}
@@ -280,8 +280,8 @@ getPeerPeek cstr = do
    `CompletionQueue',unTag `Tag'}
   -> `CallError'#}
 
-{#fun call_details_get_method as ^ {`CallDetails'} -> `String'#}
+{#fun unsafe call_details_get_method as ^ {`CallDetails'} -> `String'#}
 
-{#fun call_details_get_host as ^ {`CallDetails'} -> `String'#}
+{#fun unsafe call_details_get_host as ^ {`CallDetails'} -> `String'#}
 
 {#fun call_details_get_deadline as ^ {`CallDetails'} -> `CTimeSpec' peek* #}

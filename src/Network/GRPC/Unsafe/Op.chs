@@ -24,11 +24,11 @@ import Foreign.Ptr
 -- http://stackoverflow.com/questions/1113855/is-the-sizeofenum-sizeofint-always
 -- | Allocates space for a 'StatusCode' and returns a pointer to it. Used to
 -- receive a status code from the server with 'opRecvStatusClient'.
-{#fun create_status_code_ptr as ^ {} -> `Ptr StatusCode' castPtr#}
+{#fun unsafe create_status_code_ptr as ^ {} -> `Ptr StatusCode' castPtr#}
 
-{#fun deref_status_code_ptr as ^ {castPtr `Ptr StatusCode'} -> `StatusCode'#}
+{#fun unsafe deref_status_code_ptr as ^ {castPtr `Ptr StatusCode'} -> `StatusCode'#}
 
-{#fun destroy_status_code_ptr as ^ {castPtr `Ptr StatusCode'} -> `()' #}
+{#fun unsafe destroy_status_code_ptr as ^ {castPtr `Ptr StatusCode'} -> `()' #}
 
 -- | Represents an array of ops to be passed to 'grpcCallStartBatch'.
 -- Create an array with 'opArrayCreate', then create individual ops in the array
@@ -41,10 +41,10 @@ import Foreign.Ptr
 deriving instance Show OpArray
 
 -- | Creates an empty 'OpArray' with space for the given number of ops.
-{#fun op_array_create as ^ {`Int'} -> `OpArray'#}
+{#fun unsafe op_array_create as ^ {`Int'} -> `OpArray'#}
 
 -- | Destroys an 'OpArray' of the given size.
-{#fun op_array_destroy as ^ {`OpArray', `Int'} -> `()'#}
+{#fun unsafe op_array_destroy as ^ {`OpArray', `Int'} -> `()'#}
 
 -- | brackets creating and destroying an 'OpArray' with the given size.
 withOpArray :: Int -> (OpArray -> IO a) -> IO a
@@ -54,41 +54,41 @@ withOpArray n f = bracket (opArrayCreate n) (flip opArrayDestroy n) f
 -- index of the given 'OpArray', containing the given
 -- metadata. The metadata is copied and can be destroyed after calling this
 -- function.
-{#fun op_send_initial_metadata as ^
+{#fun unsafe op_send_initial_metadata as ^
   {`OpArray', `Int', `MetadataKeyValPtr', `Int'} -> `()'#}
 
 -- | Creates an op of type GRPC_OP_SEND_INITIAL_METADATA at the specified
 -- index of the given 'OpArray'. The op will contain no metadata.
-{#fun op_send_initial_metadata_empty as ^ {`OpArray', `Int'} -> `()'#}
+{#fun unsafe op_send_initial_metadata_empty as ^ {`OpArray', `Int'} -> `()'#}
 
 -- | Creates an op of type GRPC_OP_SEND_MESSAGE at the specified index of
 -- the given 'OpArray'. The given 'ByteBuffer' is
 -- copied and can be destroyed after calling this function.
-{#fun op_send_message as ^ {`OpArray', `Int', `ByteBuffer'} -> `()'#}
+{#fun unsafe op_send_message as ^ {`OpArray', `Int', `ByteBuffer'} -> `()'#}
 
 -- | Creates an 'Op' of type GRPC_OP_SEND_CLOSE_FROM_CLIENT at the specified
 -- index of the given 'OpArray'.
-{#fun op_send_close_client as ^ {`OpArray', `Int'} -> `()'#}
+{#fun unsafe op_send_close_client as ^ {`OpArray', `Int'} -> `()'#}
 
 -- | Creates an op of type GRPC_OP_RECV_INITIAL_METADATA at the specified
 -- index of the given 'OpArray', and ties the given
 -- 'MetadataArray' pointer to that op so that the received metadata can be
 -- accessed. It is the user's responsibility to destroy the 'MetadataArray'.
-{#fun op_recv_initial_metadata as ^
+{#fun unsafe op_recv_initial_metadata as ^
   {`OpArray', `Int',id `Ptr MetadataArray'} -> `()'#}
 
 -- | Creates an op of type GRPC_OP_RECV_MESSAGE at the specified index of the
 -- given 'OpArray', and ties the given
 -- 'ByteBuffer' pointer to that op so that the received message can be
 -- accessed. It is the user's responsibility to destroy the 'ByteBuffer'.
-{#fun op_recv_message as ^ {`OpArray', `Int',id `Ptr ByteBuffer'} -> `()'#}
+{#fun unsafe op_recv_message as ^ {`OpArray', `Int',id `Ptr ByteBuffer'} -> `()'#}
 
 -- | Creates an op of type GRPC_OP_RECV_STATUS_ON_CLIENT at the specified
 -- index of the given 'OpArray', and ties all the
 -- input pointers to that op so that the results of the receive can be
 -- accessed. It is the user's responsibility to free all the input args after
 -- this call.
-{#fun op_recv_status_client as ^
+{#fun unsafe op_recv_status_client as ^
   {`OpArray', `Int',id `Ptr MetadataArray', castPtr `Ptr StatusCode',
    castPtr `Ptr CString', `Int'}
   -> `()'#}
@@ -97,12 +97,12 @@ withOpArray n f = bracket (opArrayCreate n) (flip opArrayDestroy n) f
 -- of the given 'OpArray', and ties the input
 -- pointer to that op so that the result of the receive can be accessed. It is
 -- the user's responsibility to free the pointer.
-{#fun op_recv_close_server as ^ {`OpArray', `Int', id `Ptr CInt'} -> `()'#}
+{#fun unsafe op_recv_close_server as ^ {`OpArray', `Int', id `Ptr CInt'} -> `()'#}
 
 -- | Creates an op of type GRPC_OP_SEND_STATUS_FROM_SERVER at the specified
 -- index of the given 'OpArray'. The given
 -- Metadata and string are copied when creating the op, and can be safely
 -- destroyed immediately after calling this function.
-{#fun op_send_status_server as ^
+{#fun unsafe op_send_status_server as ^
   {`OpArray', `Int', `Int', `MetadataKeyValPtr', `StatusCode', `CString'}
   -> `()'#}

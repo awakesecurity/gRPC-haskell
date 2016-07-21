@@ -30,7 +30,7 @@ instance Storable CTimeSpec where
 -- 'timespecDestroy'.
 {#pointer *gpr_timespec as CTimeSpecPtr -> CTimeSpec #}
 
-{#fun timespec_destroy as ^ {`CTimeSpecPtr'} -> `()'#}
+{#fun unsafe timespec_destroy as ^ {`CTimeSpecPtr'} -> `()'#}
 
 {#fun gpr_inf_future_ as ^ {`ClockType'} -> `CTimeSpecPtr'#}
 
@@ -53,7 +53,7 @@ withDeadlineSeconds i = bracket (secondsToDeadline i) timespecDestroy
 
 -- | Returns a GprClockMonotonic representing an infinitely distant deadline.
 -- wraps gpr_inf_future in the gRPC library.
-{#fun infinite_deadline as ^ {} -> `CTimeSpecPtr'#}
+{#fun unsafe infinite_deadline as ^ {} -> `CTimeSpecPtr'#}
 
 withInfiniteDeadline :: (CTimeSpecPtr -> IO a) -> IO a
 withInfiniteDeadline = bracket infiniteDeadline timespecDestroy

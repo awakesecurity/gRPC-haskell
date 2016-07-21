@@ -30,8 +30,7 @@ import qualified Network.GRPC.Unsafe.Op                             as C
 serverCreateCall :: Server
                  -> IO (Either GRPCIOError ServerCall)
 serverCreateCall Server{..} = do
-  callCQ <- createCompletionQueue serverGRPC
-  serverRequestCall unsafeServer serverCQ callCQ
+  serverRequestCall unsafeServer serverCQ serverCallCQ
 
 withServerCall :: Server
                -> (ServerCall -> IO (Either GRPCIOError a))

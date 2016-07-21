@@ -212,6 +212,5 @@ destroyServerCall :: ServerCall a -> IO ()
 destroyServerCall sc@ServerCall{ unsafeSC = c, .. } = do
   grpcDebug "destroyServerCall(R): entered."
   debugServerCall sc
-  _ <- shutdownCompletionQueue callCQ
   grpcDebug $ "Destroying server-side call object: " ++ show c
   C.grpcCallDestroy c

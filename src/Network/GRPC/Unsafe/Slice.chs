@@ -27,17 +27,17 @@ deriving instance Show Slice
 -- maybe the established idiom is to do what c2hs does.
 
 -- | Get the length of a slice.
-{#fun gpr_slice_length_ as ^ {`Slice'} -> `CULong'#}
+{#fun unsafe gpr_slice_length_ as ^ {`Slice'} -> `CULong'#}
 
 -- | Returns a pointer to the start of the character array contained by the
 -- slice.
-{#fun gpr_slice_start_ as ^ {`Slice'} -> `Ptr CChar' castPtr #}
+{#fun unsafe gpr_slice_start_ as ^ {`Slice'} -> `Ptr CChar' castPtr #}
 
-{#fun gpr_slice_from_copied_buffer_ as ^ {`CString', `Int'} -> `Slice'#}
+{#fun unsafe gpr_slice_from_copied_buffer_ as ^ {`CString', `Int'} -> `Slice'#}
 
 -- | Properly cleans up all memory used by a 'Slice'. Danger: the Slice should
 -- not be used after this function is called on it.
-{#fun free_slice as ^ {`Slice'} -> `()'#}
+{#fun unsafe free_slice as ^ {`Slice'} -> `()'#}
 
 -- | Copies a 'Slice' to a ByteString.
 -- TODO: there are also non-copying unsafe ByteString construction functions.
