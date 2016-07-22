@@ -84,11 +84,11 @@ forkServer Server{..} f = do
     False -> do
       tid <- forkFinally f cleanup
       atomically $ modifyTVar' outstandingForks (S.insert tid)
-      #ifdef DEBUG
+#ifdef DEBUG
       currSet <- readTVarIO outstandingForks
       grpcDebug $ "forkServer: number of outstandingForks is "
                   ++ show (S.size currSet)
-      #endif
+#endif
       return True
       where cleanup _ = do
               tid <- myThreadId
