@@ -27,10 +27,9 @@ import           Control.Concurrent.STM.TVar           (TVar
                                                         , readTVarIO
                                                         , newTVarIO)
 import           Control.Exception                     (bracket, finally)
-import           Control.Monad hiding (mapM_)
+import           Control.Monad
 import           Control.Monad.Trans.Except
 import           Data.ByteString                       (ByteString)
-import           Data.Foldable                         (mapM_)
 import qualified Data.Set as S
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
@@ -149,7 +148,7 @@ startServer grpc conf@ServerConfig{..} =
 
 stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?
-stopServer server@Server{ unsafeServer = s, .. } = do
+stopServer Server{ unsafeServer = s, .. } = do
   grpcDebug "stopServer: calling shutdownNotify."
   shutdownNotify serverCQ
   grpcDebug "stopServer: cancelling all calls."

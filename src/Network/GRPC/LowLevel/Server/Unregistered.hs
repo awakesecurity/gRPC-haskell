@@ -7,7 +7,6 @@ import           Control.Exception                                  (finally)
 import           Control.Monad.Trans.Except
 import           Data.ByteString                                    (ByteString)
 import           Network.GRPC.LowLevel.Call.Unregistered
-import           Network.GRPC.LowLevel.CompletionQueue              (createCompletionQueue)
 import           Network.GRPC.LowLevel.CompletionQueue.Unregistered (serverRequestCall)
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op                           (Op (..)
@@ -29,7 +28,7 @@ import qualified Network.GRPC.Unsafe.Op                             as C
 
 serverCreateCall :: Server
                  -> IO (Either GRPCIOError ServerCall)
-serverCreateCall Server{..} = do
+serverCreateCall Server{..} =
   serverRequestCall unsafeServer serverCQ serverCallCQ
 
 withServerCall :: Server

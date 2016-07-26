@@ -1,14 +1,15 @@
-{-# LANGUAGE DataKinds          #-}
-{-# LANGUAGE GADTs              #-}
-{-# LANGUAGE KindSignatures     #-}
-{-# LANGUAGE LambdaCase         #-}
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE RankNTypes         #-}
-{-# LANGUAGE RecordWildCards    #-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE KindSignatures    #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes        #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Network.GRPC.HighLevel.Server where
 
 import           Control.Concurrent.Async
+import qualified Control.Exception                         as CE
 import           Control.Monad
 import           Data.ByteString                           (ByteString)
 import qualified Data.ByteString.Lazy                      as BL
@@ -16,6 +17,7 @@ import           Data.Protobuf.Wire.Class
 import           Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
+import           System.IO
 
 type ServerHandler a b =
   ServerCall a
@@ -25,7 +27,7 @@ convertServerHandler :: (Message a, Message b)
                      => ServerHandler a b
                      -> ServerHandlerLL
 convertServerHandler f c = case fromByteString (payload c) of
-  Left x  -> error $ "Failed to deserialize message: " ++ show x
+  Left x  -> CE.throw (GRPCIODecodeError x)
   Right x -> do (y, tm, sc, sd) <- f (fmap (const x) c)
                 return (toBS y, tm, sc, sd)
 
@@ -54,7 +56,7 @@ convertServerWriterHandler f c send =
   f (convert <$> c) (convertSend send)
   where
     convert bs = case fromByteString bs of
-      Left x  -> error $ "deserialization error: " ++ show x -- TODO FIXME
+      Left x  -> CE.throw (GRPCIODecodeError x)
       Right x -> x
 
 type ServerRWHandler a b =
@@ -121,14 +123,8 @@ handlerMethodName (ClientStreamHandler m _) = m
 handlerMethodName (ServerStreamHandler m _) = m
 handlerMethodName (BiDiStreamHandler m _) = m
 
--- TODO: find some idiomatic way to do logging that doesn't force the user
--- into anything they  don't want.
-logShow :: Show a => a -> IO ()
-logShow = print
-
-logAskReport :: Show a => a -> IO ()
-logAskReport x =
-  logShow $ show x ++ " This probably indicates a bug in gRPC-haskell. Please report this error."
+logMsg :: String -> IO ()
+logMsg = hPutStrLn stderr
 
 -- | Handles errors that result from trying to handle a call on the server.
 -- For each error, takes a different action depending on the severity in the
@@ -137,12 +133,17 @@ logAskReport x =
 handleCallError :: Either GRPCIOError a -> IO ()
 handleCallError (Right _) = return ()
 handleCallError (Left GRPCIOTimeout) =
-  --Probably a benign timeout (such as a client disappearing), noop for now.
+  -- Probably a benign timeout (such as a client disappearing), noop for now.
   return ()
 handleCallError (Left GRPCIOShutdown) =
-  --Server shutting down. Benign.
+  -- Server shutting down. Benign.
   return ()
-handleCallError (Left x) = logAskReport x
+handleCallError (Left (GRPCIODecodeError e)) =
+  logMsg $ "Decoding error: " ++ show e
+handleCallError (Left (GRPCIOHandlerException e)) =
+  logMsg $ "Handler exception caught: " ++ show e
+handleCallError (Left x) =
+  logMsg $ show x ++ ": This probably indicates a bug in gRPC-haskell. Please report this error."
 
 loopWError :: Int
               -> IO (Either GRPCIOError a)
@@ -157,9 +158,7 @@ handleLoop :: Server
               -> (Handler a, RegisteredMethod a)
               -> IO ()
 handleLoop s (UnaryHandler _ f, rm) =
-  loopWError 0 $ do
-    --grpcDebug' "handleLoop about to block on serverHandleNormalCall"
-    serverHandleNormalCall s rm mempty $ convertServerHandler f
+  loopWError 0 $ serverHandleNormalCall s rm mempty $ convertServerHandler f
 handleLoop s (ClientStreamHandler _ f, rm) =
   loopWError 0 $ serverReader s rm mempty $ convertServerReaderHandler f
 handleLoop s (ServerStreamHandler _ f, rm) =
@@ -229,6 +228,6 @@ serverLoop opts =
     unknownHandler s =
       --TODO: is this working?
       U.serverHandleNormalCall s mempty $ \call _ -> do
-        logShow $ "Requested unknown endpoint: " ++ show (U.callMethod call)
+        logMsg $ "Requested unknown endpoint: " ++ show (U.callMethod call)
         return ("", mempty, StatusNotFound,
                 StatusDetails "Unknown method")

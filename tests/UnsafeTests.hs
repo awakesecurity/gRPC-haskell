@@ -3,25 +3,20 @@
 module UnsafeTests (unsafeTests) where
 
 import           Control.Concurrent                        (threadDelay)
-import           Control.Concurrent.Async
 import           Control.Exception (bracket_)
 import           Control.Monad
 import qualified Data.ByteString                as B
 import           Foreign.Marshal.Alloc
-import           Foreign.Ptr
 import           Foreign.Storable
 import           Network.GRPC.Unsafe
 import           Network.GRPC.Unsafe.ByteBuffer
-import           Network.GRPC.Unsafe.Constants
 import           Network.GRPC.Unsafe.Metadata
-import           Network.GRPC.Unsafe.Op
 import           Network.GRPC.Unsafe.Slice
 import           Network.GRPC.Unsafe.Time
 import           Network.GRPC.Unsafe.ChannelArgs
 import           System.Clock
 import           Test.Tasty
-import           Test.Tasty.HUnit               as HU (testCase, (@?=),
-                                                       assertBool)
+import           Test.Tasty.HUnit               as HU (testCase, (@?=))
 
 unsafeTests :: TestTree
 unsafeTests = testGroup "Unit tests for unsafe C bindings"
@@ -133,3 +128,6 @@ grpc = bracket_ grpcInit grpcShutdown . void
 
 threadDelaySecs :: Int -> IO ()
 threadDelaySecs = threadDelay . (* 10^(6::Int))
+
+_nowarnUnused :: a
+_nowarnUnused = assertCqEventComplete `undefined` threadDelaySecs

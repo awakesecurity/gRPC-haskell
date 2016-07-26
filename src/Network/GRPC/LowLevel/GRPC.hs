@@ -9,6 +9,7 @@ import           Control.Exception
 import           Data.String            (IsString)
 import qualified Data.ByteString        as B
 import qualified Data.Map               as M
+import           Data.Typeable
 import qualified Network.GRPC.Unsafe    as C
 import qualified Network.GRPC.Unsafe.Op as C
 import           Proto3.Wire.Decode     (ParseError)
@@ -27,7 +28,8 @@ withGRPC :: (GRPC -> IO a) -> IO a
 withGRPC = bracket (C.grpcInit >> return GRPC)
                    (\_ -> grpcDebug "withGRPC: shutting down" >> C.grpcShutdown)
 
--- | Describes all errors that can occur while running a GRPC-related IO action.
+-- | Describes all errors that can occur while running a GRPC-related IO
+-- action.
 data GRPCIOError = GRPCIOCallError C.CallError
                    -- ^ Errors that can occur while the call is in flight. These
                    -- errors come from the core gRPC library directly.
@@ -43,10 +45,12 @@ data GRPCIOError = GRPCIOCallError C.CallError
                    -- reasonable amount of time.
                    | GRPCIOUnknownError
                    | GRPCIOBadStatusCode C.StatusCode StatusDetails
+
                    | GRPCIODecodeError ParseError
-                   | GRPCIOInternalMissingExpectedPayload
                    | GRPCIOInternalUnexpectedRecv String -- debugging description
-  deriving (Show, Eq)
+                   | GRPCIOHandlerException String
+  deriving (Eq, Show, Typeable)
+instance Exception GRPCIOError
 
 throwIfCallError :: C.CallError -> Either GRPCIOError ()
 throwIfCallError C.CallOk = Right ()

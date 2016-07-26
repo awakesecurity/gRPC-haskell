@@ -1,10 +1,14 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedLists   #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TupleSections     #-}
-{-# LANGUAGE ViewPatterns      #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE OverloadedLists            #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE PatternSynonyms            #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE ViewPatterns               #-}
+{-# OPTIONS_GHC -fno-warn-orphans       #-}
 
 module LowLevelTests where
 
@@ -20,7 +24,6 @@ import           Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Client.Unregistered as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
-import           Pipes                                     ((>->))
 import qualified Pipes                                     as P
 import           Test.Tasty
 import           Test.Tasty.HUnit                          as HU (Assertion,
@@ -105,7 +108,7 @@ testMixRegisteredUnregistered =
        return ()
        where regThread = do
                let rm = head (normalMethods s)
-               r <- serverHandleNormalCall s rm dummyMeta $ \c -> do
+               _r <- serverHandleNormalCall s rm dummyMeta $ \c -> do
                  payload c @?= "Hello"
                  return ("reply test", dummyMeta, StatusOk, "")
                return ()
@@ -284,11 +287,10 @@ testBiDiStreaming =
     trailMD      = dummyMeta
     serverStatus = StatusOk
     serverDtls   = "deets"
-    is act x     = act >>= liftIO . (@?= x)
 
     client c = do
       rm  <- clientRegisterMethodBiDiStreaming c "/bidi"
-      eea <- clientRW c rm 10 clientInitMD $ \initMD recv send -> do
+      eea <- clientRW c rm 10 clientInitMD $ \_initMD recv send -> do
         send "cw0" `is` Right ()
         recv       `is` Right (Just "sw0")
         send "cw1" `is` Right ()
@@ -320,11 +322,10 @@ testBiDiStreamingUnregistered =
     trailMD      = dummyMeta
     serverStatus = StatusOk
     serverDtls   = "deets"
-    is act x     = act >>= liftIO . (@?= x)
 
     client c = do
       rm  <- clientRegisterMethodBiDiStreaming c "/bidi"
-      eea <- clientRW c rm 10 clientInitMD $ \initMD recv send -> do
+      eea <- clientRW c rm 10 clientInitMD $ \_initMD recv send -> do
         send "cw0" `is` Right ()
         recv       `is` Right (Just "sw0")
         send "cw1" `is` Right ()
@@ -389,7 +390,7 @@ testGoaway =
       rm <- clientRegisterMethodNormal c "/foo"
       clientRequest c rm 10 "" mempty
       clientRequest c rm 10 "" mempty
-      lastResult <- clientRequest c rm 1 "" mempty
+      lastResult  <- clientRequest c rm 1 "" mempty
       assertBool "Client handles server shutdown gracefully" $
         lastResult == badStatus StatusUnavailable
         ||
@@ -423,8 +424,7 @@ testServerCallExpirationCheck =
   where
     client c = do
       rm <- clientRegisterMethodNormal c "/foo"
-      result <- clientRequest c rm 3 "" mempty
-      return ()
+      void $ clientRequest c rm 3 "" mempty
     server s = do
       let rm = head (normalMethods s)
       serverHandleNormalCall s rm mempty $ \c -> do
@@ -447,12 +447,11 @@ testCustomUserAgent =
     client =
       TestClient (ClientConfig "localhost" 50051 clientArgs) $
         \c -> do rm <- clientRegisterMethodNormal c "/foo"
-                 result <- clientRequest c rm 4 "" mempty
-                 return ()
+                 void $ clientRequest c rm 4 "" mempty
     server = TestServer (serverConf (["/foo"],[],[],[])) $ \s -> do
       let rm = head (normalMethods s)
       serverHandleNormalCall s rm mempty $ \c -> do
-        let ua = (metadata c) M.! "user-agent"
+        let ua = metadata c M.! "user-agent"
         assertBool "User agent prefix is present" $ isPrefixOf "prefix!" ua
         assertBool "User agent suffix is present" $ isSuffixOf "suffix!" ua
         return dummyResp
@@ -468,8 +467,7 @@ testClientCompression =
                    50051
                    [CompressionAlgArg GrpcCompressDeflate]) $ \c -> do
         rm <- clientRegisterMethodNormal c "/foo"
-        result <- clientRequest c rm 1 "hello" mempty
-        return ()
+        void $ clientRequest c rm 1 "hello" mempty
     server = TestServer (serverConf (["/foo"],[],[],[])) $ \s -> do
       let rm = head (normalMethods s)
       serverHandleNormalCall s rm mempty $ \c -> do

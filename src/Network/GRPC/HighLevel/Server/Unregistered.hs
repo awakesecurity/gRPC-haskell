@@ -1,18 +1,22 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE GADTs             #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Network.GRPC.HighLevel.Server.Unregistered where
 
+import           Control.Arrow
+import qualified Control.Exception                         as CE
 import           Control.Monad
-import           Data.Protobuf.Wire.Class
 import           Data.Foldable                             (find)
+import           Data.Protobuf.Wire.Class
 import           Network.GRPC.HighLevel.Server
 import           Network.GRPC.LowLevel
+import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
-import qualified Network.GRPC.LowLevel.Call.Unregistered as U
 
 dispatchLoop :: Server
               -> MetadataMap
@@ -41,7 +45,10 @@ dispatchLoop server meta hN hC hS hB =
                     , mempty
                     , StatusNotFound
                     , StatusDetails "unknown method")
-        handleError f = f >>= handleCallError
+
+        handleError = (handleCallError . left herr =<<) . CE.try
+          where herr (e :: CE.SomeException) = GRPCIOHandlerException (show e)
+
         unaryHandler :: (Message a, Message b) =>
                         U.ServerCall
                         -> ServerHandler a b
