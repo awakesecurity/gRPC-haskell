@@ -8,6 +8,7 @@
 
 module Network.GRPC.HighLevel.Server.Unregistered where
 
+import           Control.Concurrent
 import           Control.Arrow
 import qualified Control.Exception                         as CE
 import           Control.Monad
@@ -81,7 +82,9 @@ dispatchLoop server meta hN hC hS hB =
 
 serverLoop :: ServerOptions -> IO ()
 serverLoop ServerOptions{..} =
-  withGRPC $ \grpc ->
+  -- We run the loop in a new thread so that we can kill the serverLoop thread.
+  -- Without this fork, we block on a foreign call, which can't be interrupted.
+  void $ forkIO $ withGRPC $ \grpc ->
     withServer grpc config $ \server -> do
       dispatchLoop server
                    optInitialMetadata

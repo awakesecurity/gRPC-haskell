@@ -36,10 +36,10 @@ library
     , proto3-wire
     , protobuf-wire
 
-    , async
+    , async ==2.1.*
     , tasty >= 0.11 && <0.12
     , tasty-hunit >= 0.9 && <0.10
-    , safe
+    , safe ==0.3.*
     , vector
 
   c-sources:
@@ -198,3 +198,21 @@ test-suite test
   if flag(debug)
     CPP-Options: -DDEBUG
     CC-Options:  -DGRPC_HASKELL_DEBUG
+
+benchmark bench
+  type: exitcode-stdio-1.0
+  build-depends:
+    base ==4.8.*
+    , grpc-haskell
+    , async ==2.1.*
+    , criterion ==1.1.*
+    , protobuf-wire
+    , bytestring ==0.10.*
+    , random >=1.0.0
+  hs-source-dirs: bench
+  main-is: Bench.hs
+  ghc-options:      -Wall -O2 -threaded -rtsopts -with-rtsopts=-N
+  if flag(debug)
+    CPP-Options: -DDEBUG
+    CC-Options:  -DGRPC_HASKELL_DEBUG
+  default-language: Haskell2010
