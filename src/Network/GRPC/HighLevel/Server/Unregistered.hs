@@ -15,12 +15,13 @@ import qualified Network.GRPC.LowLevel.Server.Unregistered as U
 import qualified Network.GRPC.LowLevel.Call.Unregistered as U
 
 dispatchLoop :: Server
+              -> MetadataMap
               -> [Handler 'Normal]
               -> [Handler 'ClientStreaming]
               -> [Handler 'ServerStreaming]
               -> [Handler 'BiDiStreaming]
               -> IO ()
-dispatchLoop server hN hC hS hB =
+dispatchLoop server meta hN hC hS hB =
   forever $ U.withServerCallAsync server $ \call -> do
     case findHandler call allHandlers of
       Just (AnyHandler (UnaryHandler _ h)) -> unaryHandler call h
@@ -35,7 +36,7 @@ dispatchLoop server hN hC hS hB =
         findHandler call = find ((== (U.callMethod call))
                                  . anyHandlerMethodName)
         unknownHandler call =
-          void $ U.serverHandleNormalCall' server call mempty $ \_ _ ->
+          void $ U.serverHandleNormalCall' server call meta $ \_ _ ->
             return (mempty
                     , mempty
                     , StatusNotFound
@@ -47,7 +48,7 @@ dispatchLoop server hN hC hS hB =
                         -> IO ()
         unaryHandler call h =
           handleError $
-            U.serverHandleNormalCall' server call mempty $ \_call' bs ->
+            U.serverHandleNormalCall' server call meta $ \_call' bs ->
               convertServerHandler h (fmap (const bs) $ U.convertCall call)
         csHandler :: (Message a, Message b) =>
                      U.ServerCall
@@ -55,27 +56,28 @@ dispatchLoop server hN hC hS hB =
                      -> IO ()
         csHandler call h =
           handleError $
-            U.serverReader server call mempty (convertServerReaderHandler h)
+            U.serverReader server call meta (convertServerReaderHandler h)
         ssHandler :: (Message a, Message b) =>
                      U.ServerCall
                      -> ServerWriterHandler a b
                      -> IO ()
         ssHandler call h =
           handleError $
-            U.serverWriter server call mempty (convertServerWriterHandler h)
+            U.serverWriter server call meta (convertServerWriterHandler h)
         bdHandler :: (Message a, Message b) =>
                      U.ServerCall
                      -> ServerRWHandler a b
                      -> IO ()
         bdHandler call h =
           handleError $
-            U.serverRW server call mempty (convertServerRWHandler h)
+            U.serverRW server call meta (convertServerRWHandler h)
 
 serverLoop :: ServerOptions -> IO ()
 serverLoop ServerOptions{..} =
   withGRPC $ \grpc ->
     withServer grpc config $ \server -> do
       dispatchLoop server
+                   optInitialMetadata
                    optNormalHandlers
                    optClientStreamHandlers
                    optServerStreamHandlers

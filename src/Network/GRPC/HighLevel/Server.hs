@@ -175,7 +175,8 @@ data ServerOptions = ServerOptions
                       optServerPort           :: Port,
                       optUseCompression       :: Bool,
                       optUserAgentPrefix      :: String,
-                      optUserAgentSuffix      :: String}
+                      optUserAgentSuffix      :: String,
+                      optInitialMetadata      :: MetadataMap}
 
 defaultOptions :: ServerOptions
 defaultOptions =
@@ -186,7 +187,8 @@ defaultOptions =
                  optServerPort = 50051,
                  optUseCompression = False,
                  optUserAgentPrefix = "grpc-haskell/0.0.0",
-                 optUserAgentSuffix = ""}
+                 optUserAgentSuffix = "",
+                 optInitialMetadata = mempty}
 
 serverLoop :: ServerOptions -> IO ()
 serverLoop opts =
