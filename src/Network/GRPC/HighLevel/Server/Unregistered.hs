@@ -9,6 +9,7 @@
 module Network.GRPC.HighLevel.Server.Unregistered where
 
 import           Control.Concurrent
+import           Control.Concurrent.Async                  (async, wait)
 import           Control.Arrow
 import qualified Control.Exception                         as CE
 import           Control.Monad
@@ -81,10 +82,10 @@ dispatchLoop server meta hN hC hS hB =
             U.serverRW server call meta (convertServerRWHandler h)
 
 serverLoop :: ServerOptions -> IO ()
-serverLoop ServerOptions{..} =
+serverLoop ServerOptions{..} = do
   -- We run the loop in a new thread so that we can kill the serverLoop thread.
   -- Without this fork, we block on a foreign call, which can't be interrupted.
-  void $ forkIO $ withGRPC $ \grpc ->
+  tid <- async $ withGRPC $ \grpc ->
     withServer grpc config $ \server -> do
       dispatchLoop server
                    optInitialMetadata
@@ -92,6 +93,7 @@ serverLoop ServerOptions{..} =
                    optClientStreamHandlers
                    optServerStreamHandlers
                    optBiDiStreamHandlers
+  wait tid
   where
     config =
       ServerConfig
