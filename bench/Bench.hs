@@ -18,6 +18,7 @@ import           GHC.Generics (Generic)
 import           Network.GRPC.HighLevel.Server hiding (serverLoop)
 import           Network.GRPC.HighLevel.Server.Unregistered (serverLoop)
 import           Network.GRPC.LowLevel
+import           Network.GRPC.LowLevel.GRPC (threadDelaySecs)
 import           System.Random (randomRIO)
 
 data AddRequest = AddRequest {addX :: Fixed Word32
@@ -93,9 +94,6 @@ serverOpts =
                  , optClientStreamHandlers = [addClientStreamHandler]
                  , optServerStreamHandlers = [addServerStreamHandler]
                  , optBiDiStreamHandlers   = [addBiDiHandler]}
-
-threadDelaySecs :: Int -> IO ()
-threadDelaySecs = threadDelay . (* 10^(6::Int))
 
 main :: IO ()
 main = bracket startServer stopServer $ const $ withGRPC $ \grpc ->

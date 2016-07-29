@@ -8,6 +8,7 @@ import           Control.Monad
 import qualified Data.ByteString                as B
 import           Foreign.Marshal.Alloc
 import           Foreign.Storable
+import           Network.GRPC.LowLevel.GRPC (threadDelaySecs)
 import           Network.GRPC.Unsafe
 import           Network.GRPC.Unsafe.ByteBuffer
 import           Network.GRPC.Unsafe.Metadata
@@ -125,9 +126,6 @@ assertCqEventComplete e = do
 
 grpc :: IO a -> IO ()
 grpc = bracket_ grpcInit grpcShutdown . void
-
-threadDelaySecs :: Int -> IO ()
-threadDelaySecs = threadDelay . (* 10^(6::Int))
 
 _nowarnUnused :: a
 _nowarnUnused = assertCqEventComplete `undefined` threadDelaySecs

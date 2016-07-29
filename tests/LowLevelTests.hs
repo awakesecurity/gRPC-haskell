@@ -21,6 +21,7 @@ import           Data.ByteString                           (ByteString,
                                                             isSuffixOf)
 import qualified Data.Map                                  as M
 import           Network.GRPC.LowLevel
+import           Network.GRPC.LowLevel.GRPC (threadDelaySecs)
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Client.Unregistered as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
@@ -608,9 +609,6 @@ serverConf (ns, cs, ss, bs) =
                  methodsToRegisterClientStreaming = cs,
                  methodsToRegisterServerStreaming = ss,
                  methodsToRegisterBiDiStreaming = bs}
-
-threadDelaySecs :: Int -> IO ()
-threadDelaySecs = threadDelay . (* 10^(6::Int))
 
 mgdGRPC :: Managed GRPC
 mgdGRPC = managed withGRPC
