@@ -86,9 +86,10 @@ library
   include-dirs:         include
   hs-source-dirs:       src
   default-extensions:   CPP
+  CC-Options: -std=c99
   if flag(debug)
     CPP-Options: -DDEBUG
-    CC-Options:  -DGRPC_HASKELL_DEBUG
+    CC-Options:  -DGRPC_HASKELL_DEBUG -std=c99
 
 executable hellos-server
   if flag(with-examples)
