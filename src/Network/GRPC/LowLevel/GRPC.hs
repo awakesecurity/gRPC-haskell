@@ -2,21 +2,30 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 
-module Network.GRPC.LowLevel.GRPC where
+module Network.GRPC.LowLevel.GRPC(
+GRPC
+, withGRPC
+, GRPCIOError(..)
+, throwIfCallError
+, grpcDebug
+, threadDelaySecs
+, C.MetadataMap(..)
+, StatusDetails(..)
+) where
 
 import           Control.Concurrent     (threadDelay, myThreadId)
 import           Control.Exception
 import           Data.String            (IsString)
+import           Data.ByteString        (ByteString)
 import qualified Data.ByteString        as B
 import qualified Data.Map               as M
 import           Data.Typeable
 import qualified Network.GRPC.Unsafe    as C
 import qualified Network.GRPC.Unsafe.Op as C
+import qualified Network.GRPC.Unsafe.Metadata as C
 import           Proto3.Wire.Decode     (ParseError)
 
-type MetadataMap = M.Map B.ByteString B.ByteString
-
-newtype StatusDetails = StatusDetails B.ByteString
+newtype StatusDetails = StatusDetails ByteString
   deriving (Eq, IsString, Monoid, Show)
 
 -- | Functions as a proof that the gRPC core has been started. The gRPC core
@@ -72,33 +81,3 @@ grpcDebug' str = do
 
 threadDelaySecs :: Int -> IO ()
 threadDelaySecs = threadDelay . (* 10^(6::Int))
-
-{-
--- TODO: remove this once finally decided on whether to use it.
--- | Monad for running gRPC operations.
-newtype GRPCIO a = GRPCIO {unGRPCIO :: ExceptT GRPCIOError IO a}
-  deriving (Functor, Applicative, Monad, MonadIO)
-
-deriving instance MonadError GRPCIOError GRPCIO
-
-runGRPCIO :: GRPCIO a -> IO (Either GRPCIOError a)
-runGRPCIO = runExceptT . unGRPCIO
-
-unrunGRPCIO :: IO (Either GRPCIOError a) -> GRPCIO a
-unrunGRPCIO = GRPCIO . ExceptT
-
-continueFrom :: (a -> GRPCIO b) -> (Either GRPCIOError a) -> GRPCIO b
-continueFrom f (Left x) = throwError x
-continueFrom f (Right x) = f x
-
-wrapGRPC :: Either GRPCIOError a -> GRPCIO a
-wrapGRPC (Left x) = throwError x
-wrapGRPC (Right x) = return x
-
-grpcBracket :: GRPCIO a -> (a -> GRPCIO b) -> (a -> GRPCIO c) -> GRPCIO c
-grpcBracket create destroy f = unrunGRPCIO $ do
-  let createAction = runGRPCIO create
-  let fAction = runGRPCIO . continueFrom f
-  let destroyAction = runGRPCIO . continueFrom destroy
-  bracket createAction destroyAction fAction
--}

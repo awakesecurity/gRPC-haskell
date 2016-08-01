@@ -19,7 +19,9 @@ import           Control.Monad.Managed
 import           Data.ByteString                           (ByteString,
                                                             isPrefixOf,
                                                             isSuffixOf)
-import qualified Data.Map                                  as M
+import qualified Data.Map.Strict                           as M
+import qualified Data.Set                                  as S
+import           GHC.Exts                                  (fromList, toList)
 import           Network.GRPC.LowLevel
 import           Network.GRPC.LowLevel.GRPC (threadDelaySecs)
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
@@ -130,7 +132,9 @@ testPayload :: TestTree
 testPayload =
   csTest "registered normal request/response" client server (["/foo"],[],[],[])
   where
-    clientMD = [("foo_key", "foo_val"), ("bar_key", "bar_val")]
+    clientMD = [ ("foo_key", "foo_val")
+               , ("bar_key", "bar_val")
+               , ("bar_key", "bar_repeated_val")]
     client c = do
       rm <- clientRegisterMethodNormal c "/foo"
       clientRequest c rm 10 "Hello!" clientMD >>= do
@@ -452,7 +456,10 @@ testCustomUserAgent =
     server = TestServer (serverConf (["/foo"],[],[],[])) $ \s -> do
       let rm = head (normalMethods s)
       serverHandleNormalCall s rm mempty $ \c -> do
-        let ua = metadata c M.! "user-agent"
+        ua <- case toList $ (unMap $ metadata c) M.! "user-agent" of
+                []   -> fail "user-agent missing from metadata."
+                [ua] -> return ua
+                _    -> fail "multiple user-agent keys."
         assertBool "User agent prefix is present" $ isPrefixOf "prefix!" ua
         assertBool "User agent suffix is present" $ isSuffixOf "suffix!" ua
         return dummyResp
@@ -510,7 +517,7 @@ testClientServerCompression =
 is :: (Eq a, Show a, MonadIO m) => m a -> a -> m ()
 is act x = act >>= liftIO . (@?= x)
 
-dummyMeta :: M.Map ByteString ByteString
+dummyMeta :: MetadataMap
 dummyMeta = [("foo","bar")]
 
 dummyResp :: (ByteString, MetadataMap, StatusCode, StatusDetails)
@@ -565,10 +572,10 @@ csTest' nm tc ts =
 -- @actual@, or when values differ for matching keys.
 checkMD :: String -> MetadataMap -> MetadataMap -> Assertion
 checkMD desc expected actual =
-  unless (M.null $ expected `diff` actual) $
-    assertEqual desc expected (actual `M.intersection` expected)
+    assertEqual desc expected' (actual' `S.intersection` expected')
   where
-    diff = M.differenceWith $ \a b -> if a == b then Nothing else Just b
+    expected' = fromList . toList $ expected
+    actual' = fromList . toList $ actual
 
 checkReqRslt :: Show a => (b -> Assertion) -> Either a b -> Assertion
 checkReqRslt = either clientFail

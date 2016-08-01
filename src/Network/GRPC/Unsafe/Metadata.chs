@@ -1,20 +1,54 @@
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE StandaloneDeriving         #-}
+{-# LANGUAGE TupleSections              #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 module Network.GRPC.Unsafe.Metadata where
 
 import Control.Exception
 import Control.Monad
 import Data.ByteString (ByteString, useAsCString, packCString)
-import Data.Map.Strict as M
+import Data.Function (on)
+import Data.List (sortBy, groupBy)
+import qualified Data.SortedList as SL
+import qualified Data.Map.Strict as M
+import Data.Ord (comparing)
 import Foreign.C.String
 import Foreign.Ptr
 import Foreign.Storable
-
+import GHC.Exts
 
 #include <grpc/grpc.h>
 #include <grpc/status.h>
 #include <grpc/impl/codegen/grpc_types.h>
 #include <grpc_haskell.h>
+
+-- | Represents metadata for a given RPC, consisting of key-value pairs. Keys
+-- are allowed to be repeated. Since repeated keys are unlikely in practice,
+-- the 'IsList' instance uses key-value pairs as items. For example,
+-- @fromList [("key1","val1"),("key2","val2"),("key1","val3")]@.
+newtype MetadataMap = MetadataMap {unMap :: M.Map ByteString (SL.SortedList ByteString)}
+  deriving Eq
+
+
+instance Show MetadataMap where
+  show m = "fromList " ++ show (M.toList (unMap m))
+
+instance Monoid MetadataMap where
+  mempty = MetadataMap $ M.empty
+  mappend (MetadataMap m1) (MetadataMap m2) =
+    MetadataMap $ M.unionWith mappend m1 m2
+
+instance IsList MetadataMap where
+  type Item MetadataMap = (ByteString, ByteString)
+  fromList = MetadataMap
+             . M.fromList
+             . map (\xs -> ((fst . head) xs, fromList $ map snd xs))
+             . groupBy ((==) `on` fst)
+             . sortBy (comparing fst)
+  toList = concatMap (\(k,vs) -> map (k,) vs)
+           . map (fmap toList)
+           . M.toList
+           . unMap
 
 -- | Represents a pointer to one or more metadata key/value pairs. This type
 -- is intended to be used when sending metadata.
@@ -87,22 +121,22 @@ getMetadataKey m = getMetadataKey' m >=> packCString
 getMetadataVal :: MetadataKeyValPtr -> Int -> IO ByteString
 getMetadataVal m = getMetadataVal' m >=> packCString
 
-createMetadata :: M.Map ByteString ByteString -> IO MetadataKeyValPtr
+createMetadata :: MetadataMap -> IO MetadataKeyValPtr
 createMetadata m = do
-  let l = M.size m
-  let indexedKeyVals = zip [0..] $ M.toList m
+  let indexedKeyVals = zip [0..] $ toList m
+      l = length indexedKeyVals
   metadata <- metadataAlloc l
   forM_ indexedKeyVals $ \(i,(k,v)) -> setMetadataKeyVal k v metadata i
   return metadata
 
-getAllMetadataArray :: MetadataArray -> IO (M.Map ByteString ByteString)
+getAllMetadataArray :: MetadataArray -> IO MetadataMap
 getAllMetadataArray m = do
   kvs <- metadataArrayGetMetadata m
   l <- metadataArrayGetCount m
   getAllMetadata kvs l
 
-getAllMetadata :: MetadataKeyValPtr -> Int -> IO (M.Map ByteString ByteString)
+getAllMetadata :: MetadataKeyValPtr -> Int -> IO MetadataMap
 getAllMetadata m count = do
   let indices = [0..count-1]
-  fmap M.fromList $ forM indices $
+  fmap fromList $ forM indices $
     \i -> liftM2 (,) (getMetadataKey m i) (getMetadataVal m i)

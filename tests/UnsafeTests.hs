@@ -1,6 +1,7 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
-module UnsafeTests (unsafeTests) where
+module UnsafeTests (unsafeTests, unsafeProperties) where
 
 import           Control.Concurrent                        (threadDelay)
 import           Control.Exception (bracket_)
@@ -8,6 +9,7 @@ import           Control.Monad
 import qualified Data.ByteString                as B
 import           Foreign.Marshal.Alloc
 import           Foreign.Storable
+import           GHC.Exts
 import           Network.GRPC.LowLevel.GRPC (threadDelaySecs)
 import           Network.GRPC.Unsafe
 import           Network.GRPC.Unsafe.ByteBuffer
@@ -17,6 +19,9 @@ import           Network.GRPC.Unsafe.Time
 import           Network.GRPC.Unsafe.ChannelArgs
 import           System.Clock
 import           Test.Tasty
+import           Test.Tasty.HUnit               as HU (testCase, (@?=),
+                                                       assertBool)
+import           Test.Tasty.QuickCheck          as QC
 import           Test.Tasty.HUnit               as HU (testCase, (@?=))
 
 unsafeTests :: TestTree
@@ -34,6 +39,20 @@ unsafeTests = testGroup "Unit tests for unsafe C bindings"
   , testCreateDestroyDeadline
   , testCreateDestroyChannelArgs
   ]
+
+unsafeProperties :: TestTree
+unsafeProperties = testGroup "QuickCheck properties for unsafe C bindings"
+  [ metadataIsList ]
+
+instance Arbitrary B.ByteString where
+  arbitrary = B.pack <$> arbitrary
+
+instance Arbitrary MetadataMap where
+  arbitrary = fromList <$> arbitrary
+
+metadataIsList :: TestTree
+metadataIsList = QC.testProperty "Metadata IsList instance" $
+                   \(md :: MetadataMap) -> md == (fromList $ toList md)
 
 largeByteString :: B.ByteString
 largeByteString = B.pack $ take (32*1024*1024) $ cycle [97..99]

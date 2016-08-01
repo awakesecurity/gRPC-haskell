@@ -22,7 +22,7 @@ GRPC
 , GRPCMethodType(..)
 , RegisteredMethod
 , NormalRequestResult(..)
-, MetadataMap
+, MetadataMap(..)
 , MethodName(..)
 , StatusDetails(..)
 

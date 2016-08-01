@@ -12,7 +12,6 @@ import           Control.Monad.Trans.Class             (MonadTrans(lift))
 import           Control.Monad.Trans.Except
 import           Data.ByteString                       (ByteString)
 import qualified Data.ByteString                       as B
-import qualified Data.Map.Strict                       as M
 import           Data.Maybe                            (catMaybes)
 import           Foreign.C.String                      (CString)
 import           Foreign.C.Types                       (CInt)
@@ -20,6 +19,7 @@ import           Foreign.Marshal.Alloc                 (free, malloc,
                                                         mallocBytes)
 import           Foreign.Ptr                           (Ptr, nullPtr)
 import           Foreign.Storable                      (peek, poke)
+import           GHC.Exts                              (IsList(..))
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe                   as C (Call)
@@ -41,7 +41,7 @@ data Op = OpSendInitialMetadata MetadataMap
           | OpRecvMessage
           | OpRecvStatusOnClient
           | OpRecvCloseOnServer
-          deriving (Eq, Show)
+          deriving (Show)
 
 -- | Container holding the pointers to the C and gRPC data needed to execute the
 -- corresponding 'Op'. These are obviously unsafe, and should only be used with
@@ -70,14 +70,14 @@ createOpContext :: Op -> IO OpContext
 createOpContext (OpSendInitialMetadata m) =
   OpSendInitialMetadataContext
   <$> C.createMetadata m
-  <*> return (M.size m)
+  <*> return (length $ toList m)
 createOpContext (OpSendMessage bs) =
   fmap OpSendMessageContext (C.createByteBuffer bs)
 createOpContext (OpSendCloseFromClient) = return OpSendCloseFromClientContext
 createOpContext (OpSendStatusFromServer m code (StatusDetails str)) =
   OpSendStatusFromServerContext
   <$> C.createMetadata m
-  <*> return (M.size m)
+  <*> return (length $ toList m)
   <*> return code
   <*> return str
 createOpContext OpRecvInitialMetadata =
@@ -158,7 +158,7 @@ data OpRecvResult =
     -- which case this will be 'Nothing'.
   | OpRecvStatusOnClientResult MetadataMap C.StatusCode B.ByteString
   | OpRecvCloseOnServerResult Bool -- ^ True if call was cancelled.
-  deriving (Eq, Show)
+  deriving (Show)
 
 -- | For the given 'OpContext', if the 'Op' receives data, copies the data out
 -- of the 'OpContext' and into GC-managed Haskell types. After this, it is safe
