@@ -52,3 +52,8 @@ in  pkgs.stdenv.mkDerivation rec
         ];
     }
 ```
+
+Using the Library
+-----------------
+
+You must compile with `-threaded`, because we rely on being able to execute Haskell while blocking on foreign calls to the gRPC library. If not using code generation, the recommended place to start is in the `Network.GRPC.HighLevel.Server.Unregistered` module, where `serverLoop` provides a handler loop.
