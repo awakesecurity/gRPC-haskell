@@ -74,6 +74,18 @@ let
 
           grpc-haskell =
             haskellPackagesNew.callPackage ./default.nix { };
+
+          sorted-list = haskellPackagesNew.callPackage
+            ({ mkDerivation, base, deepseq }:
+             mkDerivation {
+               pname = "sorted-list";
+               version = "0.2.0.0";
+               sha256 = "cc52c787b056f4d3a9ecc59f06701695602558a4233042ff8f613cdd4985d138";
+               libraryHaskellDepends = [ base deepseq ];
+               homepage = "https://github.com/Daniel-Diaz/sorted-list/blob/master/README.md";
+               description = "Type-enforced sorted lists and related functions";
+               license = pkgs.stdenv.lib.licenses.bsd3;
+             }) {};
         };
       };
     };
