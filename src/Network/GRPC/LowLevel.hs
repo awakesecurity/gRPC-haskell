@@ -29,6 +29,7 @@ GRPC
 -- * Configuration options
 , Arg(..)
 , CompressionAlgorithm(..)
+, CompressionLevel(..)
 , Port
 
 -- * Server
@@ -88,4 +89,6 @@ import           Network.GRPC.LowLevel.Call
 
 import Network.GRPC.Unsafe (ConnectivityState(..))
 import Network.GRPC.Unsafe.Op (StatusCode(..))
-import Network.GRPC.Unsafe.ChannelArgs(Arg(..), CompressionAlgorithm(..))
+import Network.GRPC.Unsafe.ChannelArgs(Arg(..)
+                                       , CompressionAlgorithm(..)
+                                       , CompressionLevel(..))

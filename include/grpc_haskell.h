@@ -146,6 +146,7 @@ void* grpc_server_register_method_(
 // translate_arg_key in grpc_haskell.c.
 enum supported_arg_key {
   compression_algorithm_key = 0,
+  compression_level_key,
   user_agent_prefix_key,
   user_agent_suffix_key
 };

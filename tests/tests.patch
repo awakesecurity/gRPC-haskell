@@ -1,0 +1,30 @@
+diff --git a/tests/protoc.sh b/tests/protoc.sh
+index 054c8b6..4bf0893 100644
+--- a/tests/protoc.sh
++++ b/tests/protoc.sh
+@@ -1,8 +1,8 @@
+-#!/bin/bash -eu
++#! @shell@ -eu
+ 
+ pyTmpDir=$1
+ 
+-python                          \
++@python@/bin/python             \
+     -m grpc.tools.protoc        \
+     -I tests                    \
+     --python_out=$pyTmpDir      \
+diff --git a/tests/simple-server.sh b/tests/simple-server.sh
+index 37a0a63..8e8fb66 100755
+--- a/tests/simple-server.sh
++++ b/tests/simple-server.sh
+@@ -1,8 +1,8 @@
+-#!/bin/bash -eu
++#! @shell@ -eu
+ 
+ hsTmpDir=$1
+ 
+-stack ghc --                   \
++@ghc@/bin/ghc                  \
+     --make                     \
+     -threaded                  \
+     -odir $hsTmpDir            \

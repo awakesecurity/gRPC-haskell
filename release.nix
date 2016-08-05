@@ -33,12 +33,12 @@ let
     packageOverrides = pkgs: rec {
       grpc = pkgs.stdenv.mkDerivation rec {
         name    = "grpc-${version}";
-        version = "0.14-${pkgs.lib.strings.substring 0 7 rev}";
-        rev     = "2b223977c13975648bac2f422363e1ebf83506ce";
+        version = "0.15-${pkgs.lib.strings.substring 0 7 rev}";
+        rev     = "03efbd34ce64615f58007eae667b375accc6c8e6";
         src = pkgs.fetchgit {
           inherit rev;
           url    = "https://github.com/grpc/grpc.git";
-          sha256 = "0arxjdczgj6rbg14f6x24863mrz0xgpakmdfg54zp0xp7h2pghm6";
+          sha256 = "1pac3jby5p5a6p6vpqc5whkgy36hnn2ph2jbckg3w73hrxrnwmdh";
         };
         preInstall  = "export prefix";
         buildInputs =
@@ -53,7 +53,7 @@ let
       };
 
       haskellPackages = pkgs.haskell.packages.ghc7103.override {
-        overrides = haskellPackagesNew: haskellPackagesOld: {
+        overrides = haskellPackagesNew: haskellPackagesOld: rec {
           proto3-wire =
             let proto3-wire-src = pkgs.fetchgit {
               url    = "https://github.com/awakenetworks/proto3-wire.git";
@@ -72,8 +72,14 @@ let
             in
             haskellPackagesNew.callPackage protobuf-wire-src { };
 
-          grpc-haskell =
+          grpc-haskell-no-tests =
             haskellPackagesNew.callPackage ./default.nix { };
+
+          grpc-haskell =
+            haskellPackagesNew.callPackage (import ./default-tests.nix {
+              inherit grpc-haskell-no-tests;
+              inherit (pkgs) ghc python;
+            }) { };
 
           sorted-list = haskellPackagesNew.callPackage
             ({ mkDerivation, base, deepseq }:

@@ -28,4 +28,5 @@ mkDerivation {
   homepage = "http://github.com/aloiscochard/grpc-haskell";
   description = "Haskell implementation of gRPC layered on shared C library";
   license = stdenv.lib.licenses.asl20;
+  doCheck = false;
 }

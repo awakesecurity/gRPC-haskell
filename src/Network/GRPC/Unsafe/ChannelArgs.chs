@@ -2,10 +2,11 @@
 
 module Network.GRPC.Unsafe.ChannelArgs where
 
-import Control.Exception
-import Control.Monad
-import Foreign.Storable
-import Foreign.Marshal.Alloc (malloc, free)
+import           Control.Exception
+import           Control.Monad
+import           Data.List             (find)
+import           Foreign.Marshal.Alloc (malloc, free)
+import           Foreign.Storable
 
 #include <grpc/grpc.h>
 #include <grpc/status.h>
@@ -47,6 +48,7 @@ data ArgValue = StringArg String | IntArg Int
 -- | Supported arguments for a channel. More cases will be added as we figure
 -- out what they are.
 data Arg = CompressionAlgArg CompressionAlgorithm
+           | CompressionLevelArg CompressionLevel
            | UserAgentPrefix String
            | UserAgentSuffix String
   deriving (Show, Eq)
@@ -60,6 +62,8 @@ data Arg = CompressionAlgArg CompressionAlgorithm
 createArg :: GrpcArg -> Arg -> Int -> IO ()
 createArg array (CompressionAlgArg alg) i =
   createIntArg array i CompressionAlgorithmKey (fromEnum alg)
+createArg array (CompressionLevelArg lvl) i =
+  createIntArg array i CompressionLevelKey (fromEnum lvl)
 createArg array (UserAgentPrefix prefix) i =
   createStringArg array i UserAgentPrefixKey prefix
 createArg array (UserAgentSuffix suffix) i =

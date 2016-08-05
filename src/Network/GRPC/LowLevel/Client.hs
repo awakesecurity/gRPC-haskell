@@ -31,6 +31,7 @@ data Client = Client {clientChannel :: C.Channel,
                      }
 
 -- | Configuration necessary to set up a client.
+
 data ClientConfig = ClientConfig {serverHost :: Host,
                                   serverPort :: Port,
                                   clientArgs :: [C.Arg]
@@ -44,8 +45,8 @@ clientEndpoint :: ClientConfig -> Endpoint
 clientEndpoint ClientConfig{..} = endpoint serverHost serverPort
 
 createClient :: GRPC -> ClientConfig -> IO Client
-createClient grpc clientConfig =
-  C.withChannelArgs (clientArgs clientConfig) $ \chanargs -> do
+createClient grpc clientConfig@ClientConfig{..} =
+  C.withChannelArgs clientArgs $ \chanargs -> do
     let Endpoint e = clientEndpoint clientConfig
     clientChannel <- C.grpcInsecureChannelCreate e chanargs C.reserved
     clientCQ <- createCompletionQueue grpc

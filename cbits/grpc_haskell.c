@@ -184,7 +184,9 @@ const char* get_metadata_val(grpc_metadata *arr, size_t i){
 }
 
 grpc_op* op_array_create(size_t n){
-  return malloc(n*sizeof(grpc_op));
+  grpc_op* ops = malloc(n*sizeof(grpc_op));
+  memset(ops, 0, n*sizeof(grpc_op));
+  return ops;
 }
 
 void op_array_destroy(grpc_op* op_array, size_t n){
@@ -415,7 +417,9 @@ grpc_arg* create_arg_array(size_t n){
 char* translate_arg_key(enum supported_arg_key key){
   switch (key) {
     case compression_algorithm_key:
-      return GRPC_COMPRESSION_ALGORITHM_ARG;
+      return GRPC_COMPRESSION_CHANNEL_DEFAULT_ALGORITHM;
+    case compression_level_key:
+      return GRPC_COMPRESSION_CHANNEL_DEFAULT_LEVEL;
     case user_agent_prefix_key:
       return GRPC_ARG_PRIMARY_USER_AGENT_STRING;
     case user_agent_suffix_key:

@@ -31,10 +31,6 @@ testCancelFromServer =
         Left x -> error $ "Client recv error: " ++ show x
         Right [_,_,OpRecvStatusOnClientResult _ code details] -> do
           code @?= StatusPermissionDenied
-          assertBool "Received status details or RST_STREAM error" $
-            details == "TestStatus"
-            ||
-            isPrefixOf "Received RST_STREAM" details
           return $ Right ()
         wrong -> error $ "Unexpected op results: " ++ show wrong
 

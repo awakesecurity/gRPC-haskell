@@ -22,10 +22,10 @@ testServerGeneration = testCase "server generation" $ do
 
   compileSimpleDotProto
 
-  exitCode <- shell (T.concat ["stack ghc -- --make -threaded -odir ", hsTmpDir, " -hidir ", hsTmpDir, " -o ", hsTmpDir, "/simple-server ", hsTmpDir, "/Simple.hs tests/TestServer.hs > /dev/null"]) empty
+  exitCode <- proc "tests/simple-server.sh" [hsTmpDir] empty
   exitCode @?= ExitSuccess
 
-  exitCode <- shell (T.concat ["python -m grpc.tools.protoc -I tests --python_out=", pyTmpDir, " --grpc_python_out=", pyTmpDir, " tests/simple.proto"]) empty
+  exitCode <- proc "tests/protoc.sh" [pyTmpDir] empty
   exitCode @?= ExitSuccess
 
   runManaged $ do

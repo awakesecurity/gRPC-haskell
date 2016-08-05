@@ -158,8 +158,8 @@ testServerCancel =
   where
     client c = do
       rm <- clientRegisterMethodNormal c "/foo"
-      res <- clientRequest c rm 10 "" mempty
-      res @?= badStatus StatusCancelled
+      Left (GRPCIOBadStatusCode s _) <- clientRequest c rm 10 "" mempty
+      s @?= StatusCancelled
     server s = do
       let rm = head (normalMethods s)
       r <- serverHandleNormalCall s rm mempty $ \c -> do
@@ -504,6 +504,34 @@ testClientServerCompression =
                          50051
                          ["/foo"] [] [] []
                          [CompressionAlgArg GrpcCompressDeflate]
+    server = TestServer sconf $ \s -> do
+      let rm = head (normalMethods s)
+      serverHandleNormalCall s rm dummyMeta $ \sc -> do
+        payload sc @?= "hello"
+        return ("hello", dummyMeta, StatusOk, StatusDetails "")
+      return ()
+
+testClientServerCompressionLvl :: TestTree
+testClientServerCompressionLvl =
+  csTest' "client/server compression: no errors" client server
+  where
+    cconf = ClientConfig "localhost"
+                         50051
+                         [CompressionLevelArg GrpcCompressLevelHigh]
+    client = TestClient cconf $ \c -> do
+      rm <- clientRegisterMethodNormal c "/foo"
+      clientRequest c rm 1 "hello" mempty >>= do
+        checkReqRslt $ \NormalRequestResult{..} -> do
+          rspCode @?= StatusOk
+          rspBody @?= "hello"
+          details @?= ""
+          initMD  @?= dummyMeta
+          trailMD @?= dummyMeta
+      return ()
+    sconf = ServerConfig "localhost"
+                         50051
+                         ["/foo"] [] [] []
+                         [CompressionLevelArg GrpcCompressLevelLow]
     server = TestServer sconf $ \s -> do
       let rm = head (normalMethods s)
       serverHandleNormalCall s rm dummyMeta $ \sc -> do
