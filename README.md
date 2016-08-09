@@ -21,7 +21,7 @@ of the repository, and install as follows:
 
 ```sh
 git clone https://github.com/grpc/grpc.git
-git checkout 2b223977c13975648bac2f422363e1ebf83506ce
+git checkout release-0_15_1
 cd grpc
 git submodule update --init
 make
@@ -36,8 +36,8 @@ in  pkgs.stdenv.mkDerivation rec
     {   name = "grpc";
         src = pkgs.fetchgit
         { url    = "https://github.com/grpc/grpc.git";
-          rev    = "2b223977c13975648bac2f422363e1ebf83506ce";
-          sha256 = "0arxjdczgj6rbg14f6x24863mrz0xgpakmdfg54zp0xp7h2pghm6";
+          rev    = "674b30373e2d6a1e26425952805179f8d52a8c00";
+          sha256 = "05vj48w4h7bn6xyf1wyg2l6psl38h4yz6j1cl0yd2p5h7f5hb3s7";
         };
         preInstall = "export prefix";
         buildInputs =
