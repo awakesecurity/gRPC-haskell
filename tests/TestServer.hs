@@ -23,7 +23,7 @@ handleNormalCall call =
 
         result = sum nums
 
-handleClientStreamingCall :: ServerCall () -> StreamRecv SimpleServiceRequest -> Streaming (Maybe SimpleServiceResponse, MetadataMap, StatusCode, StatusDetails)
+handleClientStreamingCall :: ServerCall () -> StreamRecv SimpleServiceRequest -> IO (Maybe SimpleServiceResponse, MetadataMap, StatusCode, StatusDetails)
 handleClientStreamingCall call recvRequest = go 0 ""
   where go sumAccum nameAccum =
           recvRequest >>= \req ->
@@ -34,7 +34,7 @@ handleClientStreamingCall call recvRequest = go 0 ""
             Right (Just (SimpleServiceRequest name nums)) ->
               go (sumAccum + sum nums) (nameAccum <> name)
 
-handleServerStreamingCall :: ServerCall SimpleServiceRequest -> StreamSend SimpleServiceResponse -> Streaming (MetadataMap, StatusCode, StatusDetails)
+handleServerStreamingCall :: ServerCall SimpleServiceRequest -> StreamSend SimpleServiceResponse -> IO (MetadataMap, StatusCode, StatusDetails)
 handleServerStreamingCall call sendResponse = go
   where go = do forM_ nums $ \num ->
                   sendResponse (SimpleServiceResponse requestName num)
@@ -42,7 +42,7 @@ handleServerStreamingCall call sendResponse = go
 
         SimpleServiceRequest requestName nums = payload call
 
-handleBiDiStreamingCall :: ServerCall () -> StreamRecv SimpleServiceRequest -> StreamSend SimpleServiceResponse -> Streaming (MetadataMap, StatusCode, StatusDetails)
+handleBiDiStreamingCall :: ServerCall () -> StreamRecv SimpleServiceRequest -> StreamSend SimpleServiceResponse -> IO (MetadataMap, StatusCode, StatusDetails)
 handleBiDiStreamingCall call recvRequest sendResponse = go
   where go = recvRequest >>= \req ->
              case req of

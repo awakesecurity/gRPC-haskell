@@ -295,13 +295,14 @@ testBiDiStreaming =
 
     client c = do
       rm  <- clientRegisterMethodBiDiStreaming c "/bidi"
-      eea <- clientRW c rm 10 clientInitMD $ \_initMD recv send -> do
+      eea <- clientRW c rm 10 clientInitMD $ \_srvInitMD recv send writesDone -> do
         send "cw0" `is` Right ()
         recv       `is` Right (Just "sw0")
         send "cw1" `is` Right ()
         recv       `is` Right (Just "sw1")
         recv       `is` Right (Just "sw2")
-        return ()
+        writesDone `is` Right ()
+        recv       `is` Right Nothing
       eea @?= Right (trailMD, serverStatus, serverDtls)
 
     server s = do
@@ -330,19 +331,19 @@ testBiDiStreamingUnregistered =
 
     client c = do
       rm  <- clientRegisterMethodBiDiStreaming c "/bidi"
-      eea <- clientRW c rm 10 clientInitMD $ \_initMD recv send -> do
+      eea <- clientRW c rm 10 clientInitMD $ \_srvInitMD recv send writesDone -> do
         send "cw0" `is` Right ()
         recv       `is` Right (Just "sw0")
         send "cw1" `is` Right ()
         recv       `is` Right (Just "sw1")
         recv       `is` Right (Just "sw2")
-        return ()
+        writesDone `is` Right ()
+        recv       `is` Right Nothing
       eea @?= Right (trailMD, serverStatus, serverDtls)
 
     server s = U.withServerCallAsync s $ \call -> do
       eea <- U.serverRW s call serverInitMD $ \sc recv send -> do
-        liftIO $ checkMD "Client request metadata mismatch"
-                   clientInitMD (metadata sc)
+        checkMD "Client request metadata mismatch" clientInitMD (metadata sc)
         recv       `is` Right (Just "cw0")
         send "sw0" `is` Right ()
         recv       `is` Right (Just "cw1")

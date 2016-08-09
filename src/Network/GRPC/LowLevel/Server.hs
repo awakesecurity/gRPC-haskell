@@ -28,6 +28,7 @@ import           Control.Concurrent.STM.TVar           (TVar
                                                         , newTVarIO)
 import           Control.Exception                     (bracket, finally)
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import           Data.ByteString                       (ByteString)
 import qualified Data.Set as S
@@ -199,7 +200,7 @@ serverRegisterMethod :: C.Server
                         -> MethodName
                         -> Endpoint
                         -> GRPCMethodType
-                        -> IO (C.CallHandle)
+                        -> IO C.CallHandle
 serverRegisterMethod s nm e mty =
   C.grpcServerRegisterMethod s
                              (unMethodName nm)
@@ -312,20 +313,19 @@ withServerCall s rm f =
 -- serverReader (server side of client streaming mode)
 
 type ServerReaderHandlerLL
-  =  ServerCall ()
+  =  ServerCall (MethodPayload 'ClientStreaming)
   -> StreamRecv ByteString
-  -> Streaming (Maybe ByteString, MetadataMap, C.StatusCode, StatusDetails)
+  -> IO (Maybe ByteString, MetadataMap, C.StatusCode, StatusDetails)
 
 serverReader :: Server
              -> RegisteredMethod 'ClientStreaming
-             -> MetadataMap -- ^ initial server metadata
+             -> MetadataMap -- ^ Initial server metadata
              -> ServerReaderHandlerLL
              -> IO (Either GRPCIOError ())
 serverReader s rm initMeta f = withServerCall s rm go
   where
     go sc@ServerCall{ unsafeSC = c, callCQ = ccq } = runExceptT $ do
-      (mmsg, trailMeta, st, ds) <-
-        runStreamingProxy "serverReader" c ccq (f sc streamRecv)
+      (mmsg, trailMeta, st, ds) <- liftIO $ f sc (streamRecvPrim c ccq)
       runOps' c ccq ( OpSendInitialMetadata initMeta
                     : OpSendStatusFromServer trailMeta st ds
                     : maybe [] ((:[]) . OpSendMessage) mmsg
@@ -336,44 +336,42 @@ serverReader s rm initMeta f = withServerCall s rm go
 -- serverWriter (server side of server streaming mode)
 
 type ServerWriterHandlerLL
-  =  ServerCall ByteString
+  =  ServerCall (MethodPayload 'ServerStreaming)
   -> StreamSend ByteString
-  -> Streaming (MetadataMap, C.StatusCode, StatusDetails)
+  -> IO (MetadataMap, C.StatusCode, StatusDetails)
 
 -- | Wait for and then handle a registered, server-streaming call.
 serverWriter :: Server
              -> RegisteredMethod 'ServerStreaming
-             -> MetadataMap
-             -- ^ Initial server metadata
+             -> MetadataMap -- ^ Initial server metadata
              -> ServerWriterHandlerLL
              -> IO (Either GRPCIOError ())
 serverWriter s rm initMeta f = withServerCall s rm go
   where
     go sc@ServerCall{ unsafeSC = c, callCQ = ccq } = runExceptT $ do
       sendInitialMetadata c ccq initMeta
-      st <- runStreamingProxy "serverWriter" c ccq (f sc streamSend)
+      st <- liftIO $ f sc (streamSendPrim c ccq)
       sendStatusFromServer c ccq st
 
 --------------------------------------------------------------------------------
--- serverRW (server side of bidirectional streaming mode)
+-- serverRW (bidirectional streaming mode)
 
 type ServerRWHandlerLL
-  =  ServerCall ()
+  =  ServerCall (MethodPayload 'BiDiStreaming)
   -> StreamRecv ByteString
   -> StreamSend ByteString
-  -> Streaming (MetadataMap, C.StatusCode, StatusDetails)
+  -> IO (MetadataMap, C.StatusCode, StatusDetails)
 
 serverRW :: Server
          -> RegisteredMethod 'BiDiStreaming
-         -> MetadataMap
-            -- ^ initial server metadata
+         -> MetadataMap -- ^ initial server metadata
          -> ServerRWHandlerLL
          -> IO (Either GRPCIOError ())
 serverRW s rm initMeta f = withServerCall s rm go
   where
     go sc@ServerCall{ unsafeSC = c, callCQ = ccq } = runExceptT $ do
       sendInitialMetadata c ccq initMeta
-      st <- runStreamingProxy "serverRW" c ccq (f sc streamRecv streamSend)
+      st <- liftIO $ f sc (streamRecvPrim c ccq) (streamSendPrim c ccq)
       sendStatusFromServer c ccq st
 
 --------------------------------------------------------------------------------
@@ -386,7 +384,7 @@ serverRW s rm initMeta f = withServerCall s rm go
 -- respectively. We pass in the 'ServerCall' so that the server can call
 -- 'serverCallCancel' on it if needed.
 type ServerHandlerLL
-  =  ServerCall ByteString
+  =  ServerCall (MethodPayload 'Normal)
   -> IO (ByteString, MetadataMap, C.StatusCode, StatusDetails)
 
 -- | Wait for and then handle a normal (non-streaming) call.
@@ -399,12 +397,10 @@ serverHandleNormalCall :: Server
 serverHandleNormalCall s rm initMeta f =
   withServerCall s rm go
   where
-    go sc@ServerCall{..} = do
+    go sc@ServerCall{ unsafeSC = c, callCQ = ccq } = do
       (rsp, trailMeta, st, ds) <- f sc
-      void <$> runOps unsafeSC callCQ
-                 [ OpSendInitialMetadata initMeta
-                 , OpRecvCloseOnServer
-                 , OpSendMessage rsp
-                 , OpSendStatusFromServer trailMeta st ds
-                 ]
-               <* grpcDebug "serverHandleNormalCall(R): finished response ops."
+      void <$> runOps c ccq [ OpSendInitialMetadata initMeta
+                            , OpRecvCloseOnServer
+                            , OpSendMessage rsp
+                            , OpSendStatusFromServer trailMeta st ds
+                            ]

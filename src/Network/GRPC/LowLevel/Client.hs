@@ -12,6 +12,7 @@ module Network.GRPC.LowLevel.Client where
 
 import           Control.Exception                     (bracket, finally)
 import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import           Data.ByteString                       (ByteString)
 import           Network.GRPC.LowLevel.Call
@@ -198,7 +199,8 @@ compileNormalRequestResults x =
 -- clientReader (client side of server streaming mode)
 
 -- | First parameter is initial server metadata.
-type ClientReaderHandler = MetadataMap -> StreamRecv ByteString -> Streaming ()
+type ClientReaderHandler = MetadataMap -> StreamRecv ByteString -> IO ()
+type ClientReaderResult  = (MetadataMap, C.StatusCode, StatusDetails)
 
 clientReader :: Client
              -> RegisteredMethod 'ServerStreaming
@@ -206,7 +208,7 @@ clientReader :: Client
              -> ByteString -- ^ The body of the request
              -> MetadataMap -- ^ Metadata to send with the request
              -> ClientReaderHandler
-             -> IO (Either GRPCIOError (MetadataMap, C.StatusCode, StatusDetails))
+             -> IO (Either GRPCIOError ClientReaderResult)
 clientReader cl@Client{ clientCQ = cq } rm tm body initMeta f =
   withClientCall cl rm tm go
   where
@@ -216,13 +218,13 @@ clientReader cl@Client{ clientCQ = cq } rm tm body initMeta f =
                    , OpSendCloseFromClient
                    ]
       srvMD <- recvInitialMetadata c cq
-      runStreamingProxy "clientReader'" c cq (f srvMD streamRecv)
+      liftIO $ f srvMD (streamRecvPrim c cq)
       recvStatusOnClient c cq
 
 --------------------------------------------------------------------------------
 -- clientWriter (client side of client streaming mode)
 
-type ClientWriterHandler = StreamSend ByteString -> Streaming ()
+type ClientWriterHandler = StreamSend ByteString -> IO ()
 type ClientWriterResult  = (Maybe ByteString, MetadataMap, MetadataMap,
                               C.StatusCode, StatusDetails)
 
@@ -243,7 +245,7 @@ clientWriterCmn :: Client -- ^ The active client
 clientWriterCmn (clientCQ -> cq) initMeta f (unsafeCC -> c) =
   runExceptT $ do
     sendInitialMetadata c cq initMeta
-    runStreamingProxy "clientWriterCmn" c cq (f streamSend)
+    liftIO $ f (streamSendPrim c cq)
     sendSingle c cq OpSendCloseFromClient
     let ops = [OpRecvInitialMetadata, OpRecvMessage, OpRecvStatusOnClient]
     runOps' c cq ops >>= \case
@@ -260,28 +262,41 @@ pattern CWRFinal mmsg initMD trailMD st ds
 --------------------------------------------------------------------------------
 -- clientRW (client side of bidirectional streaming mode)
 
--- | First parameter is initial server metadata.
-type ClientRWHandler = MetadataMap
-                       -> StreamRecv ByteString
-                       -> StreamSend ByteString
-                       -> Streaming ()
+type ClientRWHandler
+  =  MetadataMap
+  -> StreamRecv ByteString
+  -> StreamSend ByteString
+  -> WritesDone
+  -> IO ()
+type ClientRWResult = (MetadataMap, C.StatusCode, StatusDetails)
 
--- | For bidirectional-streaming registered requests
+-- | The most generic version of clientRW. It does not assume anything about
+-- threading model; caller must invoke the WritesDone operation, exactly once,
+-- for the half-close, after all threads have completed writing. TODO: It'd be
+-- nice to find a way to type-enforce this usage pattern rather than accomplish
+-- it via usage convention and documentation.
 clientRW :: Client
          -> RegisteredMethod 'BiDiStreaming
          -> TimeoutSeconds
          -> MetadataMap
-            -- ^ request metadata
          -> ClientRWHandler
-         -> IO (Either GRPCIOError (MetadataMap, C.StatusCode, StatusDetails))
-clientRW cl@(clientCQ -> cq) rm tm initMeta f =
-  withClientCall cl rm tm go
+         -> IO (Either GRPCIOError ClientRWResult)
+clientRW cl@(clientCQ -> cq) rm tm initMeta f = withClientCall cl rm tm go
   where
     go (unsafeCC -> c) = runExceptT $ do
       sendInitialMetadata c cq initMeta
       srvMeta <- recvInitialMetadata c cq
-      runStreamingProxy "clientRW" c cq (f srvMeta streamRecv streamSend)
-      runOps' c cq [OpSendCloseFromClient] -- WritesDone()
+      liftIO $ f srvMeta (streamRecvPrim c cq) (streamSendPrim c cq) (writesDonePrim c cq)
+      -- NB: We could consider having the passed writesDone action safely set a
+      -- flag once it had been called, and invoke it ourselves if not set after
+      -- returning from the handler (although this is actually borked in the
+      -- concurrent case, because a reader may remain blocked without the
+      -- half-close and thus not return control to us -- doh). Alternately, we
+      -- can document just this general-purpose function well, and then create
+      -- slightly simpler versions of the bidi interface which support (a)
+      -- monothreaded send/recv interleaving with implicit half-close and (b)
+      -- send/recv threads with implicit half-close after writer thread
+      -- termination.
       recvStatusOnClient c cq -- Finish()
 
 --------------------------------------------------------------------------------

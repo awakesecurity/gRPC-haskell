@@ -8,7 +8,6 @@ module Network.GRPC.LowLevel.Op where
 
 import           Control.Exception
 import           Control.Monad
-import           Control.Monad.Trans.Class             (MonadTrans(lift))
 import           Control.Monad.Trans.Except
 import           Data.ByteString                       (ByteString)
 import qualified Data.ByteString                       as B
@@ -27,8 +26,6 @@ import qualified Network.GRPC.Unsafe.ByteBuffer        as C
 import qualified Network.GRPC.Unsafe.Metadata          as C
 import qualified Network.GRPC.Unsafe.Op                as C
 import qualified Network.GRPC.Unsafe.Slice             as C (Slice, freeSlice)
-import qualified Pipes                                 as P
-import qualified Pipes.Core                            as P
 
 -- | Sum describing all possible send and receive operations that can be batched
 -- and executed by gRPC. Usually these are processed in a handful of
@@ -304,60 +301,28 @@ recvInitialMessage c cq = runOps' c cq [OpRecvMessage] >>= \case
 --------------------------------------------------------------------------------
 -- Streaming types and helpers
 
--- | Requests use Nothing to denote read, Just to denote
--- write. Right-constructed responses use Just to indicate a successful read,
--- and Nothing to denote end of stream when reading or a successful write.
-type Streaming a =
-  P.Client (Maybe ByteString) (Either GRPCIOError (Maybe ByteString)) IO a
-
--- | Run the given 'Streaming' operation via an appropriate upstream
--- proxy. I.e., if called on the client side, the given 'Streaming' operation
--- talks to a server proxy, and vice versa.
-runStreamingProxy :: String
-                     -- ^ context string for including in errors
-                  -> C.Call
-                     -- ^ the call associated with this streaming operation
-                  -> CompletionQueue
-                      -- ^ the completion queue for ops batches
-                  -> Streaming a
-                      -- ^ the requesting side of the streaming operation
-                  -> ExceptT GRPCIOError IO a
-runStreamingProxy nm c cq
-  = ExceptT . P.runEffect . (streamingProxy nm c cq P.+>>) . fmap Right
-
-streamingProxy :: String
-                  -- ^ context string for including in errors
-               -> C.Call
-                  -- ^ the call associated with this streaming operation
-               -> CompletionQueue
-                  -- ^ the completion queue for ops batches
-               -> Maybe ByteString
-                  -- ^ the request to the proxy
-               -> P.Server
-                    (Maybe ByteString)
-                    (Either GRPCIOError (Maybe ByteString))
-                    IO (Either GRPCIOError a)
-streamingProxy nm c cq = maybe recv send
+type StreamRecv a = IO (Either GRPCIOError (Maybe a))
+streamRecvPrim :: C.Call -> CompletionQueue -> StreamRecv ByteString
+streamRecvPrim c cq = f <$> runOps c cq [OpRecvMessage]
   where
-    recv = run [OpRecvMessage] >>= \case
-      RecvMsgRslt mr        -> rsp mr >>= streamingProxy nm c cq
-      Right{}               -> err (urecv "recv")
-      Left e                -> err e
-    send msg = run [OpSendMessage msg] >>= \case
-      Right [] -> rsp Nothing >>= streamingProxy nm c cq
-      Right _  -> err (urecv "send")
-      Left e   -> err e
-    err e = P.respond (Left e) >> return (Left e)
-    rsp   = P.respond . Right
-    run   = lift . runOps c cq
-    urecv = GRPCIOInternalUnexpectedRecv . (nm ++)
-
-type StreamRecv a = Streaming (Either GRPCIOError (Maybe a))
-streamRecv :: StreamRecv ByteString
-streamRecv = P.request Nothing
-
-type StreamSend a = a -> Streaming (Either GRPCIOError ())
-streamSend :: StreamSend ByteString
-streamSend = fmap void . P.request . Just
+    f (RecvMsgRslt mmsg) = Right mmsg
+    f Right{}            = Left (GRPCIOInternalUnexpectedRecv "streamRecvPrim")
+    f (Left e)           = Left e
 
 pattern RecvMsgRslt mmsg <- Right [OpRecvMessageResult mmsg]
+
+type StreamSend a = a -> IO (Either GRPCIOError ())
+streamSendPrim :: C.Call -> CompletionQueue -> StreamSend ByteString
+streamSendPrim c cq bs = f <$> runOps c cq [OpSendMessage bs]
+  where
+    f (Right []) = Right ()
+    f Right{}    = Left (GRPCIOInternalUnexpectedRecv "streamSendPrim")
+    f (Left e)   = Left e
+
+type WritesDone = IO (Either GRPCIOError ())
+writesDonePrim :: C.Call -> CompletionQueue -> WritesDone
+writesDonePrim c cq = f <$> runOps c cq [OpSendCloseFromClient]
+  where
+    f (Right []) = Right ()
+    f Right{}    = Left (GRPCIOInternalUnexpectedRecv "writesDonePrim")
+    f (Left e)   = Left e

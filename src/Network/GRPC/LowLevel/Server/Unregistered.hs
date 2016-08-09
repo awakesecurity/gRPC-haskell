@@ -4,26 +4,19 @@
 module Network.GRPC.LowLevel.Server.Unregistered where
 
 import           Control.Exception                                  (finally)
+import           Control.Monad
+import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import           Data.ByteString                                    (ByteString)
 import           Network.GRPC.LowLevel.Call.Unregistered
 import           Network.GRPC.LowLevel.CompletionQueue.Unregistered (serverRequestCall)
 import           Network.GRPC.LowLevel.GRPC
-import           Network.GRPC.LowLevel.Op                           (Op (..)
-                                                                     , OpRecvResult (..)
-                                                                     , runOps
-                                                                     , runStreamingProxy
-                                                                     , streamRecv
-                                                                     , streamSend
-                                                                     , runOps'
-                                                                     , sendInitialMetadata
-                                                                     , sendStatusFromServer
-                                                                     , recvInitialMessage)
-import           Network.GRPC.LowLevel.Server                       (Server (..)
-                                                                     , ServerReaderHandlerLL
-                                                                     , ServerWriterHandlerLL
-                                                                     , ServerRWHandlerLL
-                                                                     , forkServer)
+import           Network.GRPC.LowLevel.Op
+import           Network.GRPC.LowLevel.Server                       (Server (..),
+                                                                     ServerRWHandlerLL,
+                                                                     ServerReaderHandlerLL,
+                                                                     ServerWriterHandlerLL,
+                                                                     forkServer)
 import qualified Network.GRPC.Unsafe.Op                             as C
 
 serverCreateCall :: Server
@@ -47,48 +40,26 @@ withServerCall s f =
 -- Because this function doesn't wait for the handler to return, it cannot
 -- return errors.
 withServerCallAsync :: Server
-                       -> (ServerCall -> IO ())
-                       -> IO ()
+                    -> (ServerCall -> IO ())
+                    -> IO ()
 withServerCallAsync s f =
   serverCreateCall s >>= \case
     Left e -> do grpcDebug $ "withServerCallAsync: call error: " ++ show e
                  return ()
     Right c -> do wasForkSuccess <- forkServer s handler
-                  if wasForkSuccess
-                     then return ()
-                     else destroy
+                  unless wasForkSuccess destroy
                 where handler = f c `finally` destroy
-                      --TODO: We sometimes never finish cleanup if the server
-                      -- is shutting down and calls killThread. This causes
-                      -- gRPC core to complain about leaks.
-                      -- I think the cause of this is that killThread gets
-                      -- called after we are already in destroyServerCall,
-                      -- and wrapping uninterruptibleMask doesn't seem to help.
-                      -- Doesn't crash, but does emit annoying log messages.
+                      -- TODO: We sometimes never finish cleanup if the server
+                      -- is shutting down and calls killThread. This causes gRPC
+                      -- core to complain about leaks.  I think the cause of
+                      -- this is that killThread gets called after we are
+                      -- already in destroyServerCall, and wrapping
+                      -- uninterruptibleMask doesn't seem to help.  Doesn't
+                      -- crash, but does emit annoying log messages.
                       destroy = do
                         grpcDebug "withServerCallAsync: destroying."
                         destroyServerCall c
                         grpcDebug "withServerCallAsync: cleanup finished."
-
--- | Sequence of 'Op's needed to receive a normal (non-streaming) call.
--- TODO: We have to put 'OpRecvCloseOnServer' in the response ops, or else the
--- client times out. Given this, I have no idea how to check for cancellation on
--- the server.
-serverOpsGetNormalCall :: MetadataMap -> [Op]
-serverOpsGetNormalCall initMetadata =
-  [OpSendInitialMetadata initMetadata,
-   OpRecvMessage]
-
--- | Sequence of 'Op's needed to respond to a normal (non-streaming) call.
-serverOpsSendNormalResponse :: ByteString
-                               -> MetadataMap
-                               -> C.StatusCode
-                               -> StatusDetails
-                               -> [Op]
-serverOpsSendNormalResponse body metadata code details =
-  [OpRecvCloseOnServer,
-   OpSendMessage body,
-   OpSendStatusFromServer metadata code details]
 
 -- | A handler for an unregistered server call; bytestring arguments are the
 -- request body and response body respectively.
@@ -125,6 +96,9 @@ serverHandleNormalCall'
             grpcDebug $ "got client metadata: " ++ show metadata
             grpcDebug $ "call_details host is: " ++ show callHost
             (rsp, trailMeta, st, ds) <- f sc body
+            -- TODO: We have to put 'OpRecvCloseOnServer' in the response ops,
+            -- or else the client times out. Given this, I have no idea how to
+            -- check for cancellation on the server.
             runOps c cq
               [ OpRecvCloseOnServer
               , OpSendMessage rsp,
@@ -141,13 +115,12 @@ serverHandleNormalCall'
 
 serverReader :: Server
              -> ServerCall
-             -> MetadataMap -- ^ initial server metadata
+             -> MetadataMap -- ^ Initial server metadata
              -> ServerReaderHandlerLL
              -> IO (Either GRPCIOError ())
 serverReader _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
   runExceptT $ do
-    (mmsg, trailMeta, st, ds) <-
-      runStreamingProxy "serverReader" c ccq (f (convertCall sc) streamRecv)
+    (mmsg, trailMeta, st, ds) <- liftIO $ f (convertCall sc) (streamRecvPrim c ccq)
     runOps' c ccq ( OpSendInitialMetadata initMeta
                   : OpSendStatusFromServer trailMeta st ds
                   : maybe [] ((:[]) . OpSendMessage) mmsg
@@ -156,27 +129,23 @@ serverReader _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
 
 serverWriter :: Server
              -> ServerCall
-             -> MetadataMap
-             -- ^ Initial server metadata
+             -> MetadataMap -- ^ Initial server metadata
              -> ServerWriterHandlerLL
              -> IO (Either GRPCIOError ())
 serverWriter _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
   runExceptT $ do
     bs <- recvInitialMessage c ccq
     sendInitialMetadata c ccq initMeta
-    let regCall = fmap (const bs) (convertCall sc)
-    st <- runStreamingProxy "serverWriter" c ccq (f regCall streamSend)
+    st <- liftIO $ f (const bs <$> convertCall sc) (streamSendPrim c ccq)
     sendStatusFromServer c ccq st
 
 serverRW :: Server
          -> ServerCall
-         -> MetadataMap
-            -- ^ initial server metadata
+         -> MetadataMap -- ^ Initial server metadata
          -> ServerRWHandlerLL
          -> IO (Either GRPCIOError ())
 serverRW _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
   runExceptT $ do
     sendInitialMetadata c ccq initMeta
-    let regCall = convertCall sc
-    st <- runStreamingProxy "serverRW" c ccq (f regCall streamRecv streamSend)
+    st <- liftIO $ f (convertCall sc) (streamRecvPrim c ccq) (streamSendPrim c ccq)
     sendStatusFromServer c ccq st

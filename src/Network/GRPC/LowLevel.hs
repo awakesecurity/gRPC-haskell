@@ -21,6 +21,7 @@ GRPC
 -- * Calls
 , GRPCMethodType(..)
 , RegisteredMethod
+, MethodPayload
 , NormalRequestResult(..)
 , MetadataMap(..)
 , MethodName(..)
@@ -74,7 +75,6 @@ GRPC
 , OpRecvResult(..)
 
 -- * Streaming utilities
-, Streaming
 , StreamSend
 , StreamRecv
 
