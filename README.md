@@ -16,7 +16,7 @@ Building GRPC
 -------------
 
 In order to compile this project, and anything which depends on it, you will need a working installation
-of the GRPC C core libraries. This library currently uses the 0.14 version range, so checkout an appropriate revision
+of the GRPC C core libraries. This library currently uses the 0.15 version range, so checkout an appropriate revision
 of the repository, and install as follows:
 
 ```sh
