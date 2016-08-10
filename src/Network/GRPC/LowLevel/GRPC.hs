@@ -8,6 +8,7 @@ GRPC
 , GRPCIOError(..)
 , throwIfCallError
 , grpcDebug
+, grpcDebug'
 , threadDelaySecs
 , C.MetadataMap(..)
 , StatusDetails(..)

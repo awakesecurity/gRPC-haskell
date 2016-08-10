@@ -80,14 +80,24 @@ forkServer :: Server -> IO () -> IO Bool
 forkServer Server{..} f = do
   shutdown <- readTVarIO serverShuttingDown
   case shutdown of
-    True -> return False
+    True  -> return False
     False -> do
-      tid <- forkFinally f cleanup
-      atomically $ modifyTVar' outstandingForks (S.insert tid)
+      -- NB: The spawned thread waits on 'ready' before running 'f' to ensure
+      -- that its ThreadId is inserted into outstandingForks before the cleanup
+      -- function deletes it from there. Not doing this can lead to stale thread
+      -- ids in the set when handlers cleanup ahead of the insertion, and a
+      -- subsequent deadlock in stopServer. We can use a dead-list instead if we
+      -- need something more performant.
+      ready <- newTVarIO False
+      tid   <- let act = do atomically (check =<< readTVar ready)
+                            f
+               in forkFinally act cleanup
+      atomically $ do
+        modifyTVar' outstandingForks (S.insert tid)
+        modifyTVar' ready (const True)
 #ifdef DEBUG
-      currSet <- readTVarIO outstandingForks
-      grpcDebug $ "forkServer: number of outstandingForks is "
-                  ++ show (S.size currSet)
+      tids <- readTVarIO outstandingForks
+      grpcDebug $ "after fork and bookkeeping: outstandingForks=" ++ show tids
 #endif
       return True
       where cleanup _ = do
@@ -176,16 +186,17 @@ stopServer Server{ unsafeServer = s, .. } = do
           case shutdownEvent of
             -- This case occurs when we pluck but the queue is already in the
             -- 'shuttingDown' state, implying we already tried to shut down.
-            (Left GRPCIOShutdown) -> error "Called stopServer twice!"
-            (Left _) -> error "Failed to stop server."
-            (Right _) -> return ()
+            Left GRPCIOShutdown -> error "Called stopServer twice!"
+            Left _              -> error "Failed to stop server."
+            Right _             -> return ()
         cleanupForks = do
           atomically $ writeTVar serverShuttingDown True
           liveForks <- readTVarIO outstandingForks
           grpcDebug $ "Server shutdown: killing threads: " ++ show liveForks
           mapM_ killThread liveForks
-          --wait for threads to shut down.
-          atomically $ readTVar outstandingForks >>= (check . (==0) . S.size)
+          -- wait for threads to shut down
+          grpcDebug "Server shutdown: waiting until all threads are dead."
+          atomically $ check . (==0) . S.size =<< readTVar outstandingForks
           grpcDebug "Server shutdown: All forks cleaned up."
 
 -- Uses 'bracket' to safely start and stop a server, even if exceptions occur.

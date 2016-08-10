@@ -179,7 +179,7 @@ testServerStreaming =
     client c = do
       rm <- clientRegisterMethodServerStreaming c "/feed"
       eea <- clientReader c rm 10 clientPay clientInitMD $ \initMD recv -> do
-        liftIO $ checkMD "Server initial metadata mismatch" serverInitMD initMD
+        checkMD "Server initial metadata mismatch" serverInitMD initMD
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
       eea @?= Right (dummyMeta, StatusOk, "dtls")
@@ -187,10 +187,8 @@ testServerStreaming =
     server s = do
       let rm = head (sstreamingMethods s)
       r <- serverWriter s rm serverInitMD $ \sc send -> do
-        liftIO $ do
-          checkMD "Server request metadata mismatch"
-            clientInitMD (metadata sc)
-          payload sc @?= clientPay
+        checkMD "Server request metadata mismatch" clientInitMD (metadata sc)
+        payload sc @?= clientPay
         forM_ pays $ \p -> send p `is` Right ()
         return (dummyMeta, StatusOk, "dtls")
       r @?= Right ()
@@ -211,17 +209,15 @@ testServerStreamingUnregistered =
     client c = do
       rm <- clientRegisterMethodServerStreaming c "/feed"
       eea <- clientReader c rm 10 clientPay clientInitMD $ \initMD recv -> do
-        liftIO $ checkMD "Server initial metadata mismatch" serverInitMD initMD
+        checkMD "Server initial metadata mismatch" serverInitMD initMD
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
       eea @?= Right (dummyMeta, StatusOk, "dtls")
 
     server s = U.withServerCallAsync s $ \call -> do
       r <- U.serverWriter s call serverInitMD $ \sc send -> do
-        liftIO $ do
-          checkMD "Server request metadata mismatch"
-            clientInitMD (metadata sc)
-          payload sc @?= clientPay
+        checkMD "Server request metadata mismatch" clientInitMD (metadata sc)
+        payload sc @?= clientPay
         forM_ pays $ \p -> send p `is` Right ()
         return (dummyMeta, StatusOk, "dtls")
       r @?= Right ()
@@ -248,8 +244,7 @@ testClientStreaming =
     server s = do
       let rm = head (cstreamingMethods s)
       eea <- serverReader s rm serverInitMD $ \sc recv -> do
-        liftIO $ checkMD "Client request metadata mismatch"
-                   clientInitMD (metadata sc)
+        checkMD "Client request metadata mismatch" clientInitMD (metadata sc)
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
         return (Just serverRsp, trailMD, serverStatus, serverDtls)
@@ -276,8 +271,7 @@ testClientStreamingUnregistered =
 
     server s = U.withServerCallAsync s $ \call -> do
       eea <- U.serverReader s call serverInitMD $ \sc recv -> do
-        liftIO $ checkMD "Client request metadata mismatch"
-                   clientInitMD (metadata sc)
+        checkMD "Client request metadata mismatch" clientInitMD (metadata sc)
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
         return (Just serverRsp, trailMD, serverStatus, serverDtls)
@@ -308,8 +302,7 @@ testBiDiStreaming =
     server s = do
       let rm = head (bidiStreamingMethods s)
       eea <- serverRW s rm serverInitMD $ \sc recv send -> do
-        liftIO $ checkMD "Client request metadata mismatch"
-                   clientInitMD (metadata sc)
+        checkMD "Client request metadata mismatch" clientInitMD (metadata sc)
         recv       `is` Right (Just "cw0")
         send "sw0" `is` Right ()
         recv       `is` Right (Just "cw1")
