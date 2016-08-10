@@ -16,7 +16,10 @@ import           Network.GRPC.LowLevel.Server                       (Server (..)
                                                                      ServerRWHandlerLL,
                                                                      ServerReaderHandlerLL,
                                                                      ServerWriterHandlerLL,
-                                                                     forkServer)
+                                                                     forkServer,
+                                                                     serverReader',
+                                                                     serverWriter',
+                                                                     serverRW')
 import qualified Network.GRPC.Unsafe.Op                             as C
 
 serverCreateCall :: Server
@@ -118,34 +121,21 @@ serverReader :: Server
              -> MetadataMap -- ^ Initial server metadata
              -> ServerReaderHandlerLL
              -> IO (Either GRPCIOError ())
-serverReader _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
-  runExceptT $ do
-    (mmsg, trailMeta, st, ds) <- liftIO $ f (convertCall sc) (streamRecvPrim c ccq)
-    runOps' c ccq ( OpSendInitialMetadata initMeta
-                  : OpSendStatusFromServer trailMeta st ds
-                  : maybe [] ((:[]) . OpSendMessage) mmsg
-                  )
-    return ()
+serverReader s = serverReader' s . convertCall
 
 serverWriter :: Server
              -> ServerCall
              -> MetadataMap -- ^ Initial server metadata
              -> ServerWriterHandlerLL
              -> IO (Either GRPCIOError ())
-serverWriter _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
+serverWriter s sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
   runExceptT $ do
     bs <- recvInitialMessage c ccq
-    sendInitialMetadata c ccq initMeta
-    st <- liftIO $ f (const bs <$> convertCall sc) (streamSendPrim c ccq)
-    sendStatusFromServer c ccq st
+    ExceptT (serverWriter' s (const bs <$> convertCall sc) initMeta f)
 
 serverRW :: Server
          -> ServerCall
          -> MetadataMap -- ^ Initial server metadata
          -> ServerRWHandlerLL
          -> IO (Either GRPCIOError ())
-serverRW _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
-  runExceptT $ do
-    sendInitialMetadata c ccq initMeta
-    st <- liftIO $ f (convertCall sc) (streamRecvPrim c ccq) (streamSendPrim c ccq)
-    sendStatusFromServer c ccq st
+serverRW s = serverRW' s . convertCall

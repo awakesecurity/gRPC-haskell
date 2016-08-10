@@ -333,15 +333,23 @@ serverReader :: Server
              -> MetadataMap -- ^ Initial server metadata
              -> ServerReaderHandlerLL
              -> IO (Either GRPCIOError ())
-serverReader s rm initMeta f = withServerCall s rm go
-  where
-    go sc@ServerCall{ unsafeSC = c, callCQ = ccq } = runExceptT $ do
-      (mmsg, trailMeta, st, ds) <- liftIO $ f sc (streamRecvPrim c ccq)
-      runOps' c ccq ( OpSendInitialMetadata initMeta
-                    : OpSendStatusFromServer trailMeta st ds
-                    : maybe [] ((:[]) . OpSendMessage) mmsg
-                    )
-      return ()
+serverReader s rm initMeta f =
+  withServerCall s rm (\sc -> serverReader' s sc initMeta f)
+
+serverReader' :: Server
+              -> ServerCall (MethodPayload 'ClientStreaming)
+              -> MetadataMap -- ^ Initial server metadata
+              -> ServerReaderHandlerLL
+              -> IO (Either GRPCIOError ())
+serverReader' _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
+  runExceptT $ do
+    (mmsg, trailMeta, st, ds) <- liftIO $ f sc (streamRecvPrim c ccq)
+    runOps' c ccq ( OpSendInitialMetadata initMeta
+                  : OpSendStatusFromServer trailMeta st ds
+                  : maybe [] ((:[]) . OpSendMessage) mmsg
+                  )
+    return ()
+
 
 --------------------------------------------------------------------------------
 -- serverWriter (server side of server streaming mode)
@@ -357,12 +365,19 @@ serverWriter :: Server
              -> MetadataMap -- ^ Initial server metadata
              -> ServerWriterHandlerLL
              -> IO (Either GRPCIOError ())
-serverWriter s rm initMeta f = withServerCall s rm go
-  where
-    go sc@ServerCall{ unsafeSC = c, callCQ = ccq } = runExceptT $ do
-      sendInitialMetadata c ccq initMeta
-      st <- liftIO $ f sc (streamSendPrim c ccq)
-      sendStatusFromServer c ccq st
+serverWriter s rm initMeta f =
+  withServerCall s rm (\sc -> serverWriter' s sc initMeta f)
+
+serverWriter' :: Server
+              -> ServerCall (MethodPayload 'ServerStreaming)
+              -> MetadataMap
+              -> ServerWriterHandlerLL
+              -> IO (Either GRPCIOError ())
+serverWriter' _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
+  runExceptT $ do
+    sendInitialMetadata c ccq initMeta
+    st <- liftIO $ f sc (streamSendPrim c ccq)
+    sendStatusFromServer c ccq st
 
 --------------------------------------------------------------------------------
 -- serverRW (bidirectional streaming mode)
@@ -378,12 +393,19 @@ serverRW :: Server
          -> MetadataMap -- ^ initial server metadata
          -> ServerRWHandlerLL
          -> IO (Either GRPCIOError ())
-serverRW s rm initMeta f = withServerCall s rm go
-  where
-    go sc@ServerCall{ unsafeSC = c, callCQ = ccq } = runExceptT $ do
-      sendInitialMetadata c ccq initMeta
-      st <- liftIO $ f sc (streamRecvPrim c ccq) (streamSendPrim c ccq)
-      sendStatusFromServer c ccq st
+serverRW s rm initMeta f =
+  withServerCall s rm (\sc -> serverRW' s sc initMeta f)
+
+serverRW' :: Server
+          -> ServerCall (MethodPayload 'BiDiStreaming)
+          -> MetadataMap
+          -> ServerRWHandlerLL
+          -> IO (Either GRPCIOError ())
+serverRW' _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
+  runExceptT $ do
+    sendInitialMetadata c ccq initMeta
+    st <- liftIO $ f sc (streamRecvPrim c ccq) (streamSendPrim c ccq)
+    sendStatusFromServer c ccq st
 
 --------------------------------------------------------------------------------
 -- serverHandleNormalCall (server side of normal request/response)
