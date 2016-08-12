@@ -72,6 +72,7 @@ library
     Network.GRPC.HighLevel.Generated
     Network.GRPC.HighLevel.Server
     Network.GRPC.HighLevel.Server.Unregistered
+    Network.GRPC.HighLevel.Client
   extra-libraries:
     grpc
   includes:

@@ -13,7 +13,8 @@ import Turtle
 
 generatedTests :: TestTree
 generatedTests = testGroup "Code generator tests"
-  [ testServerGeneration ]
+  [ testServerGeneration
+  , testClientGeneration ]
 
 testServerGeneration :: TestTree
 testServerGeneration = testCase "server generation" $ do
@@ -32,6 +33,34 @@ testServerGeneration = testCase "server generation" $ do
     serverExitCodeA <- fork (shell (hsTmpDir <> "/simple-server") empty)
     clientExitCodeA <- fork
       (export "PYTHONPATH" pyTmpDir >> shell "python tests/test-client.py" empty)
+
+    liftIO $ do
+      serverExitCode <- liftIO (wait serverExitCodeA)
+      clientExitCode <- liftIO (wait clientExitCodeA)
+
+      serverExitCode @?= ExitSuccess
+      clientExitCode @?= ExitSuccess
+
+  rmtree hsTmpDir
+  rmtree pyTmpDir
+
+testClientGeneration :: TestTree
+testClientGeneration = testCase "client generation" $ do
+  mktree hsTmpDir
+  mktree pyTmpDir
+
+  compileSimpleDotProto
+
+  exitCode <- proc "tests/simple-client.sh" [hsTmpDir] empty
+  exitCode @?= ExitSuccess
+
+  exitCode <- proc "tests/protoc.sh" [pyTmpDir] empty
+  exitCode @?= ExitSuccess
+
+  runManaged $ do
+    serverExitCodeA <- fork
+      (export "PYTHONPATH" pyTmpDir >> shell "python tests/test-server.py" empty)
+    clientExitCodeA <- fork (shell (hsTmpDir <> "/simple-client") empty)
 
     liftIO $ do
       serverExitCode <- liftIO (wait serverExitCodeA)
