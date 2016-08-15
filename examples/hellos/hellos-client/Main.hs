@@ -84,7 +84,7 @@ doHelloBi c n = do
   let pay        = BiRqtRpy "bidi payload"
       enc        = BL.toStrict . toLazyByteString $ pay
       err desc e = fail $ "doHelloBi: " ++ desc ++ " error: " ++ show e
-  eea <- clientRW c rm n mempty $ \_ recv send writesDone -> do
+  eea <- clientRW c rm n mempty $ \_getMD recv send writesDone -> do
     -- perform n writes on a worker thread
     thd <- async $ do
       replicateM_ n $ send enc >>= \case
@@ -94,6 +94,7 @@ doHelloBi c n = do
         Left e -> err "writesDone" e
         _      -> return ()
     -- perform reads on this thread until the stream is terminated
+    -- emd <- getMD; putStrLn ("getMD result: " ++ show emd)
     fix $ \go -> recv >>= \case
       Left e          -> err "recv" e
       Right Nothing   -> return ()

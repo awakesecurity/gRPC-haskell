@@ -56,6 +56,7 @@ class HellosImpl final : public Hellos::Service {
   Status HelloBi(ServerContext* context,
                  ServerReaderWriter<BiRqtRpy, BiRqtRpy>* strm) override {
     BiRqtRpy rqt;
+    strm->SendInitialMetadata();
     while (strm->Read(&rqt)) {
       strm->Write(rqt);
     }

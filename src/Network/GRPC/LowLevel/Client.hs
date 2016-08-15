@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms   #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE ViewPatterns      #-}
 
 -- | This module defines data structures and operations pertaining to registered
@@ -11,6 +12,7 @@
 module Network.GRPC.LowLevel.Client where
 
 import           Control.Exception                     (bracket, finally)
+import           Control.Concurrent.MVar
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
@@ -263,41 +265,94 @@ pattern CWRFinal mmsg initMD trailMD st ds
 -- clientRW (client side of bidirectional streaming mode)
 
 type ClientRWHandler
-  =  MetadataMap
+  =  IO (Either GRPCIOError MetadataMap)
   -> StreamRecv ByteString
   -> StreamSend ByteString
   -> WritesDone
   -> IO ()
 type ClientRWResult = (MetadataMap, C.StatusCode, StatusDetails)
 
--- | The most generic version of clientRW. It does not assume anything about
--- threading model; caller must invoke the WritesDone operation, exactly once,
--- for the half-close, after all threads have completed writing. TODO: It'd be
--- nice to find a way to type-enforce this usage pattern rather than accomplish
--- it via usage convention and documentation.
 clientRW :: Client
          -> RegisteredMethod 'BiDiStreaming
          -> TimeoutSeconds
          -> MetadataMap
          -> ClientRWHandler
          -> IO (Either GRPCIOError ClientRWResult)
-clientRW cl@(clientCQ -> cq) rm tm initMeta f = withClientCall cl rm tm go
-  where
-    go (unsafeCC -> c) = runExceptT $ do
-      sendInitialMetadata c cq initMeta
-      srvMeta <- recvInitialMetadata c cq
-      liftIO $ f srvMeta (streamRecvPrim c cq) (streamSendPrim c cq) (writesDonePrim c cq)
-      -- NB: We could consider having the passed writesDone action safely set a
-      -- flag once it had been called, and invoke it ourselves if not set after
-      -- returning from the handler (although this is actually borked in the
-      -- concurrent case, because a reader may remain blocked without the
-      -- half-close and thus not return control to us -- doh). Alternately, we
-      -- can document just this general-purpose function well, and then create
-      -- slightly simpler versions of the bidi interface which support (a)
-      -- monothreaded send/recv interleaving with implicit half-close and (b)
-      -- send/recv threads with implicit half-close after writer thread
-      -- termination.
-      recvStatusOnClient c cq -- Finish()
+clientRW cl rm tm initMeta f =
+  withClientCall cl rm tm (\cc -> clientRW' cl cc initMeta f)
+
+-- | The most generic version of clientRW. It does not assume anything about
+-- threading model; caller must invoke the WritesDone operation, exactly once,
+-- for the half-close, after all threads have completed writing. TODO: It'd be
+-- nice to find a way to type-enforce this usage pattern rather than accomplish
+-- it via usage convention and documentation.
+clientRW' :: Client
+          -> ClientCall
+          -> MetadataMap
+          -> ClientRWHandler
+          -> IO (Either GRPCIOError ClientRWResult)
+clientRW' (clientCQ -> cq) (unsafeCC -> c) initMeta f = runExceptT $ do
+  sendInitialMetadata c cq initMeta
+
+  -- 'mdmv' is used to synchronize between callers of 'getMD' and 'recv'
+  -- below. The behavior of these two operations is different based on their
+  -- call order w.r.t. each other, and by whether or not metadata has already
+  -- been received.
+  --
+  -- Regardless of call order, metadata reception is done exactly once. The
+  -- result of doing so is cached for subsequent calls to 'getMD'.
+  --
+  -- 'getMD' will always return the received metadata (or an error if it
+  -- occurred), regardless of call order.
+  --
+  -- When 'getMD' is invoked before 'recv' (and no metadata has been obtained),
+  -- metadata is received via a singleton batch, returned, and cached for later
+  -- access via 'getMD'. This scenario is analagous to preceding the first read
+  -- with WaitForInitialMetadata() in the C++ API.
+  --
+  -- When 'recv' is invoked before 'getMD' (and no metadata has been obtained),
+  -- metadata is received alongside the first payload via an aggregate batch,
+  -- and cached for later access via 'getMD'. This scenario is analagous to just
+  -- issuing Read() in the C++ API, and having the metadata available via
+  -- ClientContext afterwards.
+  --
+  -- TODO: This is not the whole story about metadata exchange ordering, but
+  -- allows us to at least have parity on the client side with the C++ API
+  -- w.r.t. when/how metadata is exchanged. We may need to revisit this a bit as
+  -- we experiment with other bindings, new GRPC releases come out, and so
+  -- forth, but at least this provides us with basic functionality, albeit with
+  -- a great deal more caveat programmer than desirable :(
+
+  mdmv <- liftIO (newMVar Nothing)
+  let
+    getMD = modifyMVar mdmv $ \case
+      Just emd -> return (Just emd, emd)
+      Nothing  -> do -- getMD invoked before recv
+        emd <- runExceptT (recvInitialMetadata c cq)
+        return (Just emd, emd)
+
+    recv = modifyMVar mdmv $ \case
+      Just emd -> (Just emd,) <$> streamRecvPrim c cq
+      Nothing  -> -- recv invoked before getMD
+        runExceptT (recvInitialMsgMD c cq) >>= \case
+          Left e          -> return (Just (Left e), Left e)
+          Right (mbs, md) -> return (Just (Right md), Right mbs)
+
+    send = streamSendPrim c cq
+
+    -- TODO: Regarding usage of writesDone so that there isn't such a burden on
+    -- the end user programmer (i.e. must invoke it, and only once): we can just
+    -- document this general-purpose function well, and then create slightly
+    -- simpler versions of the bidi interface which support (a) monothreaded
+    -- send/recv interleaving, with an implicit half-close and (b) separate
+    -- send/recv threads, with an implicit half-close after the writer thread
+    -- terminates. These simpler versions model the most common use cases
+    -- without having to expose the half-close semantics to the end user
+    -- programmer.
+    writesDone = writesDonePrim c cq
+
+  liftIO (f getMD recv send writesDone)
+  recvStatusOnClient c cq -- Finish()
 
 --------------------------------------------------------------------------------
 -- clientRequest (client side of normal request/response)

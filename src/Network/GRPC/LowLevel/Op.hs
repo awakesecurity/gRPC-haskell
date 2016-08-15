@@ -268,6 +268,8 @@ type RecvSingle a
   -> CompletionQueue
   -> ExceptT GRPCIOError IO a
 
+pattern RecvMsgRslt mmsg <- Right [OpRecvMessageResult mmsg]
+
 sendSingle :: SendSingle Op
 sendSingle c cq op = void (runOps' c cq [op])
 
@@ -278,11 +280,22 @@ sendStatusFromServer :: SendSingle (MetadataMap, C.StatusCode, StatusDetails)
 sendStatusFromServer c cq (md, st, ds) =
   sendSingle c cq (OpSendStatusFromServer md st ds)
 
+recvInitialMessage :: RecvSingle ByteString
+recvInitialMessage c cq = ExceptT (streamRecvPrim c cq ) >>= \case
+  Nothing -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMessage: no message.")
+  Just bs -> return bs
+
 recvInitialMetadata :: RecvSingle MetadataMap
 recvInitialMetadata c cq = runOps' c cq [OpRecvInitialMetadata] >>= \case
   [OpRecvInitialMetadataResult md]
     -> return md
   _ -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMetadata")
+
+recvInitialMsgMD :: RecvSingle (Maybe ByteString, MetadataMap)
+recvInitialMsgMD c cq = runOps' c cq [OpRecvInitialMetadata, OpRecvMessage] >>= \case
+  [ OpRecvInitialMetadataResult md, OpRecvMessageResult mmsg]
+    -> return (mmsg, md)
+  _ -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMsgMD")
 
 recvStatusOnClient :: RecvSingle (MetadataMap, C.StatusCode, StatusDetails)
 recvStatusOnClient c cq = runOps' c cq [OpRecvStatusOnClient] >>= \case
@@ -290,13 +303,6 @@ recvStatusOnClient c cq = runOps' c cq [OpRecvStatusOnClient] >>= \case
     -> return (md, st, StatusDetails ds)
   _ -> throwE (GRPCIOInternalUnexpectedRecv "recvStatusOnClient")
 
-recvInitialMessage :: RecvSingle ByteString
-recvInitialMessage c cq = runOps' c cq [OpRecvMessage] >>= \case
-  [OpRecvMessageResult (Just bs)]
-    -> return bs
-  [OpRecvMessageResult Nothing]
-    -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMessage: no message.")
-  _ -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMessage")
 
 --------------------------------------------------------------------------------
 -- Streaming types and helpers
@@ -308,8 +314,6 @@ streamRecvPrim c cq = f <$> runOps c cq [OpRecvMessage]
     f (RecvMsgRslt mmsg) = Right mmsg
     f Right{}            = Left (GRPCIOInternalUnexpectedRecv "streamRecvPrim")
     f (Left e)           = Left e
-
-pattern RecvMsgRslt mmsg <- Right [OpRecvMessageResult mmsg]
 
 type StreamSend a = a -> IO (Either GRPCIOError ())
 streamSendPrim :: C.Call -> CompletionQueue -> StreamSend ByteString

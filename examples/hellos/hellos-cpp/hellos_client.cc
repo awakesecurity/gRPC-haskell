@@ -94,6 +94,8 @@ class HellosClient {
 
     std::shared_ptr<ClientReaderWriter<BiRqtRpy, BiRqtRpy> > strm(stub_->HelloBi(&ctx));
 
+    // strm->WaitForInitialMetadata();
+
     // Spawn a writer thread which sends rqt to the server n times.
     std::thread writer([strm,rqt,n]() {
       for(unsigned i = 0; i < n; ++i) {
@@ -107,6 +109,7 @@ class HellosClient {
     // there's nothing left to read.
     BiRqtRpy rpy;
     unsigned rpyCnt = 0;
+
     while(strm->Read(&rpy)) {
       if (rpy.message() != pay)
         Die("DoHelloBi/rpy: expected payload '" + pay +
