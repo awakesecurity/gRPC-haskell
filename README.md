@@ -16,8 +16,15 @@ Building GRPC
 -------------
 
 In order to compile this project, and anything which depends on it, you will need a working installation
-of the GRPC C core libraries. This library currently uses the 0.15 version range, so checkout an appropriate revision
-of the repository, and install as follows:
+of the GRPC C core libraries. This library currently uses the 0.15 version range. If you are on OS X, you can install it with homebrew:
+
+```
+brew tap grpc/grpc
+brew install grpc
+```
+
+Alternatively, you can build gRPC from source by checking out an appropriate revision
+of the repository, and installing as follows:
 
 ```sh
 git clone https://github.com/grpc/grpc.git
