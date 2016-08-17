@@ -23,14 +23,14 @@ import           Test.Tasty.HUnit               as HU (testCase, (@?=),
                                                        assertBool)
 import           Test.Tasty.QuickCheck          as QC
 import           Test.Tasty.HUnit               as HU (testCase, (@?=))
+import           Test.QuickCheck.Gen            as QC
+import           Test.QuickCheck.Property       as QC
 
 unsafeTests :: TestTree
 unsafeTests = testGroup "Unit tests for unsafe C bindings"
-  [ roundtripSlice "Hello, world!"
-  , roundtripSlice "\NULabc\NUL"
-  , roundtripByteBuffer "Hwaet! We gardena in geardagum..."
-  , roundtripSlice largeByteString
-  , roundtripByteBuffer largeByteString
+  [ roundtripSliceUnit "\NULabc\NUL"
+  , roundtripSliceUnit largeByteString
+  , roundtripByteBufferUnit largeByteString
   , roundtripTimeSpec (TimeSpec 123 123)
   , testMetadata
   , testNow
@@ -42,13 +42,34 @@ unsafeTests = testGroup "Unit tests for unsafe C bindings"
 
 unsafeProperties :: TestTree
 unsafeProperties = testGroup "QuickCheck properties for unsafe C bindings"
-  [ metadataIsList ]
+  [ roundtripSliceQC
+  , roundtripByteBufferQC
+  , roundtripMetadataQC
+  , metadataIsList
+  ]
 
 instance Arbitrary B.ByteString where
   arbitrary = B.pack <$> arbitrary
 
 instance Arbitrary MetadataMap where
-  arbitrary = fromList <$> arbitrary
+  arbitrary = do
+    --keys are not allowed to contain \NUL, but values are.
+    ks <- arbitrary `suchThat` all (B.notElem 0)
+    let l = length ks
+    vs <- vector l
+    return $ fromList (zip ks vs)
+
+roundtripMetadataKeyVals :: MetadataMap -> IO MetadataMap
+roundtripMetadataKeyVals m = do
+  kvPtr <- createMetadata m
+  m' <- getAllMetadata kvPtr (length $ toList m)
+  metadataFree kvPtr
+  return m'
+
+roundtripMetadataQC :: TestTree
+roundtripMetadataQC = QC.testProperty "Metadata roundtrip" $
+                      \m -> QC.ioProperty $ do m' <- roundtripMetadataKeyVals m
+                                               return $ m === m'
 
 metadataIsList :: TestTree
 metadataIsList = QC.testProperty "Metadata IsList instance" $
@@ -57,26 +78,45 @@ metadataIsList = QC.testProperty "Metadata IsList instance" $
 largeByteString :: B.ByteString
 largeByteString = B.pack $ take (32*1024*1024) $ cycle [97..99]
 
-roundtripSlice :: B.ByteString -> TestTree
-roundtripSlice bs = testCase "ByteString slice roundtrip" $ do
+roundtripSlice :: B.ByteString -> IO B.ByteString
+roundtripSlice bs = do
   slice <- byteStringToSlice bs
   unslice <- sliceToByteString slice
-  unslice HU.@?= bs
   freeSlice slice
+  return unslice
 
-roundtripByteBuffer :: B.ByteString -> TestTree
-roundtripByteBuffer bs = testCase "ByteBuffer roundtrip" $ do
+roundtripSliceQC :: TestTree
+roundtripSliceQC = QC.testProperty "Slice roundtrip: QuickCheck" $
+                   \bs -> QC.ioProperty $ do bs' <- roundtripSlice bs
+                                             return $ bs == bs'
+
+roundtripSliceUnit :: B.ByteString -> TestTree
+roundtripSliceUnit bs = testCase "ByteString slice roundtrip" $ do
+  unslice <- roundtripSlice bs
+  unslice HU.@?= bs
+
+roundtripByteBuffer :: B.ByteString -> IO B.ByteString
+roundtripByteBuffer bs = do
   slice <- byteStringToSlice bs
   buffer <- grpcRawByteBufferCreate slice 1
   reader <- byteBufferReaderCreate buffer
   readSlice <- grpcByteBufferReaderReadall reader
   bs' <- sliceToByteString readSlice
-  bs' HU.@?= bs
-  -- clean up
   freeSlice slice
   byteBufferReaderDestroy reader
   grpcByteBufferDestroy buffer
   freeSlice readSlice
+  return bs'
+
+roundtripByteBufferQC :: TestTree
+roundtripByteBufferQC = QC.testProperty "ByteBuffer roundtrip: QuickCheck" $
+                        \bs -> QC.ioProperty $ do bs' <- roundtripByteBuffer bs
+                                                  return $ bs == bs'
+
+roundtripByteBufferUnit :: B.ByteString -> TestTree
+roundtripByteBufferUnit bs = testCase "ByteBuffer roundtrip" $ do
+  bs' <- roundtripByteBuffer bs
+  bs' HU.@?= bs
 
 roundtripTimeSpec :: TimeSpec -> TestTree
 roundtripTimeSpec t = testCase "CTimeSpec roundtrip" $ do

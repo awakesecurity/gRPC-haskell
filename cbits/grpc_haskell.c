@@ -166,11 +166,12 @@ void metadata_free(grpc_metadata* m){
   grpc_haskell_free("metadata_free", m);
 }
 
-void set_metadata_key_val(char *key, char *val, grpc_metadata *arr, size_t i){
+void set_metadata_key_val(char *key, char *val, size_t val_len,
+                          grpc_metadata *arr, size_t i){
   grpc_metadata *p = arr + i;
   p->key = key;
   p->value = val;
-  p->value_length = strlen(val);
+  p->value_length = val_len;
 }
 
 const char* get_metadata_key(grpc_metadata *arr, size_t i){
@@ -181,6 +182,11 @@ const char* get_metadata_key(grpc_metadata *arr, size_t i){
 const char* get_metadata_val(grpc_metadata *arr, size_t i){
   grpc_metadata *p = arr + i;
   return p->value;
+}
+
+size_t get_metadata_val_len(grpc_metadata *arr, size_t i){
+  grpc_metadata *p = arr + i;
+  return p->value_length;
 }
 
 grpc_op* op_array_create(size_t n){

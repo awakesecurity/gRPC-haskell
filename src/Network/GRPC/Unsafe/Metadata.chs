@@ -1,6 +1,6 @@
-{-# LANGUAGE StandaloneDeriving         #-}
-{-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TupleSections      #-}
+{-# LANGUAGE TypeFamilies       #-}
 
 module Network.GRPC.Unsafe.Metadata where
 
@@ -8,6 +8,9 @@ import Control.Exception
 import Control.Monad
 import Data.ByteString (ByteString, useAsCString, packCString)
 import Data.Function (on)
+import Data.List (sortBy, groupBy, (\\))
+import Data.ByteString (ByteString, useAsCString,
+                        useAsCStringLen, packCString, packCStringLen)
 import Data.List (sortBy, groupBy)
 import qualified Data.SortedList as SL
 import qualified Data.Map.Strict as M
@@ -28,7 +31,6 @@ import GHC.Exts
 -- @fromList [("key1","val1"),("key2","val2"),("key1","val3")]@.
 newtype MetadataMap = MetadataMap {unMap :: M.Map ByteString (SL.SortedList ByteString)}
   deriving Eq
-
 
 instance Show MetadataMap where
   show m = "fromList " ++ show (M.toList (unMap m))
@@ -98,9 +100,17 @@ instance Storable MetadataArray where
 -- | Sets a metadata key/value pair at the given index in the
 -- 'MetadataKeyValPtr'. No error checking is performed to ensure the index is
 -- in bounds!
-{#fun unsafe set_metadata_key_val as setMetadataKeyVal
-  {useAsCString* `ByteString', useAsCString* `ByteString',
+{#fun unsafe set_metadata_key_val as setMetadataKeyVal'
+  {useAsCString* `ByteString', `CString', `Int',
    `MetadataKeyValPtr', `Int'} -> `()'#}
+
+setMetadataKeyVal :: ByteString
+                     -> ByteString
+                     -> MetadataKeyValPtr
+                     -> Int
+                     -> IO ()
+setMetadataKeyVal k v m i =
+  useAsCStringLen v $ \(vStr, vLen) -> setMetadataKeyVal' k vStr vLen m i
 
 {#fun unsafe get_metadata_key as getMetadataKey'
   {`MetadataKeyValPtr', `Int'} -> `CString'#}
@@ -108,7 +118,9 @@ instance Storable MetadataArray where
 {#fun unsafe get_metadata_val as getMetadataVal'
   {`MetadataKeyValPtr', `Int'} -> `CString'#}
 
---TODO: The test suggests this is leaking.
+{#fun unsafe get_metadata_val_len as getMetadataValLen
+  {`MetadataKeyValPtr', `Int'} -> `Int'#}
+
 withMetadataArrayPtr :: (Ptr MetadataArray -> IO a) -> IO a
 withMetadataArrayPtr = bracket metadataArrayCreate metadataArrayDestroy
 
@@ -119,7 +131,9 @@ getMetadataKey :: MetadataKeyValPtr -> Int -> IO ByteString
 getMetadataKey m = getMetadataKey' m >=> packCString
 
 getMetadataVal :: MetadataKeyValPtr -> Int -> IO ByteString
-getMetadataVal m = getMetadataVal' m >=> packCString
+getMetadataVal m i = do vStr <- getMetadataVal' m i
+                        vLen <- getMetadataValLen m i
+                        packCStringLen (vStr, vLen)
 
 createMetadata :: MetadataMap -> IO MetadataKeyValPtr
 createMetadata m = do

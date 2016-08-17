@@ -64,11 +64,14 @@ grpc_metadata* metadata_alloc(size_t n);
 
 void metadata_free(grpc_metadata* m);
 
-void set_metadata_key_val(char *key, char *val, grpc_metadata *arr, size_t i);
+void set_metadata_key_val(char *key, char *val, size_t val_len,
+                          grpc_metadata *arr, size_t i);
 
 const char* get_metadata_key(grpc_metadata *arr, size_t i);
 
 const char* get_metadata_val(grpc_metadata *arr, size_t i);
+
+size_t get_metadata_val_len(grpc_metadata *arr, size_t i);
 
 grpc_op* op_array_create(size_t n);
 
