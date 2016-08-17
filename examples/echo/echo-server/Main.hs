@@ -20,6 +20,7 @@ import qualified Network.GRPC.HighLevel.Server.Unregistered as U
 import           Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
+import           Network.GRPC.Unsafe.Security as U
 
 serverMeta :: MetadataMap
 serverMeta = [("test_meta", "test_meta_value")]
@@ -123,4 +124,4 @@ main :: IO ()
 main = highlevelMainUnregistered
 
 defConfig :: ServerConfig
-defConfig = ServerConfig "localhost" 50051 [] [] [] [] []
+defConfig = ServerConfig "localhost" 50051 [] [] [] [] [] Nothing

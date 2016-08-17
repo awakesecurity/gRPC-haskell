@@ -2,6 +2,7 @@
 #define GRPC_HASKELL
 
 #include <grpc/grpc.h>
+#include <grpc/grpc_security.h>
 #include <grpc/impl/codegen/slice.h>
 #include <grpc/impl/codegen/time.h>
 #include <grpc/byte_buffer.h>
@@ -163,5 +164,41 @@ void create_int_arg(grpc_arg* args, size_t i,
                     enum supported_arg_key key, int value);
 
 void destroy_arg_array(grpc_arg* args, size_t n);
+
+grpc_auth_property_iterator* grpc_auth_context_property_iterator_(
+  const grpc_auth_context* ctx);
+
+grpc_server_credentials* ssl_server_credentials_create_internal(
+  const char* pem_root_certs, const char* pem_key, const char* pem_cert,
+  grpc_ssl_client_certificate_request_type force_client_auth);
+
+grpc_channel_credentials* grpc_ssl_credentials_create_internal(
+  const char* pem_root_certs, const char* pem_key, const char* pem_cert);
+
+void grpc_server_credentials_set_auth_metadata_processor_(
+  grpc_server_credentials* creds, grpc_auth_metadata_processor* p);
+
+//packs a Haskell server-side auth processor function pointer into the
+//appropriate struct expected by gRPC.
+grpc_auth_metadata_processor* mk_auth_metadata_processor(
+  void (*process)(void *state, grpc_auth_context *context,
+                  const grpc_metadata *md, size_t num_md,
+                  grpc_process_auth_metadata_done_cb cb, void *user_data));
+
+grpc_call_credentials* grpc_metadata_credentials_create_from_plugin_(
+  grpc_metadata_credentials_plugin* plugin);
+
+//type of the callback used to create auth metadata on the client
+typedef void (*get_metadata)
+       (void *state, grpc_auth_metadata_context context,
+        grpc_credentials_plugin_metadata_cb cb, void *user_data);
+
+//type of the Haskell callback that we use to create auth metadata on the client
+typedef void haskell_get_metadata(grpc_auth_metadata_context*,
+                                  grpc_credentials_plugin_metadata_cb,
+                                  void*);
+
+grpc_metadata_credentials_plugin* mk_metadata_client_plugin(
+  haskell_get_metadata* f);
 
 #endif //GRPC_HASKELL

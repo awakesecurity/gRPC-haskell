@@ -9,7 +9,7 @@ packages:
 - '.'
 - location:
     git: git@github.mv.awakenetworks.net:awakenetworks/protobuf-wire.git
-    commit: 676a99af41a664660d269c475832301873062a37
+    commit: 38b4af244934310edacd3defce5929f44c72d5c9
   extra-dep: true
 - location:
     git: git@github.com:awakenetworks/proto3-wire.git

@@ -1,6 +1,7 @@
 #include <grpc/grpc.h>
 #include <grpc/byte_buffer.h>
 #include <grpc/byte_buffer_reader.h>
+#include <grpc/grpc_security.h>
 #include <grpc/impl/codegen/grpc_types.h>
 #include <grpc/impl/codegen/compression_types.h>
 #include <stdio.h>
@@ -158,7 +159,7 @@ void metadata_array_destroy(grpc_metadata_array **arr){
 }
 
 grpc_metadata* metadata_alloc(size_t n){
-  grpc_metadata *retval = malloc(sizeof(grpc_metadata)*n);
+  grpc_metadata *retval = calloc(n,sizeof(grpc_metadata));
   return retval;
 }
 
@@ -462,4 +463,86 @@ void destroy_arg_array(grpc_arg* args, size_t n){
     }
   }
   free(args);
+}
+
+grpc_auth_property_iterator* grpc_auth_context_property_iterator_(
+  const grpc_auth_context* ctx){
+
+  grpc_auth_property_iterator* i = malloc(sizeof(grpc_auth_property_iterator));
+  *i = grpc_auth_context_property_iterator(ctx);
+  return i;
+}
+
+grpc_server_credentials* ssl_server_credentials_create_internal(
+  const char* pem_root_certs, const char* pem_key, const char* pem_cert,
+  grpc_ssl_client_certificate_request_type force_client_auth){
+
+  grpc_ssl_pem_key_cert_pair pair = {pem_key, pem_cert};
+  grpc_server_credentials* creds = grpc_ssl_server_credentials_create_ex(
+    pem_root_certs, &pair, 1, force_client_auth, NULL);
+  return creds;
+}
+
+grpc_channel_credentials* grpc_ssl_credentials_create_internal(
+  const char* pem_root_certs, const char* pem_key, const char* pem_cert){
+
+  grpc_channel_credentials* creds;
+  if(pem_key && pem_cert){
+    grpc_ssl_pem_key_cert_pair pair = {pem_key, pem_cert};
+    creds = grpc_ssl_credentials_create(pem_root_certs, &pair, NULL);
+  }
+  else{
+    creds = grpc_ssl_credentials_create(pem_root_certs, NULL, NULL);
+  }
+  return creds;
+}
+
+void grpc_server_credentials_set_auth_metadata_processor_(
+  grpc_server_credentials* creds, grpc_auth_metadata_processor* p){
+
+  grpc_server_credentials_set_auth_metadata_processor(creds, *p);
+}
+
+grpc_auth_metadata_processor* mk_auth_metadata_processor(
+  void (*process)(void *state, grpc_auth_context *context,
+                  const grpc_metadata *md, size_t num_md,
+                  grpc_process_auth_metadata_done_cb cb, void *user_data)){
+
+  //TODO: figure out when to free this.
+  grpc_auth_metadata_processor* p = malloc(sizeof(grpc_auth_metadata_processor));
+  p->process = process;
+  p->destroy = NULL;
+  p->state = NULL;
+  return p;
+}
+
+grpc_call_credentials* grpc_metadata_credentials_create_from_plugin_(
+  grpc_metadata_credentials_plugin* plugin){
+
+  return grpc_metadata_credentials_create_from_plugin(*plugin, NULL);
+}
+
+//This is a hack to work around GHC being unable to deal with raw struct params.
+//This callback is registered as the get_metadata callback for the call, and its
+//only job is to cast the void* state pointer to the correct function pointer
+//type and call the Haskell function with it.
+void metadata_dispatcher(void *state, grpc_auth_metadata_context context,
+ grpc_credentials_plugin_metadata_cb cb, void *user_data){
+
+  ((haskell_get_metadata*)state)(&context, cb, user_data);
+}
+
+grpc_metadata_credentials_plugin* mk_metadata_client_plugin(
+  haskell_get_metadata* f){
+
+  //TODO: figure out when to free this.
+  grpc_metadata_credentials_plugin* p =
+    malloc(sizeof(grpc_metadata_credentials_plugin));
+
+  p->get_metadata = metadata_dispatcher;
+  p->destroy = NULL;
+  p->state = f;
+  p->type = "grpc-haskell custom credentials";
+
+  return p;
 }

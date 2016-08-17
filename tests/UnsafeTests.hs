@@ -17,6 +17,7 @@ import           Network.GRPC.Unsafe.Metadata
 import           Network.GRPC.Unsafe.Slice
 import           Network.GRPC.Unsafe.Time
 import           Network.GRPC.Unsafe.ChannelArgs
+import           Network.GRPC.Unsafe.Security
 import           System.Clock
 import           Test.Tasty
 import           Test.Tasty.HUnit               as HU (testCase, (@?=),
@@ -38,6 +39,8 @@ unsafeTests = testGroup "Unit tests for unsafe C bindings"
   , testCreateDestroyMetadataKeyVals
   , testCreateDestroyDeadline
   , testCreateDestroyChannelArgs
+  , testCreateDestroyClientCreds
+  , testCreateDestroyServerCreds
   ]
 
 unsafeProperties :: TestTree
@@ -177,6 +180,18 @@ testCreateDestroyChannelArgs :: TestTree
 testCreateDestroyChannelArgs = testCase "Create/destroy channel args" $
   grpc $ withChannelArgs [CompressionAlgArg GrpcCompressDeflate] $
   const $ return ()
+
+testCreateDestroyClientCreds :: TestTree
+testCreateDestroyClientCreds = testCase "Create/destroy client credentials" $
+  grpc $ withChannelCredentials Nothing Nothing Nothing $ const $ return ()
+
+testCreateDestroyServerCreds :: TestTree
+testCreateDestroyServerCreds = testCase "Create/destroy server credentials" $
+  grpc $ withServerCredentials Nothing
+                               "tests/ssl/testServerKey.pem"
+                               "tests/ssl/testServerCert.pem"
+                               SslDontRequestClientCertificate
+                               $ const $ return ()
 
 assertCqEventComplete :: Event -> IO ()
 assertCqEventComplete e = do

@@ -151,6 +151,7 @@ data ServerOptions = ServerOptions
   , optUserAgentPrefix      :: String
   , optUserAgentSuffix      :: String
   , optInitialMetadata      :: MetadataMap
+  , optSSLConfig            :: Maybe ServerSSLConfig
   }
 
 defaultOptions :: ServerOptions
@@ -164,6 +165,7 @@ defaultOptions = ServerOptions
   , optUserAgentPrefix      = "grpc-haskell/0.0.0"
   , optUserAgentSuffix      = ""
   , optInitialMetadata      = mempty
+  , optSSLConfig            = Nothing
   }
 
 serverLoop :: ServerOptions -> IO ()

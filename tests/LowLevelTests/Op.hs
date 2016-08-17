@@ -60,10 +60,10 @@ withClientServerUnaryCall grpc f = do
           f (c, s, cc, sc)
 
 serverConf :: ServerConfig
-serverConf = ServerConfig "localhost" 50051 [("/foo")] [] [] [] []
+serverConf = ServerConfig "localhost" 50051 [("/foo")] [] [] [] [] Nothing
 
 clientConf :: ClientConfig
-clientConf = ClientConfig "localhost" 50051 []
+clientConf = ClientConfig "localhost" 50051 [] Nothing
 
 clientEmptySendOps :: [Op]
 clientEmptySendOps = [OpSendInitialMetadata mempty,

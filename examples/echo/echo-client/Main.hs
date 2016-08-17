@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedLists   #-}
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
 {-# OPTIONS_GHC -fno-warn-unused-binds       #-}
 
@@ -22,7 +23,7 @@ addMethod = MethodName "/echo.Add/DoAdd"
 _unregistered c = U.clientRequest c echoMethod 1 "hi" mempty
 
 regMain = withGRPC $ \g ->
-  withClient g (ClientConfig "localhost" 50051 []) $ \c -> do
+  withClient g (ClientConfig "localhost" 50051 [] Nothing) $ \c -> do
   rm <- clientRegisterMethodNormal c echoMethod
   replicateM_ 100000 $ clientRequest c rm 5 "hi" mempty >>= \case
     Left e -> fail $ "Got client error: " ++ show e
@@ -42,7 +43,7 @@ instance Message AddResponse
 -- TODO: Create Network.GRPC.HighLevel.Client w/ request variants
 
 highlevelMain = withGRPC $ \g ->
-    withClient g (ClientConfig "localhost" 50051 []) $ \c -> do
+    withClient g (ClientConfig "localhost" 50051 [] Nothing) $ \c -> do
     rm <- clientRegisterMethodNormal c echoMethod
     rmAdd <- clientRegisterMethodNormal c addMethod
     let oneThread = replicateM_ 10000 $ body c rm rmAdd
@@ -71,4 +72,5 @@ highlevelMain = withGRPC $ \g ->
                     | dec == AddResponse (x + y) -> return ()
                     | otherwise -> fail $ "Got wrong add answer: " ++ show dec ++ "expected: " ++ show x ++ " + " ++ show y ++ " = " ++ show (x+y)
 
+main :: IO ()
 main = highlevelMain

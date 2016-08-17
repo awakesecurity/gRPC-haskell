@@ -92,4 +92,5 @@ serverLoop ServerOptions{..} = do
           [ UserAgentPrefix optUserAgentPrefix
           , UserAgentSuffix optUserAgentSuffix
           ]
+      , sslConfig = optSSLConfig
       }

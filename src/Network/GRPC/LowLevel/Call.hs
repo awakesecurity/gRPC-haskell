@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures             #-}
+{-# LANGUAGE OverloadedStrings          #-}
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
@@ -17,7 +18,9 @@ module Network.GRPC.LowLevel.Call where
 import           Control.Monad.Managed                          (Managed, managed)
 import           Control.Exception                              (bracket)
 import           Data.ByteString                                (ByteString)
+import           Data.ByteString.Char8                          (pack)
 import           Data.List                                      (intersperse)
+import           Data.Monoid
 import           Data.String                                    (IsString)
 import           Foreign.Marshal.Alloc                          (free, malloc)
 import           Foreign.Ptr                                    (Ptr, nullPtr)
@@ -58,21 +61,21 @@ extractPayload (RegisteredMethodServerStreaming _ _ _) p =
   peek p >>= C.copyByteBufferToByteString
 extractPayload (RegisteredMethodBiDiStreaming _ _ _) _ = return ()
 
-newtype MethodName = MethodName {unMethodName :: String}
+newtype MethodName = MethodName {unMethodName :: ByteString}
   deriving (Show, Eq, IsString)
 
-newtype Host = Host {unHost :: String}
+newtype Host = Host {unHost :: ByteString}
   deriving (Show, Eq, IsString)
 
 newtype Port = Port {unPort :: Int}
   deriving (Eq, Num, Show)
 
-newtype Endpoint = Endpoint {unEndpoint :: String}
+newtype Endpoint = Endpoint {unEndpoint :: ByteString}
   deriving (Show, Eq, IsString)
 
 -- | Given a hostname and port, produces a "host:port" string
 endpoint :: Host -> Port -> Endpoint
-endpoint (Host h) (Port p) = Endpoint (h ++ ":" ++ show p)
+endpoint (Host h) (Port p) = Endpoint (h <> ":" <> pack (show p))
 
 -- | Represents a registered method. Methods can optionally be registered in
 -- order to make the C-level request/response code simpler.  Before making or

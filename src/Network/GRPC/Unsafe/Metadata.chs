@@ -135,13 +135,19 @@ getMetadataVal m i = do vStr <- getMetadataVal' m i
                         vLen <- getMetadataValLen m i
                         packCStringLen (vStr, vLen)
 
-createMetadata :: MetadataMap -> IO MetadataKeyValPtr
+createMetadata :: MetadataMap -> IO (MetadataKeyValPtr, Int)
 createMetadata m = do
   let indexedKeyVals = zip [0..] $ toList m
       l = length indexedKeyVals
   metadata <- metadataAlloc l
   forM_ indexedKeyVals $ \(i,(k,v)) -> setMetadataKeyVal k v metadata i
-  return metadata
+  return (metadata, l)
+
+withPopulatedMetadataKeyValPtr :: MetadataMap
+                                  -> ((MetadataKeyValPtr, Int) -> IO a)
+                                  -> IO a
+withPopulatedMetadataKeyValPtr m = bracket (createMetadata m)
+                                           (metadataFree . fst)
 
 getAllMetadataArray :: MetadataArray -> IO MetadataMap
 getAllMetadataArray m = do

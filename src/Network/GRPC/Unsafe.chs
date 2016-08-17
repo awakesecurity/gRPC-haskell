@@ -1,15 +1,19 @@
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 
 module Network.GRPC.Unsafe where
 
 import Control.Exception (bracket)
 import Control.Monad
 
+import Data.ByteString (ByteString, useAsCString, packCString)
+
 import Foreign.C.String (CString, peekCString)
 import Foreign.C.Types
 import Foreign.Marshal.Alloc (free)
 import Foreign.Ptr
 import Foreign.Storable
+import GHC.Exts (IsString(..))
 
 {#import Network.GRPC.Unsafe.Time#}
 import Network.GRPC.Unsafe.Constants
@@ -24,6 +28,9 @@ import Network.GRPC.Unsafe.Constants
 #include <grpc_haskell.h>
 
 {#context prefix = "grpc" #}
+
+newtype StatusDetails = StatusDetails {unStatusDetails :: ByteString}
+  deriving (Eq, IsString, Monoid, Show)
 
 {#pointer *grpc_completion_queue as CompletionQueue newtype #}
 
@@ -169,7 +176,7 @@ castPeek p = do
 -- 'grpcInsecureChannelCreate' is the one that is actually used.
 {#fun grpc_channel_create_call_ as ^
   {`Channel', `Call', fromIntegral `PropagationMask', `CompletionQueue',
-   `String', `String', `CTimeSpecPtr',unReserved `Reserved'}
+   useAsCString* `ByteString', useAsCString* `ByteString', `CTimeSpecPtr',unReserved `Reserved'}
   -> `Call'#}
 
 -- | Create a channel (on the client) to the server. The first argument is
@@ -178,10 +185,10 @@ castPeek p = do
 -- expose any functions for creating channel args, since they are entirely
 -- undocumented.
 {#fun grpc_insecure_channel_create as ^
-  {`String', `GrpcChannelArgs', unReserved `Reserved'} -> `Channel'#}
+  {useAsCString* `ByteString', `GrpcChannelArgs', unReserved `Reserved'} -> `Channel'#}
 
 {#fun grpc_channel_register_call as ^
-  {`Channel', `String', `String',unReserved `Reserved'}
+  {`Channel', useAsCString* `ByteString',useAsCString* `ByteString',unReserved `Reserved'}
   -> `CallHandle' CallHandle#}
 
 {#fun grpc_channel_create_registered_call_ as ^
@@ -237,13 +244,13 @@ getPeerPeek cstr = do
   {`GrpcChannelArgs',unReserved `Reserved'} -> `Server'#}
 
 {#fun grpc_server_register_method_ as ^
-  {`Server', `String', `String', `ServerRegisterMethodPayloadHandling'} -> `CallHandle' CallHandle#}
+  {`Server',useAsCString* `ByteString',useAsCString* `ByteString', `ServerRegisterMethodPayloadHandling'} -> `CallHandle' CallHandle#}
 
 {#fun grpc_server_register_completion_queue as ^
   {`Server', `CompletionQueue', unReserved `Reserved'} -> `()'#}
 
 {#fun grpc_server_add_insecure_http2_port as ^
-  {`Server', `String'} -> `Int'#}
+  {`Server', useAsCString* `ByteString'} -> `Int'#}
 
 -- | Starts a server. To shut down the server, call these in order:
 -- 'grpcServerShutdownAndNotify', 'grpcServerCancelAllCalls',
@@ -280,8 +287,8 @@ getPeerPeek cstr = do
    `CompletionQueue',unTag `Tag'}
   -> `CallError'#}
 
-{#fun unsafe call_details_get_method as ^ {`CallDetails'} -> `String'#}
+{#fun unsafe call_details_get_method as ^ {`CallDetails'} -> `ByteString' packCString* #}
 
-{#fun unsafe call_details_get_host as ^ {`CallDetails'} -> `String'#}
+{#fun unsafe call_details_get_host as ^ {`CallDetails'} -> `ByteString' packCString* #}
 
 {#fun call_details_get_deadline as ^ {`CallDetails'} -> `CTimeSpec' peek* #}

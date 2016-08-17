@@ -80,4 +80,4 @@ main :: IO ()
 main = highlevelMainUnregistered
 
 defConfig :: ServerConfig
-defConfig = ServerConfig "localhost" 50051 [] [] [] [] []
+defConfig = ServerConfig "localhost" 50051 [] [] [] [] [] Nothing

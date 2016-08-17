@@ -16,6 +16,7 @@ import           Control.Concurrent.MVar
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
+import qualified Data.ByteString                       as B
 import           Data.ByteString                       (ByteString)
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue
@@ -25,6 +26,7 @@ import qualified Network.GRPC.Unsafe                   as C
 import qualified Network.GRPC.Unsafe.ChannelArgs       as C
 import qualified Network.GRPC.Unsafe.Constants         as C
 import qualified Network.GRPC.Unsafe.Op                as C
+import qualified Network.GRPC.Unsafe.Security          as C
 import qualified Network.GRPC.Unsafe.Time              as C
 
 -- | Represents the context needed to perform client-side gRPC operations.
@@ -33,25 +35,72 @@ data Client = Client {clientChannel :: C.Channel,
                       clientConfig  :: ClientConfig
                      }
 
+data ClientSSLKeyCertPair = ClientSSLKeyCertPair
+  {clientPrivateKey :: FilePath,
+   clientCert :: FilePath}
+
+-- | SSL configuration for the client. It's perfectly acceptable for both fields
+-- to be 'Nothing', in which case default fallbacks will be used for the server
+-- root cert.
+data ClientSSLConfig = ClientSSLConfig
+  {serverRootCert :: Maybe FilePath,
+   -- ^ Path to the server root certificate. If 'Nothing', gRPC will attempt to
+   -- fall back to a default.
+   clientSSLKeyCertPair :: Maybe ClientSSLKeyCertPair,
+   -- ^ The client's private key and cert, if available.
+   clientMetadataPlugin :: Maybe C.ClientMetadataCreate
+   -- ^ Optional plugin for attaching additional metadata to each call.
+  }
+
 -- | Configuration necessary to set up a client.
 
 data ClientConfig = ClientConfig {serverHost :: Host,
                                   serverPort :: Port,
-                                  clientArgs :: [C.Arg]
+                                  clientArgs :: [C.Arg],
                                   -- ^ Optional arguments for setting up the
                                   -- channel on the client. Supplying an empty
                                   -- list will cause the channel to use gRPC's
                                   -- default options.
+                                  clientSSLConfig :: Maybe ClientSSLConfig
+                                  -- ^ If 'Nothing', the client will use an
+                                  -- insecure connection to the server.
+                                  -- Otherwise, will use the supplied config to
+                                  -- connect using SSL.
                                  }
 
 clientEndpoint :: ClientConfig -> Endpoint
 clientEndpoint ClientConfig{..} = endpoint serverHost serverPort
 
+addMetadataCreds :: C.ChannelCredentials
+                    -> Maybe C.ClientMetadataCreate
+                    -> IO C.ChannelCredentials
+addMetadataCreds c Nothing = return c
+addMetadataCreds c (Just create) = do
+  callCreds <- C.createCustomCallCredentials create
+  C.compositeChannelCredentialsCreate c callCreds C.reserved
+
+createChannel :: ClientConfig -> C.GrpcChannelArgs -> IO C.Channel
+createChannel conf@ClientConfig{..} chanargs =
+  case clientSSLConfig of
+    Nothing -> C.grpcInsecureChannelCreate e chanargs C.reserved
+    Just (ClientSSLConfig rootCertPath Nothing plugin) ->
+      do rootCert <- mapM B.readFile rootCertPath
+         C.withChannelCredentials rootCert Nothing Nothing $ \creds -> do
+           creds' <- addMetadataCreds creds plugin
+           C.secureChannelCreate creds' e chanargs C.reserved
+    Just (ClientSSLConfig x (Just (ClientSSLKeyCertPair y z)) plugin) ->
+      do rootCert <- mapM B.readFile x
+         privKey <- Just <$> B.readFile y
+         clientCert <- Just <$> B.readFile z
+         C.withChannelCredentials rootCert privKey clientCert $ \creds -> do
+           creds' <- addMetadataCreds creds plugin
+           C.secureChannelCreate creds' e chanargs C.reserved
+  where (Endpoint e) = clientEndpoint conf
+
 createClient :: GRPC -> ClientConfig -> IO Client
-createClient grpc clientConfig@ClientConfig{..} =
-  C.withChannelArgs clientArgs $ \chanargs -> do
-    let Endpoint e = clientEndpoint clientConfig
-    clientChannel <- C.grpcInsecureChannelCreate e chanargs C.reserved
+createClient grpc clientConfig =
+  C.withChannelArgs (clientArgs clientConfig) $ \chanargs -> do
+    clientChannel <- createChannel clientConfig chanargs
     clientCQ <- createCompletionQueue grpc
     return Client{..}
 
@@ -162,7 +211,7 @@ withClientCall cl rm tm = withClientCallParent cl rm tm Nothing
 withClientCallParent :: Client
                      -> RegisteredMethod mt
                      -> TimeoutSeconds
-                     -> Maybe (ServerCall a)
+                     -> Maybe (ServerCall b)
                         -- ^ Optional parent call for cascading cancellation
                      -> (ClientCall -> IO (Either GRPCIOError a))
                      -> IO (Either GRPCIOError a)
@@ -359,16 +408,33 @@ clientRW' (clientCQ -> cq) (unsafeCC -> c) initMeta f = runExceptT $ do
 
 -- | Make a request of the given method with the given body. Returns the
 -- server's response.
-clientRequest :: Client
-              -> RegisteredMethod 'Normal
-              -> TimeoutSeconds
-              -> ByteString
-              -- ^ The body of the request
-              -> MetadataMap
-              -- ^ Metadata to send with the request
-              -> IO (Either GRPCIOError NormalRequestResult)
-clientRequest cl@(clientCQ -> cq) rm tm body initMeta =
-  withClientCall cl rm tm (fmap join . go)
+clientRequest
+  :: Client
+  -> RegisteredMethod 'Normal
+  -> TimeoutSeconds
+  -> ByteString
+  -- ^ The body of the request
+  -> MetadataMap
+  -- ^ Metadata to send with the request
+  -> IO (Either GRPCIOError NormalRequestResult)
+clientRequest c = clientRequestParent c Nothing
+
+-- | Like 'clientRequest', but allows the user to supply an optional parent
+-- call, so that call cancellation can be propagated from the parent to the
+-- child. This is intended for servers that call other servers.
+clientRequestParent
+  :: Client
+  -> Maybe (ServerCall a)
+  -- ^ optional parent call
+  -> RegisteredMethod 'Normal
+  -> TimeoutSeconds
+  -> ByteString
+  -- ^ The body of the request
+  -> MetadataMap
+  -- ^ Metadata to send with the request
+  -> IO (Either GRPCIOError NormalRequestResult)
+clientRequestParent cl@(clientCQ -> cq) p rm tm body initMeta =
+  withClientCallParent cl rm tm p (fmap join . go)
   where
     go (unsafeCC -> c) =
       -- NB: the send and receive operations below *must* be in separate

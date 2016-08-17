@@ -55,6 +55,7 @@ library
     Network.GRPC.Unsafe.Metadata
     Network.GRPC.Unsafe.Op
     Network.GRPC.Unsafe
+    Network.GRPC.Unsafe.Security
     Network.GRPC.LowLevel
     Network.GRPC.LowLevel.Server.Unregistered
     Network.GRPC.LowLevel.Client.Unregistered

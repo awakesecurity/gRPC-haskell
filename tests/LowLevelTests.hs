@@ -19,6 +19,7 @@ import           Control.Monad.Managed
 import           Data.ByteString                           (ByteString,
                                                             isPrefixOf,
                                                             isSuffixOf)
+import           Data.List                                 (find)
 import qualified Data.Map.Strict                           as M
 import qualified Data.Set                                  as S
 import           GHC.Exts                                  (fromList, toList)
@@ -46,6 +47,9 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
   , testServerCreateDestroy
   , testMixRegisteredUnregistered
   , testPayload
+  , testSSL
+  , testAuthMetadataTransfer
+  , testServerAuthProcessorCancel
   , testPayloadUnregistered
   , testServerCancel
   , testGoaway
@@ -151,6 +155,231 @@ testPayload =
         checkMD "Server metadata mismatch" clientMD (metadata c)
         return ("reply test", dummyMeta, StatusOk, "details string")
       r @?= Right ()
+
+testSSL :: TestTree
+testSSL =
+  csTest' "request/response using SSL" client server
+  where
+    clientConf = stdClientConf
+                 {clientSSLConfig = Just (ClientSSLConfig
+                                            (Just "tests/ssl/localhost.crt")
+                                            Nothing
+                                            Nothing)
+                }
+    client = TestClient clientConf $ \c -> do
+      rm <- clientRegisterMethodNormal c "/foo"
+      clientRequest c rm 10 "hi" mempty >>= do
+        checkReqRslt $ \NormalRequestResult{..} -> do
+          rspCode @?= StatusOk
+          rspBody @?= "reply test"
+
+    serverConf = defServerConf
+                 {sslConfig = Just (ServerSSLConfig
+                                      Nothing
+                                      "tests/ssl/localhost.key"
+                                      "tests/ssl/localhost.crt"
+                                      SslDontRequestClientCertificate
+                                      Nothing)
+                }
+    server = TestServer serverConf $ \s -> do
+      r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{..} body -> do
+        body @?= "hi"
+        return ("reply test", mempty, StatusOk, "")
+      r @?= Right ()
+
+-- NOTE: With auth plugin tests, if an auth plugin decides someone isn't
+-- authenticated, then the call never happens from the perspective of
+-- the server, so the server will continue to block waiting for a call. So, if
+-- these tests hang forever, it's because auth failed and the server is still
+-- waiting for a successfully authenticated call to come in.
+
+testServerAuthProcessorCancel :: TestTree
+testServerAuthProcessorCancel =
+  csTest' "request rejection by auth processor" client server
+  where
+    clientConf = stdClientConf
+                 {clientSSLConfig = Just (ClientSSLConfig
+                                            (Just "tests/ssl/localhost.crt")
+                                            Nothing
+                                            Nothing)
+                }
+    client = TestClient clientConf $ \c -> do
+      rm <- clientRegisterMethodNormal c "/foo"
+      r <- clientRequest c rm 10 "hi" mempty
+      -- TODO: using checkReqRslt on this first result causes the test to hang!
+      r @?= Left (GRPCIOBadStatusCode StatusUnauthenticated "denied!")
+      clientRequest c rm 10 "hi" [("foo","bar")] >>= do
+        checkReqRslt $ \NormalRequestResult{..} -> do
+          rspCode @?= StatusOk
+          rspBody @?= "reply test"
+
+    serverProcessor = Just $ \_ m -> do
+      let (status, details) = if M.member "foo" (unMap m)
+                                 then (StatusOk, "")
+                                 else (StatusUnauthenticated, "denied!")
+      return $ AuthProcessorResult mempty mempty status details
+
+    serverConf = defServerConf
+                 {sslConfig = Just (ServerSSLConfig
+                                      Nothing
+                                      "tests/ssl/localhost.key"
+                                      "tests/ssl/localhost.crt"
+                                      SslDontRequestClientCertificate
+                                      serverProcessor)
+                }
+    server = TestServer serverConf $ \s -> do
+      r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{..} body -> do
+        checkMD "Handler only sees requests with good metadata"
+                [("foo","bar")]
+                metadata
+        return ("reply test", mempty, StatusOk, "")
+      r @?= Right ()
+
+testAuthMetadataTransfer :: TestTree
+testAuthMetadataTransfer =
+  csTest' "Auth metadata changes sent from client to server" client server
+  where
+    plugin :: ClientMetadataCreate
+    plugin authMetaCtx = do
+      let authCtx = (channelAuthContext authMetaCtx)
+
+      addAuthProperty authCtx (AuthProperty "foo1" "bar1")
+      print "getting properties"
+      newProps <- getAuthProperties authCtx
+      print "got properties"
+      let addedProp = find ((== "foo1") . authPropName) newProps
+      addedProp @?= Just (AuthProperty "foo1" "bar1")
+      return $ ClientMetadataCreateResult [("foo","bar")] StatusOk ""
+    clientConf = stdClientConf
+                 {clientSSLConfig = Just (ClientSSLConfig
+                                            (Just "tests/ssl/localhost.crt")
+                                            Nothing
+                                            (Just plugin))
+                }
+    client = TestClient clientConf $ \c -> do
+      rm <- clientRegisterMethodNormal c "/foo"
+      clientRequest c rm 10 "hi" mempty >>= do
+        checkReqRslt $ \NormalRequestResult{..} -> do
+          rspCode @?= StatusOk
+          rspBody @?= "reply test"
+
+    serverProcessor :: Maybe ProcessMeta
+    serverProcessor = Just $ \authCtx m -> do
+      let expected = fromList [("foo","bar")]
+
+      props <- getAuthProperties authCtx
+      let clientProp = find ((== "foo1") . authPropName) props
+      assertBool "server plugin doesn't see auth properties set by client"
+                 (clientProp == Nothing)
+      checkMD "server plugin sees metadata added by client plugin" expected m
+      return $ AuthProcessorResult mempty mempty StatusOk ""
+
+    serverConf = defServerConf
+                 {sslConfig = Just (ServerSSLConfig
+                                      Nothing
+                                      "tests/ssl/localhost.key"
+                                      "tests/ssl/localhost.crt"
+                                      SslDontRequestClientCertificate
+                                      serverProcessor)
+                }
+    server = TestServer serverConf $ \s -> do
+      r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{..} body -> do
+        body @?= "hi"
+        return ("reply test", mempty, StatusOk, "")
+      r @?= Right ()
+
+-- TODO: auth metadata doesn't propagate from parent calls to child calls.
+-- Once we implement our own system for doing so, update this test and add it
+-- to the tests list.
+testAuthMetadataPropagate :: TestTree
+testAuthMetadataPropagate = testCase "auth metadata inherited by children" $ do
+  c <- async client
+  s1 <- async server
+  s2 <- async server2
+  wait c
+  wait s1
+  wait s2
+  return ()
+  where
+    clientPlugin _ =
+      return $ ClientMetadataCreateResult [("foo","bar")] StatusOk ""
+    clientConf = stdClientConf
+                 {clientSSLConfig = Just (ClientSSLConfig
+                                            (Just "tests/ssl/localhost.crt")
+                                            Nothing
+                                            (Just clientPlugin))
+                }
+    client = do
+      threadDelaySecs 3
+      withGRPC $ \g -> withClient g clientConf $ \c -> do
+        rm <- clientRegisterMethodNormal c "/foo"
+        clientRequest c rm 10 "hi" mempty >>= do
+          checkReqRslt $ \NormalRequestResult{..} -> do
+            rspCode @?= StatusOk
+            rspBody @?= "reply test"
+
+    server1ServerPlugin _ctx md = do
+      checkMD "server1 sees client's auth metadata." [("foo","bar")] md
+      -- TODO: add response meta to check, and consume meta to see what happens.
+      return $ AuthProcessorResult mempty mempty StatusOk ""
+
+    server1ServerConf = defServerConf
+                 {sslConfig = Just (ServerSSLConfig
+                                      Nothing
+                                      "tests/ssl/localhost.key"
+                                      "tests/ssl/localhost.crt"
+                                      SslDontRequestClientCertificate
+                                      (Just server1ServerPlugin)),
+                  methodsToRegisterNormal = ["/foo"]
+                }
+
+    server1ClientPlugin _ =
+      return $ ClientMetadataCreateResult [("foo1","bar1")] StatusOk ""
+
+    server1ClientConf = stdClientConf
+                 {clientSSLConfig = Just (ClientSSLConfig
+                                            (Just "tests/ssl/localhost.crt")
+                                            Nothing
+                                            (Just server1ClientPlugin)),
+                  serverPort = 50052
+                }
+
+    server = do
+      threadDelaySecs 2
+      withGRPC $ \g -> withServer g server1ServerConf $ \s ->
+        withClient g server1ClientConf $ \c -> do
+          let rm = head (normalMethods s)
+          serverHandleNormalCall s rm mempty $ \call -> do
+            rmc <- clientRegisterMethodNormal c "/foo"
+            res <- clientRequestParent c (Just call) rmc 10 "hi" mempty
+            case res of
+              Left _ ->
+                error "got bad result from server2"
+              Right (NormalRequestResult{..}) ->
+                return (rspBody, mempty, StatusOk, "")
+
+    server2ServerPlugin _ctx md = do
+      print md
+      checkMD "server2 sees server1's auth metadata." [("foo1","bar1")] md
+      --TODO: this assert fails
+      checkMD "server2 sees client's auth metadata." [("foo","bar")] md
+      return $ AuthProcessorResult mempty mempty StatusOk ""
+
+    server2ServerConf = defServerConf
+                 {sslConfig = Just (ServerSSLConfig
+                                      Nothing
+                                      "tests/ssl/localhost.key"
+                                      "tests/ssl/localhost.crt"
+                                      SslDontRequestClientCertificate
+                                      (Just server2ServerPlugin)),
+                  methodsToRegisterNormal = ["/foo"],
+                  port = 50052
+                }
+
+    server2 = withGRPC $ \g -> withServer g server2ServerConf $ \s -> do
+        let rm = head (normalMethods s)
+        serverHandleNormalCall s rm mempty $ \call -> do
+          return ("server2 reply", mempty, StatusOk, "")
 
 testServerCancel :: TestTree
 testServerCancel =
@@ -446,7 +675,7 @@ testCustomUserAgent =
   where
     clientArgs = [UserAgentPrefix "prefix!", UserAgentSuffix "suffix!"]
     client =
-      TestClient (ClientConfig "localhost" 50051 clientArgs) $
+      TestClient (ClientConfig "localhost" 50051 clientArgs Nothing) $
         \c -> do rm <- clientRegisterMethodNormal c "/foo"
                  void $ clientRequest c rm 4 "" mempty
     server = TestServer (serverConf (["/foo"],[],[],[])) $ \s -> do
@@ -469,7 +698,8 @@ testClientCompression =
       TestClient (ClientConfig
                    "localhost"
                    50051
-                   [CompressionAlgArg GrpcCompressDeflate]) $ \c -> do
+                   [CompressionAlgArg GrpcCompressDeflate]
+                   Nothing) $ \c -> do
         rm <- clientRegisterMethodNormal c "/foo"
         void $ clientRequest c rm 1 "hello" mempty
     server = TestServer (serverConf (["/foo"],[],[],[])) $ \s -> do
@@ -486,6 +716,7 @@ testClientServerCompression =
     cconf = ClientConfig "localhost"
                          50051
                          [CompressionAlgArg GrpcCompressDeflate]
+                         Nothing
     client = TestClient cconf $ \c -> do
       rm <- clientRegisterMethodNormal c "/foo"
       clientRequest c rm 1 "hello" mempty >>= do
@@ -500,6 +731,7 @@ testClientServerCompression =
                          50051
                          ["/foo"] [] [] []
                          [CompressionAlgArg GrpcCompressDeflate]
+                         Nothing
     server = TestServer sconf $ \s -> do
       let rm = head (normalMethods s)
       serverHandleNormalCall s rm dummyMeta $ \sc -> do
@@ -514,6 +746,7 @@ testClientServerCompressionLvl =
     cconf = ClientConfig "localhost"
                          50051
                          [CompressionLevelArg GrpcCompressLevelHigh]
+                         Nothing
     client = TestClient cconf $ \c -> do
       rm <- clientRegisterMethodNormal c "/foo"
       clientRequest c rm 1 "hello" mempty >>= do
@@ -528,6 +761,7 @@ testClientServerCompressionLvl =
                          50051
                          ["/foo"] [] [] []
                          [CompressionLevelArg GrpcCompressLevelLow]
+                         Nothing
     server = TestServer sconf $ \s -> do
       let rm = head (normalMethods s)
       serverHandleNormalCall s rm dummyMeta $ \sc -> do
@@ -622,7 +856,7 @@ stdTestClient :: (Client -> IO ()) -> TestClient
 stdTestClient = TestClient stdClientConf
 
 stdClientConf :: ClientConfig
-stdClientConf = ClientConfig "localhost" 50051 []
+stdClientConf = ClientConfig "localhost" 50051 [] Nothing
 
 data TestServer = TestServer ServerConfig (Server -> IO ())
 
@@ -631,7 +865,7 @@ runTestServer (TestServer conf f) =
   runManaged $ mgdGRPC >>= mgdServer conf >>= liftIO . f
 
 defServerConf :: ServerConfig
-defServerConf = ServerConfig "localhost" 50051 [] [] [] [] []
+defServerConf = ServerConfig "localhost" 50051 [] [] [] [] [] Nothing
 
 serverConf :: ([MethodName],[MethodName],[MethodName],[MethodName])
               -> ServerConfig

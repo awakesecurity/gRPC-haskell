@@ -51,6 +51,25 @@ GRPC
 , serverRW     -- for bidirectional streaming
 , ServerRWHandlerLL
 
+-- * Client and Server Auth
+, AuthContext
+, AuthProperty(..)
+, getAuthProperties
+, addAuthProperty
+
+-- * Server Auth
+, ServerSSLConfig(..)
+, ProcessMeta
+, AuthProcessorResult(..)
+, SslClientCertificateRequestType(..)
+
+-- * Client Auth
+, ClientSSLConfig(..)
+, ClientSSLKeyCertPair(..)
+, ClientMetadataCreate
+, ClientMetadataCreateResult(..)
+, AuthMetadataContext(..)
+
 -- * Client
 , ClientConfig(..)
 , Client
@@ -63,6 +82,7 @@ GRPC
 , clientRegisterMethodServerStreaming
 , clientRegisterMethodBiDiStreaming
 , clientRequest
+, clientRequestParent
 , clientReader -- for server streaming
 , clientWriter -- for client streaming
 , clientRW     -- for bidirectional streaming
@@ -80,15 +100,25 @@ GRPC
 
 ) where
 
-import           Network.GRPC.LowLevel.GRPC
-import           Network.GRPC.LowLevel.Server
-import           Network.GRPC.LowLevel.CompletionQueue
-import           Network.GRPC.LowLevel.Op
-import           Network.GRPC.LowLevel.Client
 import           Network.GRPC.LowLevel.Call
+import           Network.GRPC.LowLevel.Client
+import           Network.GRPC.LowLevel.CompletionQueue
+import           Network.GRPC.LowLevel.GRPC
+import           Network.GRPC.LowLevel.Op
+import           Network.GRPC.LowLevel.Server
 
-import Network.GRPC.Unsafe (ConnectivityState(..))
-import Network.GRPC.Unsafe.Op (StatusCode(..))
-import Network.GRPC.Unsafe.ChannelArgs(Arg(..)
-                                       , CompressionAlgorithm(..)
-                                       , CompressionLevel(..))
+import           Network.GRPC.Unsafe                   (ConnectivityState (..))
+import           Network.GRPC.Unsafe.ChannelArgs       (Arg (..), CompressionAlgorithm (..),
+                                                        CompressionLevel (..))
+import           Network.GRPC.Unsafe.ChannelArgs       (Arg (..), CompressionAlgorithm (..))
+import           Network.GRPC.Unsafe.Op                (StatusCode (..))
+import           Network.GRPC.Unsafe.Security          (AuthContext,
+                                                        AuthMetadataContext (..),
+                                                        AuthProcessorResult (..),
+                                                        AuthProperty (..),
+                                                        ClientMetadataCreate,
+                                                        ClientMetadataCreateResult (..),
+                                                        ProcessMeta,
+                                                        SslClientCertificateRequestType (..),
+                                                        addAuthProperty,
+                                                        getAuthProperties)

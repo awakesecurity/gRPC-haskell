@@ -11,7 +11,7 @@ GRPC
 , grpcDebug'
 , threadDelaySecs
 , C.MetadataMap(..)
-, StatusDetails(..)
+, C.StatusDetails(..)
 ) where
 
 import           Control.Concurrent     (threadDelay, myThreadId)
@@ -25,9 +25,6 @@ import qualified Network.GRPC.Unsafe    as C
 import qualified Network.GRPC.Unsafe.Op as C
 import qualified Network.GRPC.Unsafe.Metadata as C
 import           Proto3.Wire.Decode     (ParseError)
-
-newtype StatusDetails = StatusDetails ByteString
-  deriving (Eq, IsString, Monoid, Show)
 
 -- | Functions as a proof that the gRPC core has been started. The gRPC core
 -- must be initialized to create any gRPC state, so this is a requirement for
@@ -54,7 +51,7 @@ data GRPCIOError = GRPCIOCallError C.CallError
                    -- ^ Thrown if a 'CompletionQueue' fails to shut down in a
                    -- reasonable amount of time.
                    | GRPCIOUnknownError
-                   | GRPCIOBadStatusCode C.StatusCode StatusDetails
+                   | GRPCIOBadStatusCode C.StatusCode C.StatusDetails
 
                    | GRPCIODecodeError ParseError
                    | GRPCIOInternalUnexpectedRecv String -- debugging description

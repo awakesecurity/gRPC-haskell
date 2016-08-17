@@ -65,16 +65,13 @@ defaultStatusStringLen = 128
 -- | Allocates and initializes the 'Opcontext' corresponding to the given 'Op'.
 createOpContext :: Op -> IO OpContext
 createOpContext (OpSendInitialMetadata m) =
-  OpSendInitialMetadataContext
-  <$> C.createMetadata m
-  <*> return (length $ toList m)
+  uncurry OpSendInitialMetadataContext <$> C.createMetadata m
 createOpContext (OpSendMessage bs) =
   fmap OpSendMessageContext (C.createByteBuffer bs)
 createOpContext (OpSendCloseFromClient) = return OpSendCloseFromClientContext
 createOpContext (OpSendStatusFromServer m code (StatusDetails str)) =
-  OpSendStatusFromServerContext
+  uncurry OpSendStatusFromServerContext
   <$> C.createMetadata m
-  <*> return (length $ toList m)
   <*> return code
   <*> return str
 createOpContext OpRecvInitialMetadata =

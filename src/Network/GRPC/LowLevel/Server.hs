@@ -31,6 +31,7 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import           Data.ByteString                       (ByteString)
+import qualified Data.ByteString                       as B
 import qualified Data.Set as S
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
@@ -45,6 +46,7 @@ import           Network.GRPC.LowLevel.Op
 import qualified Network.GRPC.Unsafe                   as C
 import qualified Network.GRPC.Unsafe.ChannelArgs       as C
 import qualified Network.GRPC.Unsafe.Op                as C
+import qualified Network.GRPC.Unsafe.Security          as C
 
 -- | Wraps various gRPC state needed to run a server.
 data Server = Server
@@ -104,6 +106,16 @@ forkServer Server{..} f = do
               tid <- myThreadId
               atomically $ modifyTVar' outstandingForks (S.delete tid)
 
+-- | Configuration for SSL.
+data ServerSSLConfig = ServerSSLConfig
+  {clientRootCert :: Maybe FilePath,
+   serverPrivateKey :: FilePath,
+   serverCert :: FilePath,
+   clientCertRequest :: C.SslClientCertificateRequestType,
+   -- ^ Whether to request a certificate from the client, and what to do with it
+   -- if received.
+   customMetadataProcessor :: Maybe C.ProcessMeta}
+
 -- | Configuration needed to start a server.
 data ServerConfig = ServerConfig
   { host              :: Host
@@ -119,18 +131,35 @@ data ServerConfig = ServerConfig
   , serverArgs        :: [C.Arg]
   -- ^ Optional arguments for setting up the channel on the server. Supplying an
   -- empty list will cause the channel to use gRPC's default options.
+  , sslConfig :: Maybe ServerSSLConfig
+  -- ^ Server-side SSL configuration. If 'Nothing', the server will use an
+  -- insecure connection.
   }
-  deriving (Show, Eq)
 
 serverEndpoint :: ServerConfig -> Endpoint
 serverEndpoint ServerConfig{..} = endpoint host port
+
+addPort :: C.Server -> ServerConfig -> IO Int
+addPort server conf@ServerConfig{..} =
+  case sslConfig of
+    Nothing -> C.grpcServerAddInsecureHttp2Port server e
+    Just ServerSSLConfig{..} ->
+      do crc <- mapM B.readFile clientRootCert
+         spk <- B.readFile serverPrivateKey
+         sc <- B.readFile serverCert
+         C.withServerCredentials crc spk sc clientCertRequest $ \creds -> do
+           case customMetadataProcessor of
+             Just p -> C.setMetadataProcessor creds p
+             Nothing -> return ()
+           C.serverAddSecureHttp2Port server e creds
+  where e = unEndpoint $ serverEndpoint conf
 
 startServer :: GRPC -> ServerConfig -> IO Server
 startServer grpc conf@ServerConfig{..} =
   C.withChannelArgs serverArgs $ \args -> do
     let e = serverEndpoint conf
     server <- C.grpcServerCreate args C.reserved
-    actualPort <- C.grpcServerAddInsecureHttp2Port server (unEndpoint e)
+    actualPort <- addPort server conf
     when (actualPort /= unPort port) $
       error $ "Unable to bind port: " ++ show port
     cq <- createCompletionQueue grpc
