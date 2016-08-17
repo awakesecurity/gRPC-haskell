@@ -8,9 +8,9 @@
 
 module Network.GRPC.HighLevel.Server.Unregistered where
 
+import           Control.Arrow
 import           Control.Concurrent
 import           Control.Concurrent.Async                  (async, wait)
-import           Control.Arrow
 import qualified Control.Exception                         as CE
 import           Control.Monad
 import           Data.Foldable                             (find)
@@ -21,13 +21,14 @@ import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
 
 dispatchLoop :: Server
+             -> (String -> IO ())
              -> MetadataMap
              -> [Handler 'Normal]
              -> [Handler 'ClientStreaming]
              -> [Handler 'ServerStreaming]
              -> [Handler 'BiDiStreaming]
              -> IO ()
-dispatchLoop s md hN hC hS hB =
+dispatchLoop s logger md hN hC hS hB =
   forever $ U.withServerCallAsync s $ \sc ->
     case findHandler sc allHandlers of
       Just (AnyHandler ah) -> case ah of
@@ -62,7 +63,7 @@ dispatchLoop s md hN hC hS hB =
       return (mempty, mempty, StatusNotFound, StatusDetails "unknown method")
 
     handleError :: IO a -> IO ()
-    handleError = (handleCallError . left herr =<<) . CE.try
+    handleError = (handleCallError logger . left herr =<<) . CE.try
       where herr (e :: CE.SomeException) = GRPCIOHandlerException (show e)
 
 serverLoop :: ServerOptions -> IO ()
@@ -72,6 +73,7 @@ serverLoop ServerOptions{..} = do
   tid <- async $ withGRPC $ \grpc ->
     withServer grpc config $ \server -> do
       dispatchLoop server
+                   optLogger
                    optInitialMetadata
                    optNormalHandlers
                    optClientStreamHandlers

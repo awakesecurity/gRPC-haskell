@@ -98,60 +98,74 @@ handlerMethodName (ClientStreamHandler m _) = m
 handlerMethodName (ServerStreamHandler m _) = m
 handlerMethodName (BiDiStreamHandler m _)   = m
 
-logMsg :: String -> IO ()
-logMsg = hPutStrLn stderr
-
 -- | Handles errors that result from trying to handle a call on the server.
 -- For each error, takes a different action depending on the severity in the
 -- context of handling a server call. This also tries to give an indication of
 -- whether the error is our fault or user error.
-handleCallError :: Either GRPCIOError a -> IO ()
-handleCallError (Right _) = return ()
-handleCallError (Left GRPCIOTimeout) =
+handleCallError :: (String -> IO ())
+                   -- ^ logging function
+                   -> Either GRPCIOError a
+                   -> IO ()
+handleCallError _ (Right _) = return ()
+handleCallError _ (Left GRPCIOTimeout) =
   -- Probably a benign timeout (such as a client disappearing), noop for now.
   return ()
-handleCallError (Left GRPCIOShutdown) =
+handleCallError _ (Left GRPCIOShutdown) =
   -- Server shutting down. Benign.
   return ()
-handleCallError (Left (GRPCIODecodeError e)) =
+handleCallError logMsg (Left (GRPCIODecodeError e)) =
   logMsg $ "Decoding error: " ++ show e
-handleCallError (Left (GRPCIOHandlerException e)) =
+handleCallError logMsg (Left (GRPCIOHandlerException e)) =
   logMsg $ "Handler exception caught: " ++ show e
-handleCallError (Left x) =
+handleCallError logMsg (Left x) =
   logMsg $ show x ++ ": This probably indicates a bug in gRPC-haskell. Please report this error."
 
 loopWError :: Int
+           -> ServerOptions
            -> IO (Either GRPCIOError a)
            -> IO ()
-loopWError i f = do
+loopWError i o@ServerOptions{..} f = do
    when (i `mod` 100 == 0) $ putStrLn $ "i = " ++ show i
-   f >>= handleCallError
-   loopWError (i + 1) f
+   f >>= handleCallError optLogger
+   loopWError (i + 1) o f
 
 -- TODO: options for setting initial/trailing metadata
 handleLoop :: Server
+           -> ServerOptions
            -> (Handler a, RegisteredMethod a)
            -> IO ()
-handleLoop s (UnaryHandler _ f, rm) =
-  loopWError 0 $ serverHandleNormalCall s rm mempty $ convertServerHandler f
-handleLoop s (ClientStreamHandler _ f, rm) =
-  loopWError 0 $ serverReader s rm mempty $ convertServerReaderHandler f
-handleLoop s (ServerStreamHandler _ f, rm) =
-  loopWError 0 $ serverWriter s rm mempty $ convertServerWriterHandler f
-handleLoop s (BiDiStreamHandler _ f, rm) =
-  loopWError 0 $ serverRW s rm mempty $ convertServerRWHandler f
+handleLoop s o (UnaryHandler _ f, rm) =
+  loopWError 0 o $ serverHandleNormalCall s rm mempty $ convertServerHandler f
+handleLoop s o (ClientStreamHandler _ f, rm) =
+  loopWError 0 o $ serverReader s rm mempty $ convertServerReaderHandler f
+handleLoop s o (ServerStreamHandler _ f, rm) =
+  loopWError 0 o $ serverWriter s rm mempty $ convertServerWriterHandler f
+handleLoop s o (BiDiStreamHandler _ f, rm) =
+  loopWError 0 o $ serverRW s rm mempty $ convertServerRWHandler f
 
 data ServerOptions = ServerOptions
   { optNormalHandlers       :: [Handler 'Normal]
+    -- ^ Handlers for unary (non-streaming) calls.
   , optClientStreamHandlers :: [Handler 'ClientStreaming]
+    -- ^ Handlers for client streaming calls.
   , optServerStreamHandlers :: [Handler 'ServerStreaming]
+    -- ^ Handlers for server streaming calls.
   , optBiDiStreamHandlers   :: [Handler 'BiDiStreaming]
+    -- ^ Handlers for bidirectional streaming calls.
   , optServerPort           :: Port
+    -- ^ Port on which to listen for requests.
   , optUseCompression       :: Bool
+    -- ^ Whether to use compression when communicating with the client.
   , optUserAgentPrefix      :: String
+    -- ^ Optional custom prefix to add to the user agent string.
   , optUserAgentSuffix      :: String
+    -- ^ Optional custom suffix to add to the user agent string.
   , optInitialMetadata      :: MetadataMap
+    -- ^ Metadata to send at the beginning of each call.
   , optSSLConfig            :: Maybe ServerSSLConfig
+    -- ^ Security configuration.
+  , optLogger               :: String -> IO ()
+    -- ^ Logging function to use to log errors in handling calls.
   }
 
 defaultOptions :: ServerOptions
@@ -166,6 +180,7 @@ defaultOptions = ServerOptions
   , optUserAgentSuffix      = ""
   , optInitialMetadata      = mempty
   , optSSLConfig            = Nothing
+  , optLogger               = hPutStrLn stderr
   }
 
 serverLoop :: ServerOptions -> IO ()

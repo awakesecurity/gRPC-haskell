@@ -3,29 +3,29 @@
 
 module UnsafeTests (unsafeTests, unsafeProperties) where
 
-import           Control.Concurrent                        (threadDelay)
-import           Control.Exception (bracket_)
+import           Control.Concurrent              (threadDelay)
+import           Control.Exception               (bracket_)
 import           Control.Monad
-import qualified Data.ByteString                as B
+import qualified Data.ByteString                 as B
 import           Foreign.Marshal.Alloc
 import           Foreign.Storable
 import           GHC.Exts
-import           Network.GRPC.LowLevel.GRPC (threadDelaySecs)
+import           Network.GRPC.LowLevel.GRPC      (threadDelaySecs)
 import           Network.GRPC.Unsafe
 import           Network.GRPC.Unsafe.ByteBuffer
+import           Network.GRPC.Unsafe.ChannelArgs
 import           Network.GRPC.Unsafe.Metadata
+import           Network.GRPC.Unsafe.Security
 import           Network.GRPC.Unsafe.Slice
 import           Network.GRPC.Unsafe.Time
-import           Network.GRPC.Unsafe.ChannelArgs
-import           Network.GRPC.Unsafe.Security
 import           System.Clock
+import           Test.QuickCheck.Gen             as QC
+import           Test.QuickCheck.Property        as QC
 import           Test.Tasty
-import           Test.Tasty.HUnit               as HU (testCase, (@?=),
-                                                       assertBool)
-import           Test.Tasty.QuickCheck          as QC
-import           Test.Tasty.HUnit               as HU (testCase, (@?=))
-import           Test.QuickCheck.Gen            as QC
-import           Test.QuickCheck.Property       as QC
+import           Test.Tasty.HUnit                as HU (assertBool, testCase,
+                                                        (@?=))
+import           Test.Tasty.HUnit                as HU (testCase, (@?=))
+import           Test.Tasty.QuickCheck           as QC
 
 unsafeTests :: TestTree
 unsafeTests = testGroup "Unit tests for unsafe C bindings"
@@ -64,8 +64,8 @@ instance Arbitrary MetadataMap where
 
 roundtripMetadataKeyVals :: MetadataMap -> IO MetadataMap
 roundtripMetadataKeyVals m = do
-  kvPtr <- createMetadata m
-  m' <- getAllMetadata kvPtr (length $ toList m)
+  (kvPtr, l) <- createMetadata m
+  m' <- getAllMetadata kvPtr l
   metadataFree kvPtr
   return m'
 
