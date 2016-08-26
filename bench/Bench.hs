@@ -1,27 +1,27 @@
+{-# LANGUAGE BangPatterns      #-}
+{-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE BangPatterns      #-}
 
 import           Control.Concurrent
 import           Control.Concurrent.Async
-import           Control.Exception (bracket)
+import           Control.Exception                          (bracket)
 import           Control.Monad
 import           Criterion.Main
-import           Criterion.Types (Config(..))
-import qualified Data.ByteString.Lazy as BL
-import           Data.Word
+import           Criterion.Types                            (Config (..))
+import qualified Data.ByteString.Lazy                       as BL
 import           Data.Protobuf.Wire.Class
 import           Data.Protobuf.Wire.Types
-import           GHC.Generics (Generic)
-import           Network.GRPC.HighLevel.Server hiding (serverLoop)
+import           Data.Word
+import           GHC.Generics                               (Generic)
+import           Network.GRPC.HighLevel.Server              hiding (serverLoop)
 import           Network.GRPC.HighLevel.Server.Unregistered (serverLoop)
 import           Network.GRPC.LowLevel
-import           Network.GRPC.LowLevel.GRPC (threadDelaySecs)
-import           System.Random (randomRIO)
+import           Network.GRPC.LowLevel.GRPC                 (threadDelaySecs)
+import           System.Random                              (randomRIO)
 
-data AddRequest = AddRequest {addX :: Fixed Word32
+data AddRequest = AddRequest {addX   :: Fixed Word32
                               , addY :: Fixed Word32}
   deriving (Show, Eq, Ord, Generic)
 instance Message AddRequest
@@ -97,7 +97,7 @@ serverOpts =
 
 main :: IO ()
 main = bracket startServer stopServer $ const $ withGRPC $ \grpc ->
-  withClient grpc (ClientConfig "localhost" 50051 []) $ \c -> do
+  withClient grpc (ClientConfig "localhost" 50051 [] Nothing) $ \c -> do
     rmAdd <- clientRegisterMethodNormal c addMethod
     rmClientStream <- clientRegisterMethodClientStreaming c addClientStreamMethod
     rmServerStream <- clientRegisterMethodServerStreaming c addServerStreamMethod
@@ -155,11 +155,12 @@ main = bracket startServer stopServer $ const $ withGRPC $ \grpc ->
           when (sd /= mempty) $ fail $ "bad status details: " ++ show sd
 
         bidiStream c rm i = do
-          Right (_, _, sd) <- clientRW c rm 5 mempty $ \_ recv send ->
+          Right (_, _, sd) <- clientRW c rm 5 mempty $ \_ recv send done -> do
             forM_ (take i [2,4..]) $ \n -> do
               void $ send $ encode $ AddRequest 1 1
               Right (Just bs) <- recv
               let Right decoded = fromByteString bs
               when (decoded /= AddResponse n) $
                 fail $ "bidiStream: got: " ++ show decoded ++ "expected: " ++ show n
+            void done
           when (sd /= mempty) $ fail $ "bad StatusDetails: " ++ show sd
