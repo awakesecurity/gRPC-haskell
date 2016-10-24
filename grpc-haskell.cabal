@@ -25,7 +25,7 @@ flag with-examples
 
 library
   build-depends:
-      base ==4.8.*
+      base >=4.8 && <5.0
     , clock >=0.6.0 && <0.8.0
     , bytestring ==0.10.*
     , stm == 2.4.*
@@ -96,7 +96,7 @@ library
 executable hellos-server
   if flag(with-examples)
     build-depends:
-        base ==4.8.*
+      base >=4.8 && <5.0
       , async
       , bytestring == 0.10.*
       , containers ==0.5.*
@@ -115,7 +115,7 @@ executable hellos-server
 executable hellos-client
   if flag(with-examples)
     build-depends:
-        base ==4.8.*
+      base >=4.8 && <5.0
       , async
       , bytestring == 0.10.*
       , containers ==0.5.*
@@ -134,7 +134,7 @@ executable hellos-client
 executable echo-server
   if flag(with-examples)
     build-depends:
-        base ==4.8.*
+      base >=4.8 && <5.0
       , async
       , bytestring == 0.10.*
       , containers ==0.5.*
@@ -152,7 +152,7 @@ executable echo-server
 executable echo-client
   if flag(with-examples)
     build-depends:
-        base ==4.8.*
+      base >=4.8 && <5.0
       , async
       , bytestring == 0.10.*
       , containers ==0.5.*
@@ -170,7 +170,7 @@ executable echo-client
 
 test-suite test
   build-depends:
-      base ==4.8.*
+      base >=4.8 && <5.0
     , grpc-haskell
     , bytestring ==0.10.*
     , unix
@@ -207,7 +207,7 @@ test-suite test
 benchmark bench
   type: exitcode-stdio-1.0
   build-depends:
-    base ==4.8.*
+      base >=4.8 && <5.0
     , grpc-haskell
     , async ==2.1.*
     , criterion ==1.1.*

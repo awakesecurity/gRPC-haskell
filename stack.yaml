@@ -2,18 +2,18 @@
 # For more information, see: http://docs.haskellstack.org/en/stable/yaml_configuration/
 
 # Specifies the GHC version and set of packages available (e.g., lts-3.5, nightly-2015-09-21, ghc-7.10.2)
-resolver: lts-6.9
+resolver: lts-7.4
 
 # Local packages, usually specified by relative directory name
 packages:
 - '.'
 - location:
     git: git@github.mv.awakenetworks.net:awakenetworks/protobuf-wire.git
-    commit: 38b4af244934310edacd3defce5929f44c72d5c9
+    commit: 2eda7a9e33e8a2f32c3ab8c4ace338b08fb79daa
   extra-dep: true
 - location:
     git: git@github.com:awakenetworks/proto3-wire.git
-    commit: b5151914873b9ede230094e742953b5062566244
+    commit: 9875a18a422884f42be0b408fcdb0b7b4904532c
   extra-dep: true
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 extra-deps: [managed-1.0.5]
