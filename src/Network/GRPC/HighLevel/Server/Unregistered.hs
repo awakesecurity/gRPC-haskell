@@ -82,7 +82,7 @@ serverLoop ServerOptions{..} = do
   wait tid
   where
     config = ServerConfig
-      { host                             = "localhost"
+      { host                             = optServerHost
       , port                             = optServerPort
       , methodsToRegisterNormal          = []
       , methodsToRegisterClientStreaming = []
