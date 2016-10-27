@@ -152,6 +152,8 @@ data ServerOptions = ServerOptions
     -- ^ Handlers for server streaming calls.
   , optBiDiStreamHandlers   :: [Handler 'BiDiStreaming]
     -- ^ Handlers for bidirectional streaming calls.
+  , optServerHost           :: Host
+    -- ^ Name of the host the server is running on.
   , optServerPort           :: Port
     -- ^ Port on which to listen for requests.
   , optUseCompression       :: Bool
@@ -174,6 +176,7 @@ defaultOptions = ServerOptions
   , optClientStreamHandlers = []
   , optServerStreamHandlers = []
   , optBiDiStreamHandlers   = []
+  , optServerHost           = "localhost"
   , optServerPort           = 50051
   , optUseCompression       = False
   , optUserAgentPrefix      = "grpc-haskell/0.0.0"

@@ -31,6 +31,7 @@ GRPC
 , Arg(..)
 , CompressionAlgorithm(..)
 , CompressionLevel(..)
+, Host
 , Port
 
 -- * Server
