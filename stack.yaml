@@ -7,9 +7,10 @@ resolver: lts-7.4
 # Local packages, usually specified by relative directory name
 packages:
 - '.'
-- location:
-    git: git@github.mv.awakenetworks.net:awakenetworks/protobuf-wire.git
-    commit: 2eda7a9e33e8a2f32c3ab8c4ace338b08fb79daa
+#- location:
+#    git: git@github.mv.awakenetworks.net:awakenetworks/protobuf-wire.git
+#    commit: 2eda7a9e33e8a2f32c3ab8c4ace338b08fb79daa
+- location: '../protobuf-wire'
   extra-dep: true
 - location:
     git: git@github.com:awakenetworks/proto3-wire.git

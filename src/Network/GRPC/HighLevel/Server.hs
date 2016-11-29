@@ -16,16 +16,46 @@ import           Data.Protobuf.Wire.Class
 import           Network.GRPC.LowLevel
 import           System.IO
 
-type ServerHandler a b
-  =  ServerCall a
+type ServerCallMetadata = ServerCall ()
+
+type ServiceServer service = service ServerRequest ServerResponse
+
+data ServerRequest (streamType :: GRPCMethodType) request response where
+  ServerNormalRequest :: ServerCallMetadata -> request -> ServerRequest 'Normal request response
+  ServerReaderRequest :: ServerCallMetadata -> StreamRecv request -> ServerRequest 'ClientStreaming request response
+  ServerWriterRequest :: ServerCallMetadata -> request -> StreamSend response -> ServerRequest 'ServerStreaming request response
+  ServerBiDiRequest :: ServerCallMetadata -> StreamRecv request -> StreamSend response -> ServerRequest 'BiDiStreaming request response
+
+data ServerResponse (streamType :: GRPCMethodType) response where
+  ServerNormalResponse :: response -> MetadataMap -> StatusCode -> StatusDetails
+                       -> ServerResponse 'Normal response
+  ServerReaderResponse :: Maybe response -> MetadataMap -> StatusCode -> StatusDetails
+                       -> ServerResponse 'ClientStreaming response
+  ServerWriterResponse :: MetadataMap -> StatusCode -> StatusDetails
+                       -> ServerResponse 'ServerStreaming response
+  ServerBiDiResponse :: MetadataMap -> StatusCode -> StatusDetails
+                     -> ServerResponse 'BiDiStreaming response
+
+type ServerHandler a b =
+  ServerCall a
   -> IO (b, MetadataMap, StatusCode, StatusDetails)
+
+convertGeneratedServerHandler ::
+  (Message request, Message response)
+  => (ServerRequest 'Normal request response -> IO (ServerResponse 'Normal response))
+  -> ServerHandler request response
+convertGeneratedServerHandler handler call =
+  do let call' = call { payload = () }
+     ServerNormalResponse rsp meta stsCode stsDetails <-
+       handler (ServerNormalRequest call' (payload call))
+     return (rsp, meta, stsCode, stsDetails)
 
 convertServerHandler :: (Message a, Message b)
                      => ServerHandler a b
                      -> ServerHandlerLL
 convertServerHandler f c = case fromByteString (payload c) of
   Left x  -> CE.throw (GRPCIODecodeError x)
-  Right x -> do (y, tm, sc, sd) <- f (const x <$> c)
+  Right x -> do (y, tm, sc, sd) <- f (fmap (const x) c)
                 return (toBS y, tm, sc, sd)
 
 type ServerReaderHandler a b
@@ -33,10 +63,20 @@ type ServerReaderHandler a b
   -> StreamRecv a
   -> IO (Maybe b, MetadataMap, StatusCode, StatusDetails)
 
+convertGeneratedServerReaderHandler ::
+  (Message request, Message response)
+  => (ServerRequest 'ClientStreaming request response -> IO (ServerResponse 'ClientStreaming response))
+  -> ServerReaderHandler request response
+convertGeneratedServerReaderHandler handler call recv =
+  do ServerReaderResponse rsp meta stsCode stsDetails <-
+       handler (ServerReaderRequest call recv)
+     return (rsp, meta, stsCode, stsDetails)
+
 convertServerReaderHandler :: (Message a, Message b)
                            => ServerReaderHandler a b
                            -> ServerReaderHandlerLL
-convertServerReaderHandler f c recv = serialize <$> f c (convertRecv recv)
+convertServerReaderHandler f c recv =
+  serialize <$> f c (convertRecv recv)
   where
     serialize (mmsg, m, sc, sd) = (toBS <$> mmsg, m, sc, sd)
 
@@ -45,10 +85,21 @@ type ServerWriterHandler a b =
   -> StreamSend b
   -> IO (MetadataMap, StatusCode, StatusDetails)
 
-convertServerWriterHandler :: (Message a, Message b)
-                           => ServerWriterHandler a b
-                           -> ServerWriterHandlerLL
-convertServerWriterHandler f c send = f (convert <$> c) (convertSend send)
+convertGeneratedServerWriterHandler ::
+  (Message request, Message response)
+  => (ServerRequest 'ServerStreaming request response -> IO (ServerResponse 'ServerStreaming response))
+  -> ServerWriterHandler request response
+convertGeneratedServerWriterHandler handler call send =
+  do let call' = call { payload = () }
+     ServerWriterResponse meta stsCode stsDetails <-
+       handler (ServerWriterRequest call' (payload call) send)
+     return (meta, stsCode, stsDetails)
+
+convertServerWriterHandler :: (Message a, Message b) =>
+                              ServerWriterHandler a b
+                              -> ServerWriterHandlerLL
+convertServerWriterHandler f c send =
+  f (convert <$> c) (convertSend send)
   where
     convert bs = case fromByteString bs of
       Left x  -> CE.throw (GRPCIODecodeError x)
@@ -60,10 +111,20 @@ type ServerRWHandler a b
   -> StreamSend b
   -> IO (MetadataMap, StatusCode, StatusDetails)
 
+convertGeneratedServerRWHandler ::
+  (Message request, Message response)
+  => (ServerRequest 'BiDiStreaming request response -> IO (ServerResponse 'BiDiStreaming response))
+  -> ServerRWHandler request response
+convertGeneratedServerRWHandler handler call recv send =
+  do ServerBiDiResponse meta stsCode stsDetails <-
+       handler (ServerBiDiRequest call recv send)
+     return (meta, stsCode, stsDetails)
+
 convertServerRWHandler :: (Message a, Message b)
                        => ServerRWHandler a b
                        -> ServerRWHandlerLL
-convertServerRWHandler f c r s = f c (convertRecv r) (convertSend s)
+convertServerRWHandler f c recv send =
+  f c (convertRecv recv) (convertSend send)
 
 convertRecv :: Message a => StreamRecv ByteString -> StreamRecv a
 convertRecv =
