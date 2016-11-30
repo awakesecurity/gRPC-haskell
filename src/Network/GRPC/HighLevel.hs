@@ -6,6 +6,9 @@ module Network.GRPC.HighLevel (
 , StatusDetails(..)
 , StatusCode(..)
 , GRPCIOError(..)
+, GRPCImpl(..)
+, MkHandler
+, ServiceOptions(..)
 
 -- * Server
 , Handler(..)
@@ -47,4 +50,5 @@ module Network.GRPC.HighLevel (
  where
 
 import           Network.GRPC.HighLevel.Server
+import           Network.GRPC.HighLevel.Generated
 import           Network.GRPC.LowLevel
