@@ -57,8 +57,8 @@ let
           proto3-wire =
             let proto3-wire-src = pkgs.fetchgit {
               url    = "https://github.com/awakenetworks/proto3-wire.git";
-              rev    = "b5151914873b9ede230094e742953b5062566244";
-              sha256 = "09vjza18gnh5mf9l8vg3ka1c7rqfbjwviyjwpvam07hf90r0yg5b";
+              rev    = "1b88bf24aad15db1f59a00d201d609fa308157f7";
+              sha256 = "02gsj0qyqqnqawm7s2h4y2510j82jv4jq2gsyadmck1ihlc9pfvl";
             };
             in
             haskellPackagesNew.callPackage proto3-wire-src { };
@@ -66,8 +66,8 @@ let
           protobuf-wire =
             let protobuf-wire-src = pkgs.fetchgitPrivate {
               url    = "git@github.mv.awakenetworks.net:awakenetworks/protobuf-wire.git";
-              rev    = "c766074e3e5da9bcca1e5a5fc069983d8fbc97b3";
-              sha256 = "0mlpfzvnzfblq7a265q4b61xkn30ndvqp8qjshbrx7kvyjxjlvnn";
+              rev    = "927c61bbb1002a9278b8a7cbe3968be059f9ff30";
+              sha256 = "091nhscrdp10cbm1v08m0i2s46qfnyd7c5j0hhbkyi5z50gzi0sk";
             };
             in
             haskellPackagesNew.callPackage protobuf-wire-src { };
