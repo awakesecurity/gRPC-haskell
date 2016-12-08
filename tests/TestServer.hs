@@ -19,6 +19,7 @@ import Data.String
 
 import Network.GRPC.LowLevel
 import Network.GRPC.HighLevel.Server
+import Network.GRPC.HighLevel.Generated (defaultServiceOptions)
 
 handleNormalCall :: ServerRequest 'Normal SimpleServiceRequest SimpleServiceResponse -> IO (ServerResponse 'Normal SimpleServiceResponse)
 handleNormalCall (ServerNormalRequest meta (SimpleServiceRequest request nums)) =
@@ -62,11 +63,12 @@ handleDone exitVar (ServerNormalRequest _ req) =
 main :: IO ()
 main = do exitVar <- newEmptyMVar
 
-          forkIO $ simpleServiceServer SimpleService
+          forkIO $ simpleServiceServer (SimpleService
             { simpleServiceDone = handleDone exitVar
             , simpleServiceNormalCall = handleNormalCall
             , simpleServiceClientStreamingCall = handleClientStreamingCall
             , simpleServiceServerStreamingCall = handleServerStreamingCall
-            , simpleServiceBiDiStreamingCall = handleBiDiStreamingCall }
+            , simpleServiceBiDiStreamingCall = handleBiDiStreamingCall })
+            defaultServiceOptions
 
           takeMVar exitVar
