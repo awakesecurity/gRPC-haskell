@@ -231,6 +231,13 @@ let
                       --prefix PATH : ${ghc}/bin
                   '';
 
+                  postInstall = pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                    wrapProgram $out/bin/hellos-client --prefix DYLD_LIBRARY_PATH : ${grpc}/lib
+                    wrapProgram $out/bin/hellos-server --prefix DYLD_LIBRARY_PATH : ${grpc}/lib
+                    wrapProgram $out/bin/echo-client   --prefix DYLD_LIBRARY_PATH : ${grpc}/lib
+                    wrapProgram $out/bin/echo-server   --prefix DYLD_LIBRARY_PATH : ${grpc}/lib
+                  '';
+
                 shellHook =
                   pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
                     export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
