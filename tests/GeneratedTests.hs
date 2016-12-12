@@ -32,7 +32,7 @@ testServerGeneration = testCase "server generation" $ do
   runManaged $ do
     serverExitCodeA <- fork (shell (hsTmpDir <> "/simple-server") empty)
     clientExitCodeA <- fork
-      (export "PYTHONPATH" pyTmpDir >> shell "python tests/test-client.py" empty)
+      (export "PYTHONPATH" pyTmpDir >> shell "tests/test-client.sh" empty)
 
     liftIO $ do
       serverExitCode <- liftIO (wait serverExitCodeA)
@@ -59,7 +59,7 @@ testClientGeneration = testCase "client generation" $ do
 
   runManaged $ do
     serverExitCodeA <- fork
-      (export "PYTHONPATH" pyTmpDir >> shell "python tests/test-server.py" empty)
+      (export "PYTHONPATH" pyTmpDir >> shell "tests/test-server.sh" empty)
     clientExitCodeA <- fork (shell (hsTmpDir <> "/simple-client") empty)
 
     liftIO $ do

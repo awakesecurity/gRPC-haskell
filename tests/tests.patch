@@ -1,30 +1,42 @@
-diff --git a/tests/protoc.sh b/tests/protoc.sh
-index 054c8b6..4bf0893 100644
---- a/tests/protoc.sh
-+++ b/tests/protoc.sh
-@@ -1,8 +1,8 @@
--#!/bin/bash -eu
-+#! @shell@ -eu
- 
- pyTmpDir=$1
- 
--python                          \
-+@python@/bin/python             \
-     -m grpc.tools.protoc        \
-     -I tests                    \
-     --python_out=$pyTmpDir      \
-diff --git a/tests/simple-server.sh b/tests/simple-server.sh
-index 37a0a63..8e8fb66 100755
---- a/tests/simple-server.sh
-+++ b/tests/simple-server.sh
-@@ -1,8 +1,8 @@
--#!/bin/bash -eu
-+#! @shell@ -eu
+diff --git a/tests/simple-client.sh b/tests/simple-client.sh
+index 8feb1f4..ca925b1 100755
+--- a/tests/simple-client.sh
++++ b/tests/simple-client.sh
+@@ -2,7 +2,7 @@
  
  hsTmpDir=$1
  
 -stack ghc --                   \
-+@ghc@/bin/ghc                  \
++ghc                            \
      --make                     \
      -threaded                  \
      -odir $hsTmpDir            \
+@@ -11,3 +11,7 @@ stack ghc --                   \
+     $hsTmpDir/Simple.hs        \
+     tests/TestClient.hs        \
+     > /dev/null
++
++. @makeWrapper@/nix-support/setup-hook
++
++flagsBefore="" wrapProgram "${hsTmpDir}/simple-client" --prefix DYLD_LIBRARY_PATH : @grpc@/lib
+diff --git a/tests/simple-server.sh b/tests/simple-server.sh
+index 37a0a63..eb37776 100755
+--- a/tests/simple-server.sh
++++ b/tests/simple-server.sh
+@@ -2,7 +2,7 @@
+ 
+ hsTmpDir=$1
+ 
+-stack ghc --                   \
++ghc                            \
+     --make                     \
+     -threaded                  \
+     -odir $hsTmpDir            \
+@@ -11,3 +11,7 @@ stack ghc --                   \
+     $hsTmpDir/Simple.hs        \
+     tests/TestServer.hs        \
+     > /dev/null
++
++. @makeWrapper@/nix-support/setup-hook
++
++flagsBefore="" wrapProgram "${hsTmpDir}/simple-server" --prefix DYLD_LIBRARY_PATH : @grpc@/lib
