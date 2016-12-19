@@ -8,7 +8,7 @@ stdenv.mkDerivation rec {
   src = fetchgit {
     inherit rev;
     url    = "https://github.com/grpc/grpc.git";
-    sha256 = "1pac3jby5p5a6p6vpqc5whkgy36hnn2ph2jbckg3w73hrxrnwmdh";
+    sha256 = "0a48swsip09bd0yk80gl9r7pny9dal3byyd22bdz4fcvydna43m0";
   };
   preInstall  = "export prefix";
   buildInputs =

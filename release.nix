@@ -3,7 +3,7 @@
 #     $ # Consider adding the following command to your `~/.profile`
 #     $ NIX_PATH="${NIX_PATH}:ssh-config-file=${HOME}/.ssh/config:ssh-auth-sock=${SSH_AUTH_SOCK}"
 #     $ nix-shell -A grpc-haskell.env release.nix
-#     [nix-shell]$ cabal configure --with-gcc=clang --enable tests
+#     [nix-shell]$ cabal configure --with-gcc=clang --enable tests && cabal build && cabal test
 #
 # This will open up a Nix shell where all of your Haskell tools will work like
 # normal, except that all dependencies (including C libraries) are managed by
@@ -163,7 +163,7 @@ let
         ];
       };
 
-      haskellPackages = pkgs.haskell.packages.ghc7103.override {
+      haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: rec {
           proto3-wire =
             haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
@@ -194,6 +194,10 @@ let
                   ghc =
                     haskellPackagesNew.ghcWithPackages (pkgs: [
                       pkgs.grpc-haskell-no-tests
+                      # Include some additional packages in this custom ghc for
+                      # running tests in the nix-shell environment.
+                      pkgs.tasty-quickcheck
+                      pkgs.turtle
                     ]);
 
                   python = pkgs.python.withPackages (pkgs: [
@@ -201,8 +205,17 @@ let
                     grpcio-tools
                   ]);
 
+                  # So users can use `stack` inside of `nix-shell` if they do not
+                  # already have it installed.
+                  stack = haskellPackages.stack;
+
                 in rec {
-                  buildDepends = [ pkgs.makeWrapper ];
+                  buildDepends = [
+                    pkgs.makeWrapper
+                    # Give our nix-shell its own cabal so we don't pick up one
+                    # from the user's environment by accident.
+                    haskellPackagesNew.cabal-install
+                  ];
 
                   patches = [ tests/tests.patch ];
 
@@ -231,16 +244,10 @@ let
                       --prefix PATH : ${ghc}/bin
                   '';
 
-                  postInstall = pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
-                    wrapProgram $out/bin/hellos-client --prefix DYLD_LIBRARY_PATH : ${grpc}/lib
-                    wrapProgram $out/bin/hellos-server --prefix DYLD_LIBRARY_PATH : ${grpc}/lib
-                    wrapProgram $out/bin/echo-client   --prefix DYLD_LIBRARY_PATH : ${grpc}/lib
-                    wrapProgram $out/bin/echo-server   --prefix DYLD_LIBRARY_PATH : ${grpc}/lib
-                  '';
-
-                shellHook =
-                  pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                  shellHook = ''
                     export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+                    # This lets us use our custom ghc and python environments in the shell.
+                    export PATH=${stack}/bin:${ghc}/bin:${python}/bin''${PATH:+:}$PATH
                   '';
                 });
         };

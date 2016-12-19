@@ -1,38 +1,21 @@
 diff --git a/tests/simple-client.sh b/tests/simple-client.sh
-index 8feb1f4..ca925b1 100755
+index 066a0ca..fc5b693 100755
 --- a/tests/simple-client.sh
 +++ b/tests/simple-client.sh
-@@ -2,7 +2,7 @@
- 
- hsTmpDir=$1
- 
--stack ghc --                   \
-+ghc                            \
-     --make                     \
-     -threaded                  \
-     -odir $hsTmpDir            \
-@@ -11,3 +11,7 @@ stack ghc --                   \
+@@ -11,3 +11,8 @@ ghc                            \
      $hsTmpDir/Simple.hs        \
      tests/TestClient.hs        \
      > /dev/null
++
 +
 +. @makeWrapper@/nix-support/setup-hook
 +
 +flagsBefore="" wrapProgram "${hsTmpDir}/simple-client" --prefix DYLD_LIBRARY_PATH : @grpc@/lib
 diff --git a/tests/simple-server.sh b/tests/simple-server.sh
-index 37a0a63..eb37776 100755
+index b66db5c..c8a679a 100755
 --- a/tests/simple-server.sh
 +++ b/tests/simple-server.sh
-@@ -2,7 +2,7 @@
- 
- hsTmpDir=$1
- 
--stack ghc --                   \
-+ghc                            \
-     --make                     \
-     -threaded                  \
-     -odir $hsTmpDir            \
-@@ -11,3 +11,7 @@ stack ghc --                   \
+@@ -11,3 +11,7 @@ ghc                            \
      $hsTmpDir/Simple.hs        \
      tests/TestServer.hs        \
      > /dev/null
