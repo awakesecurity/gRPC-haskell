@@ -244,9 +244,7 @@ testAuthMetadataTransfer =
       let authCtx = (channelAuthContext authMetaCtx)
 
       addAuthProperty authCtx (AuthProperty "foo1" "bar1")
-      print "getting properties"
       newProps <- getAuthProperties authCtx
-      print "got properties"
       let addedProp = find ((== "foo1") . authPropName) newProps
       addedProp @?= Just (AuthProperty "foo1" "bar1")
       return $ ClientMetadataCreateResult [("foo","bar")] StatusOk ""
@@ -620,13 +618,13 @@ testGoaway =
       rm <- clientRegisterMethodNormal c "/foo"
       clientRequest c rm 10 "" mempty
       clientRequest c rm 10 "" mempty
-      lastResult  <- clientRequest c rm 1 "" mempty
-      assertBool "Client handles server shutdown gracefully" $
-        lastResult == badStatus StatusUnavailable
-        ||
-        lastResult == badStatus StatusDeadlineExceeded
-        ||
-        lastResult == Left GRPCIOTimeout
+      eer <- clientRequest c rm 1 "" mempty
+      assertBool "Client handles server shutdown gracefully" $ case eer of
+        Left (GRPCIOBadStatusCode StatusUnavailable _)                        -> True
+        Left (GRPCIOBadStatusCode StatusDeadlineExceeded "Deadline Exceeded") -> True
+        Left GRPCIOTimeout                                                    -> True
+        _                                                                     -> False
+
     server s = do
       let rm = head (normalMethods s)
       serverHandleNormalCall s rm mempty dummyHandler
@@ -640,7 +638,7 @@ testSlowServer =
     client c = do
       rm <- clientRegisterMethodNormal c "/foo"
       result <- clientRequest c rm 1 "" mempty
-      result @?= badStatus StatusDeadlineExceeded
+      result @?= Left (GRPCIOBadStatusCode StatusDeadlineExceeded "Deadline Exceeded")
     server s = do
       let rm = head (normalMethods s)
       serverHandleNormalCall s rm mempty $ \_ -> do
@@ -788,12 +786,6 @@ dummyHandler _ = return dummyResp
 dummyResult' :: StatusDetails
              -> IO (ByteString, MetadataMap, StatusCode, StatusDetails)
 dummyResult' = return . (mempty, mempty, StatusOk, )
-
-badStatus :: StatusCode -> Either GRPCIOError a
-badStatus st = Left . GRPCIOBadStatusCode st $ case st of
-  StatusDeadlineExceeded -> "Deadline Exceeded"
-  StatusCancelled        -> "Received RST_STREAM err=8"
-  _ -> mempty
 
 nop :: Monad m => a -> m ()
 nop = const (return ())
