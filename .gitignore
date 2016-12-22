@@ -6,3 +6,5 @@ dist
 examples/echo/echo-cpp/echo-client
 examples/echo/echo-cpp/echo-server
 benchmarks.html
+result
+

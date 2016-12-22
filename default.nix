@@ -20,6 +20,7 @@ mkDerivation {
   executableHaskellDepends = [
     async base bytestring containers optparse-generic proto3-wire
     protobuf-wire random system-filepath text transformers turtle
+    vector
   ];
   testHaskellDepends = [
     async base bytestring clock containers managed pipes protobuf-wire
