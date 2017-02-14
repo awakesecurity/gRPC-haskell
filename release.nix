@@ -244,6 +244,11 @@ let
                       --prefix PATH : ${ghc}/bin
                   '';
 
+                  postInstall = pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                    wrapProgram $out/bin/compile-proto-file \
+                      --prefix DYLD_LIBRARY_PATH : ${grpc}/lib
+                  '';
+
                   shellHook = ''
                     export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
                     # This lets us use our custom ghc and python environments in the shell.
