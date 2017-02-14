@@ -1,3 +1,27 @@
+Installation
+------------
+
+Run the following command from the root of this repository to install the
+`compile-proto-file` executable:
+
+```bash
+$ nix-env -iA grpc-haskell -f release.nix
+```
+
+Usage
+-----
+
+```bash
+$ compile-proto-file --help
+Dumps a compiled .proto file to stdout
+
+Usage: compile-proto-file --proto FILEPATH
+
+Available options:
+  -h,--help                Show this help text
+  --proto FILEPATH         Path to input .proto file
+```
+
 Building and testing
 --------------------
 
