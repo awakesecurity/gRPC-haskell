@@ -6,7 +6,7 @@ import Test.Tasty
 import Test.Tasty.HUnit (testCase, (@?=))
 
 import Data.String
-import Data.Protobuf.Wire.DotProto.Generate
+import Proto3.Suite.DotProto.Generate
 import qualified Data.Text as T
 
 import Turtle

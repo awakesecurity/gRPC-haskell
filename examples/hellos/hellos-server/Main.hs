@@ -11,13 +11,13 @@
 import           Control.Monad
 import           Data.Function                              (fix)
 import           Data.Monoid
-import           Data.Protobuf.Wire.Class
 import qualified Data.Text                                  as T
 import           Data.Word
 import           GHC.Generics                               (Generic)
 import           Network.GRPC.HighLevel.Server
 import qualified Network.GRPC.HighLevel.Server.Unregistered as U
 import           Network.GRPC.LowLevel
+import           Proto3.Suite.Class
 
 serverMeta :: MetadataMap
 serverMeta = [("test_meta", "test_meta_value")]

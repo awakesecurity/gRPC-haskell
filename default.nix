@@ -1,6 +1,6 @@
 { mkDerivation, async, base, bytestring, c2hs, clock, containers
-, grpc, managed, optparse-generic, pipes, proto3-wire
-, protobuf-wire, QuickCheck, random, safe, sorted-list, stdenv, stm
+, grpc, managed, optparse-generic, pipes, proto3-suite, proto3-wire
+, QuickCheck, random, safe, sorted-list, stdenv, stm
 , system-filepath, tasty, tasty-hunit, tasty-quickcheck, text, time
 , transformers, turtle, unix, vector
 }:
@@ -11,19 +11,18 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    async base bytestring clock containers managed pipes proto3-wire
-    protobuf-wire safe sorted-list stm tasty tasty-hunit transformers
+    async base bytestring clock containers managed pipes proto3-suite
+    proto3-wire safe sorted-list stm tasty tasty-hunit transformers
     vector
   ];
   librarySystemDepends = [ grpc ];
   libraryToolDepends = [ c2hs ];
   executableHaskellDepends = [
-    async base bytestring containers optparse-generic proto3-wire
-    protobuf-wire random system-filepath text transformers turtle
-    vector
+    async base bytestring containers optparse-generic proto3-suite
+    proto3-wire random system-filepath text transformers turtle vector
   ];
   testHaskellDepends = [
-    async base bytestring clock containers managed pipes protobuf-wire
+    async base bytestring clock containers managed pipes proto3-suite
     QuickCheck safe tasty tasty-hunit tasty-quickcheck text time
     transformers turtle unix
   ];

@@ -14,11 +14,11 @@ import           Control.Concurrent.Async                  (async, wait)
 import qualified Control.Exception                         as CE
 import           Control.Monad
 import           Data.Foldable                             (find)
-import           Data.Protobuf.Wire.Class
 import           Network.GRPC.HighLevel.Server
 import           Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
+import           Proto3.Suite.Class
 
 dispatchLoop :: Server
              -> (String -> IO ())

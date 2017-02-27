@@ -11,14 +11,14 @@ import           Control.Monad
 import           Criterion.Main
 import           Criterion.Types                            (Config (..))
 import qualified Data.ByteString.Lazy                       as BL
-import           Data.Protobuf.Wire.Class
-import           Data.Protobuf.Wire.Types
 import           Data.Word
 import           GHC.Generics                               (Generic)
 import           Network.GRPC.HighLevel.Server              hiding (serverLoop)
 import           Network.GRPC.HighLevel.Server.Unregistered (serverLoop)
 import           Network.GRPC.LowLevel
 import           Network.GRPC.LowLevel.GRPC                 (threadDelaySecs)
+import           Proto3.Suite.Class
+import           Proto3.Suite.Types
 import           System.Random                              (randomRIO)
 
 data AddRequest = AddRequest {addX   :: Fixed Word32

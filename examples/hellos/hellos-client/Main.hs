@@ -9,11 +9,11 @@ import           Control.Concurrent.Async
 import           Control.Monad
 import qualified Data.ByteString.Lazy                      as BL
 import           Data.Function
-import           Data.Protobuf.Wire.Class
 import qualified Data.Text                                 as T
 import           Data.Word
 import           GHC.Generics                              (Generic)
 import           Network.GRPC.LowLevel
+import           Proto3.Suite.Class
 
 helloSS, helloCS, helloBi :: MethodName
 helloSS = MethodName "/hellos.Hellos/HelloSS"

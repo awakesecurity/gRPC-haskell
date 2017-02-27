@@ -36,7 +36,7 @@ import Network.GRPC.LowLevel ( GRPCMethodType(..)
 import Network.GRPC.LowLevel.Op (WritesDone)
 import Network.GRPC.HighLevel.Server (convertRecv, convertSend)
 
-import Data.Protobuf.Wire (Message, toLazyByteString, fromByteString)
+import Proto3.Suite (Message, toLazyByteString, fromByteString)
 import Proto3.Wire.Decode (ParseError)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL

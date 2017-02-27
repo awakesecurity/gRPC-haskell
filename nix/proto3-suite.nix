@@ -4,12 +4,12 @@
 , tasty-hunit, tasty-quickcheck, text, transformers, turtle, vector
 }:
 mkDerivation {
-  pname = "protobuf-wire";
+  pname = "proto3-suite";
   version = "0.1.0.0";
   src = fetchgit {
-    url = "git@github.mv.awakenetworks.net:awakenetworks/protobuf-wire.git";
-    sha256 = "1d52hd7wq8cfxsp35mmamj0m3mr4705bc76344rhjmsi055r70bc";
-    rev = "927c61bbb1002a9278b8a7cbe3968be059f9ff30";
+    url = "https://github.com/awakenetworks/proto3-suite.git";
+    sha256 = "0wvr54x3v6g9yb30nd5g9gfnn7j8is2hl8drwmmiyz0n45zlz0qh";
+    rev = "827af4bf644d05e88b5d95dfe40febe7b43fab16";
   };
   libraryHaskellDepends = [
     base bytestring cereal containers deepseq filepath haskell-src mtl
@@ -21,5 +21,5 @@ mkDerivation {
     tasty-hunit tasty-quickcheck text transformers turtle
   ];
   description = "A low level library for writing out data in the Protocol Buffers wire format";
-  license = stdenv.lib.licenses.unfree;
+  license = stdenv.lib.licenses.asl20;
 }

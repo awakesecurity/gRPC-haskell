@@ -168,9 +168,9 @@ let
           proto3-wire =
             haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
 
-          protobuf-wire =
+          proto3-suite =
             pkgs.haskell.lib.dontCheck
-              (haskellPackagesNew.callPackage ./nix/protobuf-wire.nix {
+              (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {
                 fetchgit = pkgs.fetchgitPrivate;
               });
 

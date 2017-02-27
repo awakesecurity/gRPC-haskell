@@ -12,8 +12,8 @@ import qualified Control.Exception                         as CE
 import           Control.Monad
 import           Data.ByteString                           (ByteString)
 import qualified Data.ByteString.Lazy                      as BL
-import           Data.Protobuf.Wire.Class
 import           Network.GRPC.LowLevel
+import           Proto3.Suite.Class
 import           System.IO
 
 type ServerCallMetadata = ServerCall ()

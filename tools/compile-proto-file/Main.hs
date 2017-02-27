@@ -5,9 +5,9 @@
 {-# LANGUAGE TypeOperators     #-}
 
 import           Data.Monoid                          ((<>))
-import           Data.Protobuf.Wire.DotProto.Generate
 import           Filesystem.Path.CurrentOS            (encodeString)
 import           Options.Generic
+import           Proto3.Suite.DotProto.Generate
 import           Prelude                              hiding (FilePath)
 import           Turtle                               (FilePath)
 

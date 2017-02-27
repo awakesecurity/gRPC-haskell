@@ -22,10 +22,11 @@ import Data.Foldable (sum)
 import Data.String
 import Data.Word
 import Data.Vector (fromList)
-import Data.Protobuf.Wire
 
 import Network.GRPC.LowLevel
 import Network.GRPC.HighLevel.Client
+
+import Proto3.Suite
 
 import System.Random
 
