@@ -1,3 +1,9 @@
+Attribution
+-----------
+
+This library is a fork of https://github.com/aloiscochard/grpc-haskell that we
+have extended and released under the same [`LICENSE`](./LICENSE)
+
 Installation
 ------------
 
