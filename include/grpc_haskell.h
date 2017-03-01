@@ -4,7 +4,7 @@
 #include <grpc/grpc.h>
 #include <grpc/grpc_security.h>
 #include <grpc/impl/codegen/slice.h>
-#include <grpc/impl/codegen/time.h>
+#include <grpc/support/time.h>
 #include <grpc/byte_buffer.h>
 #include <grpc/byte_buffer_reader.h>
 

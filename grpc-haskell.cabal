@@ -79,8 +79,8 @@ library
     , grpc/status.h
     , grpc/support/time.h
     , grpc/impl/codegen/compression_types.h
-    , grpc/impl/codegen/slice_buffer.h
-    , grpc/impl/codegen/slice.h
+    , grpc/slice_buffer.h
+    , grpc/slice.h
   build-tools:          c2hs
   default-language:     Haskell2010
   ghc-options:          -Wall -fwarn-incomplete-patterns -fno-warn-unused-do-bind

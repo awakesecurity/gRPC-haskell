@@ -2,7 +2,7 @@
 
 module Network.GRPC.Unsafe.Slice where
 
-#include <grpc/impl/codegen/slice.h>
+#include <grpc/impl/codegen/gpr_slice.h>
 #include <grpc_haskell.h>
 
 import qualified Data.ByteString as B
@@ -12,7 +12,7 @@ import Foreign.Ptr
 
 -- | A 'Slice' is gRPC's string type. We can easily convert these to and from
 -- ByteStrings. This type is a pointer to a C type.
-{#pointer *gpr_slice as Slice newtype #}
+{#pointer *grpc_slice as Slice newtype #}
 
 deriving instance Show Slice
 
