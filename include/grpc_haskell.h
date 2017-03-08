@@ -23,13 +23,13 @@ grpc_call *grpc_channel_create_call_(grpc_channel *channel,
                                      const char *method, const char *host,
                                      gpr_timespec *deadline, void *reserved);
 
-size_t gpr_slice_length_(gpr_slice *slice);
+size_t grpc_slice_length_(grpc_slice *slice);
 
-uint8_t *gpr_slice_start_(gpr_slice *slice);
+uint8_t *grpc_slice_start_(grpc_slice *slice);
 
-gpr_slice* gpr_slice_from_copied_buffer_(const char *source, size_t len);
+grpc_slice* grpc_slice_from_copied_buffer_(const char *source, size_t len);
 
-void free_slice(gpr_slice *slice);
+void free_slice(grpc_slice *slice);
 
 grpc_byte_buffer **create_receiving_byte_buffer();
 
@@ -39,7 +39,7 @@ grpc_byte_buffer_reader *byte_buffer_reader_create(grpc_byte_buffer *buffer);
 
 void byte_buffer_reader_destroy(grpc_byte_buffer_reader *reader);
 
-gpr_slice* grpc_byte_buffer_reader_readall_(grpc_byte_buffer_reader *reader);
+grpc_slice* grpc_byte_buffer_reader_readall_(grpc_byte_buffer_reader *reader);
 
 void timespec_destroy(gpr_timespec* t);
 

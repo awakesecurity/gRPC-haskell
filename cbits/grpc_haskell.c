@@ -43,27 +43,27 @@ grpc_call *grpc_channel_create_call_(grpc_channel *channel,
                                        *deadline, reserved);
 }
 
-size_t gpr_slice_length_(gpr_slice *slice){
-  return GPR_SLICE_LENGTH(*slice);
+size_t grpc_slice_length_(grpc_slice *slice){
+  return GRPC_SLICE_LENGTH(*slice);
 }
 
-uint8_t *gpr_slice_start_(gpr_slice *slice){
-  return GPR_SLICE_START_PTR(*slice);
+uint8_t *grpc_slice_start_(grpc_slice *slice){
+  return GRPC_SLICE_START_PTR(*slice);
 }
 
-gpr_slice* gpr_slice_from_copied_buffer_(const char *source, size_t len){
-  gpr_slice* retval = malloc(sizeof(gpr_slice));
-  //note: 'gpr_slice_from_copied_string' handles allocating space for 'source'.
-  *retval = gpr_slice_from_copied_buffer(source, len);
+grpc_slice* grpc_slice_from_copied_buffer_(const char *source, size_t len){
+  grpc_slice* retval = malloc(sizeof(grpc_slice));
+  //note: 'grpc_slice_from_copied_string' handles allocating space for 'source'.
+  *retval = grpc_slice_from_copied_buffer(source, len);
   return retval;
 }
 
-void gpr_slice_unref_(gpr_slice* slice){
-  gpr_slice_unref(*slice);
+void grpc_slice_unref_(grpc_slice* slice){
+  grpc_slice_unref(*slice);
 }
 
-void free_slice(gpr_slice *slice){
-  gpr_slice_unref(*slice);
+void free_slice(grpc_slice *slice){
+  grpc_slice_unref(*slice);
   grpc_haskell_free("free_slice", slice);
 }
 
@@ -89,8 +89,8 @@ void byte_buffer_reader_destroy(grpc_byte_buffer_reader *reader){
   grpc_haskell_free("byte_buffer_reader_destroy", reader);
 }
 
-gpr_slice *grpc_byte_buffer_reader_readall_(grpc_byte_buffer_reader *reader){
-  gpr_slice *retval = malloc(sizeof(gpr_slice));
+grpc_slice *grpc_byte_buffer_reader_readall_(grpc_byte_buffer_reader *reader){
+  grpc_slice *retval = malloc(sizeof(grpc_slice));
   *retval = grpc_byte_buffer_reader_readall(reader);
   return retval;
 }
