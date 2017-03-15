@@ -175,9 +175,7 @@ let
 
           proto3-suite =
             pkgs.haskell.lib.dontCheck
-              (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {
-                fetchgit = pkgs.fetchgitPrivate;
-              });
+              (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
 
           grpc-haskell-no-tests =
             pkgs.haskell.lib.overrideCabal
