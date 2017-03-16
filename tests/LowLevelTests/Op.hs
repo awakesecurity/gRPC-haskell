@@ -4,10 +4,9 @@
 
 module LowLevelTests.Op where
 
-import           Data.ByteString                (ByteString, isPrefixOf)
+import           Data.ByteString                (ByteString)
 import           Test.Tasty
-import           Test.Tasty.HUnit               as HU (testCase, (@?=),
-                                                       assertBool)
+import           Test.Tasty.HUnit               as HU (testCase, (@?=))
 
 import           Network.GRPC.LowLevel
 import           Network.GRPC.LowLevel.Call
@@ -29,7 +28,7 @@ testCancelFromServer =
       clientRes <- runOps unsafeCC clientCQ clientRecvOps
       case clientRes of
         Left x -> error $ "Client recv error: " ++ show x
-        Right [_,_,OpRecvStatusOnClientResult _ code details] -> do
+        Right [_,_,OpRecvStatusOnClientResult _ code _details] -> do
           code @?= StatusPermissionDenied
           return $ Right ()
         wrong -> error $ "Unexpected op results: " ++ show wrong

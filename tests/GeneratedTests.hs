@@ -7,9 +7,8 @@ import Test.Tasty.HUnit (testCase, (@?=))
 
 import Data.String
 import Proto3.Suite.DotProto.Generate
-import qualified Data.Text as T
 
-import Turtle
+import Turtle hiding (err)
 
 generatedTests :: TestTree
 generatedTests = testGroup "Code generator tests"
@@ -23,11 +22,11 @@ testServerGeneration = testCase "server generation" $ do
 
   compileSimpleDotProto
 
-  exitCode <- proc "tests/simple-server.sh" [hsTmpDir] empty
-  exitCode @?= ExitSuccess
+  do exitCode <- proc "tests/simple-server.sh" [hsTmpDir] empty
+     exitCode @?= ExitSuccess
 
-  exitCode <- proc "tests/protoc.sh" [pyTmpDir] empty
-  exitCode @?= ExitSuccess
+  do exitCode <- proc "tests/protoc.sh" [pyTmpDir] empty
+     exitCode @?= ExitSuccess
 
   runManaged $ do
     serverExitCodeA <- fork (shell (hsTmpDir <> "/simple-server") empty)
@@ -51,11 +50,11 @@ testClientGeneration = testCase "client generation" $ do
 
   compileSimpleDotProto
 
-  exitCode <- proc "tests/simple-client.sh" [hsTmpDir] empty
-  exitCode @?= ExitSuccess
+  do exitCode <- proc "tests/simple-client.sh" [hsTmpDir] empty
+     exitCode @?= ExitSuccess
 
-  exitCode <- proc "tests/protoc.sh" [pyTmpDir] empty
-  exitCode @?= ExitSuccess
+  do exitCode <- proc "tests/protoc.sh" [pyTmpDir] empty
+     exitCode @?= ExitSuccess
 
   runManaged $ do
     serverExitCodeA <- fork
