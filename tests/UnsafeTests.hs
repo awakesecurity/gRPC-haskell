@@ -1,9 +1,9 @@
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module UnsafeTests (unsafeTests, unsafeProperties) where
 
-import           Control.Concurrent              (threadDelay)
 import           Control.Exception               (bracket_)
 import           Control.Monad
 import qualified Data.ByteString                 as B
@@ -22,8 +22,6 @@ import           System.Clock
 import           Test.QuickCheck.Gen             as QC
 import           Test.QuickCheck.Property        as QC
 import           Test.Tasty
-import           Test.Tasty.HUnit                as HU (assertBool, testCase,
-                                                        (@?=))
 import           Test.Tasty.HUnit                as HU (testCase, (@?=))
 import           Test.Tasty.QuickCheck           as QC
 

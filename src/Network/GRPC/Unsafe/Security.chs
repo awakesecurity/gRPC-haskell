@@ -8,7 +8,7 @@ module Network.GRPC.Unsafe.Security where
 import Control.Exception (bracket)
 import Data.ByteString (ByteString, useAsCString, packCString, packCStringLen)
 import Data.Coerce (coerce)
-import Foreign.C.String (CString, withCString)
+import Foreign.C.String (CString)
 import Foreign.C.Types
 import Foreign.Storable
 import Foreign.Marshal.Alloc (free)

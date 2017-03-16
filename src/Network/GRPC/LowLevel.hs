@@ -111,7 +111,6 @@ import           Network.GRPC.LowLevel.Server
 import           Network.GRPC.Unsafe                   (ConnectivityState (..))
 import           Network.GRPC.Unsafe.ChannelArgs       (Arg (..), CompressionAlgorithm (..),
                                                         CompressionLevel (..))
-import           Network.GRPC.Unsafe.ChannelArgs       (Arg (..), CompressionAlgorithm (..))
 import           Network.GRPC.Unsafe.Op                (StatusCode (..))
 import           Network.GRPC.Unsafe.Security          (AuthContext,
                                                         AuthMetadataContext (..),

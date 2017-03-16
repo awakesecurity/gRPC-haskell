@@ -38,7 +38,6 @@ import Network.GRPC.HighLevel.Server (convertRecv, convertSend)
 
 import Proto3.Suite (Message, toLazyByteString, fromByteString)
 import Proto3.Wire.Decode (ParseError)
-import Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as BL
 
 newtype RegisteredMethod (mt :: GRPCMethodType) request response
@@ -115,7 +114,7 @@ clientRequest client (RegisteredMethod method) (ClientReaderRequest req timeout 
     mkResponse (Right (meta_, rspCode_, details_)) =
       ClientReaderResponse meta_ rspCode_ details_
 clientRequest client (RegisteredMethod method) (ClientBiDiRequest timeout meta handler) =
-    mkResponse <$> LL.clientRW client method timeout meta (\m recv send writesDone -> handler meta (convertRecv recv) (convertSend send) writesDone)
+    mkResponse <$> LL.clientRW client method timeout meta (\_m recv send writesDone -> handler meta (convertRecv recv) (convertSend send) writesDone)
   where
     mkResponse (Left ioError_) = ClientError (ClientIOError ioError_)
     mkResponse (Right (meta_, rspCode_, details_)) =

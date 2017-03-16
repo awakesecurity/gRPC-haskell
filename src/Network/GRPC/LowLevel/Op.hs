@@ -18,7 +18,6 @@ import           Foreign.Marshal.Alloc                 (free, malloc,
                                                         mallocBytes)
 import           Foreign.Ptr                           (Ptr, nullPtr)
 import           Foreign.Storable                      (peek, poke)
-import           GHC.Exts                              (IsList(..))
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe                   as C (Call)
@@ -265,6 +264,7 @@ type RecvSingle a
   -> CompletionQueue
   -> ExceptT GRPCIOError IO a
 
+pattern RecvMsgRslt :: Maybe ByteString -> Either a [OpRecvResult]
 pattern RecvMsgRslt mmsg <- Right [OpRecvMessageResult mmsg]
 
 sendSingle :: SendSingle Op

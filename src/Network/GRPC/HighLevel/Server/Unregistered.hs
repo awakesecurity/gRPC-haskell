@@ -9,7 +9,6 @@
 module Network.GRPC.HighLevel.Server.Unregistered where
 
 import           Control.Arrow
-import           Control.Concurrent
 import           Control.Concurrent.Async                  (async, wait)
 import qualified Control.Exception                         as CE
 import           Control.Monad

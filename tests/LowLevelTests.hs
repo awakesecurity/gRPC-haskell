@@ -173,15 +173,15 @@ testSSL =
           rspCode @?= StatusOk
           rspBody @?= "reply test"
 
-    serverConf = defServerConf
-                 {sslConfig = Just (ServerSSLConfig
-                                      Nothing
-                                      "tests/ssl/localhost.key"
-                                      "tests/ssl/localhost.crt"
-                                      SslDontRequestClientCertificate
-                                      Nothing)
-                }
-    server = TestServer serverConf $ \s -> do
+    serverConf' = defServerConf
+                  { sslConfig = Just (ServerSSLConfig
+                                        Nothing
+                                        "tests/ssl/localhost.key"
+                                        "tests/ssl/localhost.crt"
+                                        SslDontRequestClientCertificate
+                                        Nothing)
+                  }
+    server = TestServer serverConf' $ \s -> do
       r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{..} body -> do
         body @?= "hi"
         return ("reply test", mempty, StatusOk, "")
@@ -219,16 +219,16 @@ testServerAuthProcessorCancel =
                                  else (StatusUnauthenticated, "denied!")
       return $ AuthProcessorResult mempty mempty status details
 
-    serverConf = defServerConf
-                 {sslConfig = Just (ServerSSLConfig
-                                      Nothing
-                                      "tests/ssl/localhost.key"
-                                      "tests/ssl/localhost.crt"
-                                      SslDontRequestClientCertificate
-                                      serverProcessor)
-                }
-    server = TestServer serverConf $ \s -> do
-      r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{..} body -> do
+    serverConf' = defServerConf
+                  { sslConfig = Just (ServerSSLConfig
+                                        Nothing
+                                        "tests/ssl/localhost.key"
+                                        "tests/ssl/localhost.crt"
+                                        SslDontRequestClientCertificate
+                                        serverProcessor)
+                  }
+    server = TestServer serverConf' $ \s -> do
+      r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{..} _body -> do
         checkMD "Handler only sees requests with good metadata"
                 [("foo","bar")]
                 metadata
@@ -272,15 +272,15 @@ testAuthMetadataTransfer =
       checkMD "server plugin sees metadata added by client plugin" expected m
       return $ AuthProcessorResult mempty mempty StatusOk ""
 
-    serverConf = defServerConf
-                 {sslConfig = Just (ServerSSLConfig
-                                      Nothing
-                                      "tests/ssl/localhost.key"
-                                      "tests/ssl/localhost.crt"
-                                      SslDontRequestClientCertificate
-                                      serverProcessor)
-                }
-    server = TestServer serverConf $ \s -> do
+    serverConf' = defServerConf
+                  { sslConfig = Just (ServerSSLConfig
+                                        Nothing
+                                        "tests/ssl/localhost.key"
+                                        "tests/ssl/localhost.crt"
+                                        SslDontRequestClientCertificate
+                                        serverProcessor)
+                  }
+    server = TestServer serverConf' $ \s -> do
       r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{..} body -> do
         body @?= "hi"
         return ("reply test", mempty, StatusOk, "")
@@ -376,7 +376,7 @@ testAuthMetadataPropagate = testCase "auth metadata inherited by children" $ do
 
     server2 = withGRPC $ \g -> withServer g server2ServerConf $ \s -> do
         let rm = head (normalMethods s)
-        serverHandleNormalCall s rm mempty $ \call -> do
+        serverHandleNormalCall s rm mempty $ \_call -> do
           return ("server2 reply", mempty, StatusOk, "")
 
 testServerCancel :: TestTree
