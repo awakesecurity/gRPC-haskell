@@ -9,7 +9,6 @@ import Control.Monad
 import Data.ByteString (ByteString, useAsCString, packCString)
 
 import Foreign.C.String (CString, peekCString)
-import Foreign.C.Types
 import Foreign.Marshal.Alloc (free)
 import Foreign.Ptr
 import Foreign.Storable

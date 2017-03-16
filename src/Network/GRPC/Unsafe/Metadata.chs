@@ -6,9 +6,7 @@ module Network.GRPC.Unsafe.Metadata where
 
 import Control.Exception
 import Control.Monad
-import Data.ByteString (ByteString, useAsCString, packCString)
 import Data.Function (on)
-import Data.List (sortBy, groupBy, (\\))
 import Data.ByteString (ByteString, useAsCString,
                         useAsCStringLen, packCString, packCStringLen)
 import Data.List (sortBy, groupBy)

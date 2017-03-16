@@ -41,8 +41,7 @@ type ServerHandler a b =
   -> IO (b, MetadataMap, StatusCode, StatusDetails)
 
 convertGeneratedServerHandler ::
-  (Message request, Message response)
-  => (ServerRequest 'Normal request response -> IO (ServerResponse 'Normal response))
+  (ServerRequest 'Normal request response -> IO (ServerResponse 'Normal response))
   -> ServerHandler request response
 convertGeneratedServerHandler handler call =
   do let call' = call { payload = () }
@@ -64,8 +63,7 @@ type ServerReaderHandler a b
   -> IO (Maybe b, MetadataMap, StatusCode, StatusDetails)
 
 convertGeneratedServerReaderHandler ::
-  (Message request, Message response)
-  => (ServerRequest 'ClientStreaming request response -> IO (ServerResponse 'ClientStreaming response))
+  (ServerRequest 'ClientStreaming request response -> IO (ServerResponse 'ClientStreaming response))
   -> ServerReaderHandler request response
 convertGeneratedServerReaderHandler handler call recv =
   do ServerReaderResponse rsp meta stsCode stsDetails <-
@@ -86,8 +84,7 @@ type ServerWriterHandler a b =
   -> IO (MetadataMap, StatusCode, StatusDetails)
 
 convertGeneratedServerWriterHandler ::
-  (Message request, Message response)
-  => (ServerRequest 'ServerStreaming request response -> IO (ServerResponse 'ServerStreaming response))
+  (ServerRequest 'ServerStreaming request response -> IO (ServerResponse 'ServerStreaming response))
   -> ServerWriterHandler request response
 convertGeneratedServerWriterHandler handler call send =
   do let call' = call { payload = () }
@@ -112,8 +109,7 @@ type ServerRWHandler a b
   -> IO (MetadataMap, StatusCode, StatusDetails)
 
 convertGeneratedServerRWHandler ::
-  (Message request, Message response)
-  => (ServerRequest 'BiDiStreaming request response -> IO (ServerResponse 'BiDiStreaming response))
+  (ServerRequest 'BiDiStreaming request response -> IO (ServerResponse 'BiDiStreaming response))
   -> ServerRWHandler request response
 convertGeneratedServerRWHandler handler call recv send =
   do ServerBiDiResponse meta stsCode stsDetails <-

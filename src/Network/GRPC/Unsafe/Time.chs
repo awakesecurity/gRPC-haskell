@@ -2,7 +2,6 @@ module Network.GRPC.Unsafe.Time where
 
 import Control.Exception (bracket)
 import Control.Monad
-import Foreign.C.Types
 import Foreign.Storable
 import System.Clock
 

@@ -304,6 +304,12 @@ clientWriterCmn (clientCQ -> cq) initMeta f (unsafeCC -> c) =
         -> return (mmsg, initMD, trailMD, st, ds)
       _ -> throwE (GRPCIOInternalUnexpectedRecv "clientWriter")
 
+pattern CWRFinal :: Maybe ByteString
+                 -> MetadataMap
+                 -> MetadataMap
+                 -> C.StatusCode
+                 -> StatusDetails
+                 -> [OpRecvResult]
 pattern CWRFinal mmsg initMD trailMD st ds
   <- [ OpRecvInitialMetadataResult initMD
      , OpRecvMessageResult mmsg
