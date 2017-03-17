@@ -8,8 +8,8 @@ mkDerivation {
   version = "0.1.0.0";
   src = fetchgit {
     url = "https://github.com/awakenetworks/proto3-suite.git";
-    sha256 = "0wvr54x3v6g9yb30nd5g9gfnn7j8is2hl8drwmmiyz0n45zlz0qh";
-    rev = "827af4bf644d05e88b5d95dfe40febe7b43fab16";
+    sha256 = "1g6w4ddqybgwnj3143bkl7sp9f5ch6d8qpb242fi4m396585bpq9";
+    rev = "8db2ceb8c48a3f8dc2cbdc492d1e8cbaf8b62a15";
   };
   libraryHaskellDepends = [
     base bytestring cereal containers deepseq filepath haskell-src mtl
