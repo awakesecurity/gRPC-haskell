@@ -264,10 +264,10 @@ clientReader cl@Client{ clientCQ = cq } rm tm body initMeta f =
   withClientCall cl rm tm go
   where
     go (unsafeCC -> c) = runExceptT $ do
-      runOps' c cq [ OpSendInitialMetadata initMeta
-                   , OpSendMessage body
-                   , OpSendCloseFromClient
-                   ]
+      void $ runOps' c cq [ OpSendInitialMetadata initMeta
+                          , OpSendMessage body
+                          , OpSendCloseFromClient
+                          ]
       srvMD <- recvInitialMetadata c cq
       liftIO $ f srvMD (streamRecvPrim c cq)
       recvStatusOnClient c cq

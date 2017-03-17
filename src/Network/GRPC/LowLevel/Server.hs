@@ -373,12 +373,10 @@ serverReader' :: Server
 serverReader' _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
   runExceptT $ do
     (mmsg, trailMeta, st, ds) <- liftIO $ f sc (streamRecvPrim c ccq)
-    runOps' c ccq ( OpSendInitialMetadata initMeta
-                  : OpSendStatusFromServer trailMeta st ds
-                  : maybe [] ((:[]) . OpSendMessage) mmsg
-                  )
-    return ()
-
+    void $ runOps' c ccq ( OpSendInitialMetadata initMeta
+                         : OpSendStatusFromServer trailMeta st ds
+                         : maybe [] ((:[]) . OpSendMessage) mmsg
+                         )
 
 --------------------------------------------------------------------------------
 -- serverWriter (server side of server streaming mode)
