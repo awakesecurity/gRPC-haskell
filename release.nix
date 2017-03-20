@@ -106,8 +106,8 @@ let
 
         src = pkgs.fetchgit {
           url    = "https://github.com/grpc/grpc.git";
-          rev    = "686375b5ac2aeb3696958c4959235171aae323a5";
-          sha256 = "00ckprs2lm2mq0mg0sy3iq3n9fn8887vzv6gh3r3wlg6nvcm0vdw";
+          rev    = "ed7d06af3eef1c27f10328c73b3ae3ab10d72b10";
+          sha256 = "1qh4fm3v11qa5b17br5bbdn2c6qgv2q5dpy4gmviz9cjyqxgjvxw";
         };
 
         preConfigure = ''
@@ -139,8 +139,8 @@ let
 
         src = pkgs.fetchgit {
           url    = "https://github.com/grpc/grpc.git";
-          rev    = "686375b5ac2aeb3696958c4959235171aae323a5";
-          sha256 = "00ckprs2lm2mq0mg0sy3iq3n9fn8887vzv6gh3r3wlg6nvcm0vdw";
+          rev    = "ed7d06af3eef1c27f10328c73b3ae3ab10d72b10";
+          sha256 = "1qh4fm3v11qa5b17br5bbdn2c6qgv2q5dpy4gmviz9cjyqxgjvxw";
         };
 
         preConfigure = ''
