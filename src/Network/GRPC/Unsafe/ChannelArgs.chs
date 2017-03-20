@@ -4,7 +4,6 @@ module Network.GRPC.Unsafe.ChannelArgs where
 
 import           Control.Exception
 import           Control.Monad
-import           Data.List             (find)
 import           Foreign.Marshal.Alloc (malloc, free)
 import           Foreign.Storable
 

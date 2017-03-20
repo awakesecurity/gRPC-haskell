@@ -3,7 +3,7 @@
 #     $ # Consider adding the following command to your `~/.profile`
 #     $ NIX_PATH="${NIX_PATH}:ssh-config-file=${HOME}/.ssh/config:ssh-auth-sock=${SSH_AUTH_SOCK}"
 #     $ nix-shell -A grpc-haskell.env release.nix
-#     [nix-shell]$ cabal configure --with-gcc=clang --enable tests && cabal build && cabal test
+#     [nix-shell]$ cabal configure --with-gcc=clang --enable-tests && cabal build && cabal test
 #
 # This will open up a Nix shell where all of your Haskell tools will work like
 # normal, except that all dependencies (including C libraries) are managed by
@@ -46,15 +46,20 @@
 # You can also add private Git dependencies in the same way, except supplying
 # the `git` URL to clone:
 #
-#     $ cabal2nix git@github.mv.awakenetworks.net:awakenetworks/${package-name}.git > ./nix/${package-name}.nix
+#     $ cabal2nix <your private git url>/${package-name}.git > ./nix/${package-name}.nix
 #
-# `cabal2nix` also takes an optional `--revision` flag if you want to pick a
-# revision other than the latest one to depend on.
+# ...but also be sure to supply `fetchgit = pkgs.fetchgitPrivate` in the
+# `haskellPackagesNew.callPackage` invocation for your private package.
 #
-# If you want to test a local source checkout of a dependency, then run:
+# Note that `cabal2nix` also takes an optional `--revision` flag if you want to
+# pick a revision other than the latest to depend on.
+#
+# Finally, if you want to test a local source checkout of a dependency, then
+# run:
 #
 #     $ cabal2nix path/to/dependency/repo > nix/${package-name}.nix
 let
+  nixpkgs = import ./nixpkgs.nix;
   config = {
     packageOverrides = pkgs: rec {
       cython = pkgs.buildPythonPackage rec {
@@ -170,9 +175,7 @@ let
 
           proto3-suite =
             pkgs.haskell.lib.dontCheck
-              (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {
-                fetchgit = pkgs.fetchgitPrivate;
-              });
+              (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
 
           grpc-haskell-no-tests =
             pkgs.haskell.lib.overrideCabal
@@ -265,9 +268,9 @@ let
 in
 
 let
-   linuxPkgs = import <nixpkgs> { inherit config; system = "x86_64-linux" ; };
-  darwinPkgs = import <nixpkgs> { inherit config; system = "x86_64-darwin"; };
-        pkgs = import <nixpkgs> { inherit config; };
+   linuxPkgs = import nixpkgs { inherit config; system = "x86_64-linux" ; };
+  darwinPkgs = import nixpkgs { inherit config; system = "x86_64-darwin"; };
+        pkgs = import nixpkgs { inherit config; };
 
 in
   { grpc-haskell-linux  =  linuxPkgs.haskellPackages.grpc-haskell;

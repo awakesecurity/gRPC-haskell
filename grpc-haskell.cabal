@@ -1,11 +1,11 @@
 name:                grpc-haskell
 version:             0.0.0.0
 synopsis:            Haskell implementation of gRPC layered on shared C library.
-homepage:            https://github.mv.awakenetworks.net/awakenetworks/gRPC-haskell
+homepage:            https://github.com/awakenetworks/gRPC-haskell
 license:             Apache-2.0
 license-file:        LICENSE
-author:              Connor Clark
-maintainer:          connor@awakenetworks.com
+author:              Awake Networks
+maintainer:          opensource@awakenetworks.com
 copyright:           Copyright 2016 Awake Networks
 category:            Network
 build-type:          Simple

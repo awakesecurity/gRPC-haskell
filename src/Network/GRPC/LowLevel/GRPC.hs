@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 
@@ -16,10 +17,6 @@ GRPC
 
 import           Control.Concurrent     (threadDelay, myThreadId)
 import           Control.Exception
-import           Data.String            (IsString)
-import           Data.ByteString        (ByteString)
-import qualified Data.ByteString        as B
-import qualified Data.Map               as M
 import           Data.Typeable
 import qualified Network.GRPC.Unsafe    as C
 import qualified Network.GRPC.Unsafe.Op as C
