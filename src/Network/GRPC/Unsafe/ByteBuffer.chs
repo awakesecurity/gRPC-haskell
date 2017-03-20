@@ -3,9 +3,9 @@
 module Network.GRPC.Unsafe.ByteBuffer where
 
 #include <grpc/grpc.h>
-#include <grpc/impl/codegen/slice.h>
+#include <grpc/slice.h>
 #include <grpc/impl/codegen/compression_types.h>
-#include <grpc/impl/codegen/slice_buffer.h>
+#include <grpc/slice_buffer.h>
 
 #include <grpc_haskell.h>
 

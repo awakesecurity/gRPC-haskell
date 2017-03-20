@@ -3,12 +3,12 @@
 
 stdenv.mkDerivation rec {
   name    = "grpc-${version}";
-  version = "1.0.1-${lib.strings.substring 0 7 rev}";
-  rev     = "6040b471bcd1d6bb05b25c126b6545180a1d3528";
+  version = "1.1.4-${lib.strings.substring 0 7 rev}";
+  rev     = "ed7d06af3eef1c27f10328c73b3ae3ab10d72b10";
   src = fetchgit {
     inherit rev;
     url    = "https://github.com/grpc/grpc.git";
-    sha256 = "1kx6jkx2dnnfnjfyc50ravfk7mfdszj988vndrlzs1zkd6627k4z";
+    sha256 = "1qh4fm3v11qa5b17br5bbdn2c6qgv2q5dpy4gmviz9cjyqxgjvxw";
   };
   preInstall  = "export prefix";
   buildInputs =

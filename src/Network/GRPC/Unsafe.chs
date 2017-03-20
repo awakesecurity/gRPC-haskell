@@ -23,7 +23,7 @@ import Network.GRPC.Unsafe.Constants
 
 #include <grpc/grpc.h>
 #include <grpc/status.h>
-#include <grpc/impl/codegen/alloc.h>
+#include <grpc/support/alloc.h>
 #include <grpc_haskell.h>
 
 {#context prefix = "grpc" #}

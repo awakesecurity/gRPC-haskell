@@ -9,7 +9,7 @@ import           Foreign.Storable
 
 #include <grpc/grpc.h>
 #include <grpc/status.h>
-#include <grpc/impl/codegen/alloc.h>
+#include <grpc/support/alloc.h>
 #include <grpc/impl/codegen/compression_types.h>
 #include <grpc_haskell.h>
 
