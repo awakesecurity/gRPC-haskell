@@ -20,6 +20,7 @@ import Network.GRPC.Unsafe.Constants
 {#import Network.GRPC.Unsafe.Op#}
 {#import Network.GRPC.Unsafe.Metadata#}
 {#import Network.GRPC.Unsafe.ChannelArgs#}
+{#import Network.GRPC.Unsafe.Slice#}
 
 #include <grpc/grpc.h>
 #include <grpc/status.h>
@@ -286,8 +287,8 @@ getPeerPeek cstr = do
    `CompletionQueue',unTag `Tag'}
   -> `CallError'#}
 
-{#fun unsafe call_details_get_method as ^ {`CallDetails'} -> `ByteString' packCString* #}
+{#fun unsafe call_details_get_method as ^ {`CallDetails'} -> `ByteString' sliceToByteString* #}
 
-{#fun unsafe call_details_get_host as ^ {`CallDetails'} -> `ByteString' packCString* #}
+{#fun unsafe call_details_get_host as ^ {`CallDetails'} -> `ByteString' sliceToByteString* #}
 
 {#fun call_details_get_deadline as ^ {`CallDetails'} -> `CTimeSpec' peek* #}

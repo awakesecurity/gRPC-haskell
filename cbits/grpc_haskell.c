@@ -4,6 +4,7 @@
 #include <grpc/grpc_security.h>
 #include <grpc/impl/codegen/grpc_types.h>
 #include <grpc/impl/codegen/compression_types.h>
+#include <grpc/slice.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,9 +39,17 @@ grpc_call *grpc_channel_create_call_(grpc_channel *channel,
                                      grpc_completion_queue *completion_queue,
                                      const char *method, const char *host,
                                      gpr_timespec *deadline, void *reserved) {
+  grpc_slice method_slice = grpc_slice_from_copied_string(method);
+  grpc_slice host_slice = grpc_slice_from_copied_string(host);
   return grpc_channel_create_call(channel, parent_call, propagation_mask,
-                                       completion_queue, method, host,
-                                       *deadline, reserved);
+                                       completion_queue, method_slice,
+                                       &host_slice, *deadline, reserved);
+}
+
+grpc_slice* grpc_slice_malloc_(size_t len){
+  grpc_slice* retval = malloc(sizeof(grpc_slice));
+  *retval = grpc_slice_malloc(len);
+  return retval;
 }
 
 size_t grpc_slice_length_(grpc_slice *slice){
@@ -49,6 +58,13 @@ size_t grpc_slice_length_(grpc_slice *slice){
 
 uint8_t *grpc_slice_start_(grpc_slice *slice){
   return GRPC_SLICE_START_PTR(*slice);
+}
+
+
+grpc_slice* grpc_slice_from_copied_string_(const char* source){
+  grpc_slice* retval = malloc(sizeof(grpc_slice));
+  *retval = grpc_slice_from_copied_string(source);
+  return retval;
 }
 
 grpc_slice* grpc_slice_from_copied_buffer_(const char *source, size_t len){
@@ -170,24 +186,18 @@ void metadata_free(grpc_metadata* m){
 void set_metadata_key_val(char *key, char *val, size_t val_len,
                           grpc_metadata *arr, size_t i){
   grpc_metadata *p = arr + i;
-  p->key = key;
-  p->value = val;
-  p->value_length = val_len;
+  p->key = grpc_slice_from_copied_string(key);
+  p->value = grpc_slice_from_copied_buffer(val,val_len);
 }
 
-const char* get_metadata_key(grpc_metadata *arr, size_t i){
+grpc_slice* get_metadata_key(grpc_metadata *arr, size_t i){
   grpc_metadata *p = arr + i;
-  return p->key;
+  return &p->key;
 }
 
-const char* get_metadata_val(grpc_metadata *arr, size_t i){
+grpc_slice* get_metadata_val(grpc_metadata *arr, size_t i){
   grpc_metadata *p = arr + i;
-  return p->value;
-}
-
-size_t get_metadata_val_len(grpc_metadata *arr, size_t i){
-  grpc_metadata *p = arr + i;
-  return p->value_length;
+  return &(p->value);
 }
 
 grpc_op* op_array_create(size_t n){
@@ -207,7 +217,7 @@ void op_array_destroy(grpc_op* op_array, size_t n){
       metadata_free(op->data.send_initial_metadata.metadata);
       break;
       case GRPC_OP_SEND_MESSAGE:
-      grpc_byte_buffer_destroy(op->data.send_message);
+      grpc_byte_buffer_destroy(op->data.send_message.send_message);
       break;
       case GRPC_OP_SEND_CLOSE_FROM_CLIENT:
       break;
@@ -256,7 +266,7 @@ void op_send_message(grpc_op *op_array, size_t i,
                          grpc_byte_buffer *payload){
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_SEND_MESSAGE;
-  op->data.send_message = grpc_byte_buffer_copy(payload);
+  op->data.send_message.send_message = grpc_byte_buffer_copy(payload);
   op->flags = 0;
   op->reserved = NULL;
 }
@@ -272,7 +282,7 @@ void op_recv_initial_metadata(grpc_op *op_array, size_t i,
                               grpc_metadata_array** arr){
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_RECV_INITIAL_METADATA;
-  op->data.recv_initial_metadata = *arr;
+  op->data.recv_initial_metadata.recv_initial_metadata = *arr;
   op->flags = 0;
   op->reserved = NULL;
 }
@@ -281,7 +291,7 @@ void op_recv_message(grpc_op *op_array, size_t i,
                      grpc_byte_buffer **payload_recv){
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_RECV_MESSAGE;
-  op->data.recv_message = payload_recv;
+  op->data.recv_message.recv_message = payload_recv;
   op->flags = 0;
   op->reserved = NULL;
 }
@@ -289,13 +299,12 @@ void op_recv_message(grpc_op *op_array, size_t i,
 void op_recv_status_client(grpc_op *op_array, size_t i,
                            grpc_metadata_array** arr,
                            grpc_status_code* status,
-                           char **details, size_t* details_capacity){
+                           grpc_slice* details){
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_RECV_STATUS_ON_CLIENT;
   op->data.recv_status_on_client.trailing_metadata = *arr;
   op->data.recv_status_on_client.status = status;
   op->data.recv_status_on_client.status_details = details;
-  op->data.recv_status_on_client.status_details_capacity = details_capacity;
   op->flags = 0;
   op->reserved = NULL;
 }
@@ -310,7 +319,7 @@ void op_recv_close_server(grpc_op *op_array, size_t i, int *was_cancelled){
 
 void op_send_status_server(grpc_op *op_array, size_t i,
                            size_t metadata_count, grpc_metadata* m,
-                           grpc_status_code status, char *details){
+                           grpc_status_code status, grpc_slice *details){
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_SEND_STATUS_FROM_SERVER;
   op->data.send_status_from_server.trailing_metadata_count = metadata_count;
@@ -319,9 +328,7 @@ void op_send_status_server(grpc_op *op_array, size_t i,
   memcpy(op->data.send_status_from_server.trailing_metadata, m,
          metadata_count*sizeof(grpc_metadata));
   op->data.send_status_from_server.status = status;
-  op->data.send_status_from_server.status_details
-    = malloc(sizeof(char)*(strlen(details) + 1));
-  strcpy((char*)(op->data.send_status_from_server.status_details), details);
+  op->data.send_status_from_server.status_details = details;
   op->flags = 0;
   op->reserved = NULL;
 }
@@ -398,12 +405,12 @@ grpc_call* grpc_channel_create_registered_call_(
              *deadline, reserved);
 }
 
-char* call_details_get_method(grpc_call_details* details){
-  return details->method;
+grpc_slice* call_details_get_method(grpc_call_details* details){
+  return &details->method;
 }
 
-char* call_details_get_host(grpc_call_details* details){
-  return details->host;
+grpc_slice* call_details_get_host(grpc_call_details* details){
+  return &details->host;
 }
 
 gpr_timespec* call_details_get_deadline(grpc_call_details* details){

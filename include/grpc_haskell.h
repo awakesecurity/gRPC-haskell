@@ -23,9 +23,13 @@ grpc_call *grpc_channel_create_call_(grpc_channel *channel,
                                      const char *method, const char *host,
                                      gpr_timespec *deadline, void *reserved);
 
+grpc_slice* grpc_slice_malloc_(size_t len);
+
 size_t grpc_slice_length_(grpc_slice *slice);
 
 uint8_t *grpc_slice_start_(grpc_slice *slice);
+
+grpc_slice* grpc_slice_from_copied_string_(const char* source);
 
 grpc_slice* grpc_slice_from_copied_buffer_(const char *source, size_t len);
 
@@ -68,11 +72,9 @@ void metadata_free(grpc_metadata* m);
 void set_metadata_key_val(char *key, char *val, size_t val_len,
                           grpc_metadata *arr, size_t i);
 
-const char* get_metadata_key(grpc_metadata *arr, size_t i);
+grpc_slice* get_metadata_key(grpc_metadata *arr, size_t i);
 
-const char* get_metadata_val(grpc_metadata *arr, size_t i);
-
-size_t get_metadata_val_len(grpc_metadata *arr, size_t i);
+grpc_slice* get_metadata_val(grpc_metadata *arr, size_t i);
 
 grpc_op* op_array_create(size_t n);
 
@@ -95,15 +97,15 @@ void op_recv_message(grpc_op *op_array, size_t i,
                      grpc_byte_buffer **payload_recv);
 
 void op_recv_status_client(grpc_op *op_array, size_t i,
-                           grpc_metadata_array** arr,
-                           grpc_status_code* status,
-                           char **details, size_t* details_capacity);
+                          grpc_metadata_array** arr,
+                          grpc_status_code* status,
+                          grpc_slice* details);
 
 void op_recv_close_server(grpc_op *op_array, size_t i, int *was_cancelled);
 
 void op_send_status_server(grpc_op *op_array, size_t i,
                            size_t metadata_count, grpc_metadata* m,
-                           grpc_status_code status, char *details);
+                           grpc_status_code status, grpc_slice *details);
 
 grpc_status_code* create_status_code_ptr();
 
@@ -135,9 +137,9 @@ grpc_call* grpc_channel_create_registered_call_(
   grpc_completion_queue *completion_queue, void *registered_call_handle,
   gpr_timespec *deadline, void *reserved);
 
-char* call_details_get_method(grpc_call_details* details);
+grpc_slice* call_details_get_method(grpc_call_details* details);
 
-char* call_details_get_host(grpc_call_details* details);
+grpc_slice* call_details_get_host(grpc_call_details* details);
 
 gpr_timespec* call_details_get_deadline(grpc_call_details* details);
 

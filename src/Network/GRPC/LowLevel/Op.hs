@@ -24,7 +24,8 @@ import qualified Network.GRPC.Unsafe                   as C (Call)
 import qualified Network.GRPC.Unsafe.ByteBuffer        as C
 import qualified Network.GRPC.Unsafe.Metadata          as C
 import qualified Network.GRPC.Unsafe.Op                as C
-import qualified Network.GRPC.Unsafe.Slice             as C (Slice, freeSlice)
+import qualified Network.GRPC.Unsafe.Slice             as C
+import           Network.GRPC.Unsafe.Slice             (Slice)
 
 -- | Sum describing all possible send and receive operations that can be batched
 -- and executed by gRPC. Usually these are processed in a handful of
@@ -46,12 +47,10 @@ data OpContext =
   OpSendInitialMetadataContext C.MetadataKeyValPtr Int
   | OpSendMessageContext (C.ByteBuffer, C.Slice)
   | OpSendCloseFromClientContext
-  | OpSendStatusFromServerContext C.MetadataKeyValPtr Int C.StatusCode
-                                  B.ByteString
+  | OpSendStatusFromServerContext C.MetadataKeyValPtr Int C.StatusCode Slice
   | OpRecvInitialMetadataContext (Ptr C.MetadataArray)
   | OpRecvMessageContext (Ptr C.ByteBuffer)
-  | OpRecvStatusOnClientContext (Ptr C.MetadataArray) (Ptr C.StatusCode)
-                                (Ptr CString)
+  | OpRecvStatusOnClientContext (Ptr C.MetadataArray) (Ptr C.StatusCode) Slice
   | OpRecvCloseOnServerContext (Ptr CInt)
   deriving Show
 
@@ -72,7 +71,7 @@ createOpContext (OpSendStatusFromServer m code (StatusDetails str)) =
   uncurry OpSendStatusFromServerContext
   <$> C.createMetadata m
   <*> return code
-  <*> return str
+  <*> C.byteStringToSlice str
 createOpContext OpRecvInitialMetadata =
   fmap OpRecvInitialMetadataContext C.metadataArrayCreate
 createOpContext OpRecvMessage =
@@ -80,10 +79,8 @@ createOpContext OpRecvMessage =
 createOpContext OpRecvStatusOnClient = do
   pmetadata <- C.metadataArrayCreate
   pstatus <- C.createStatusCodePtr
-  pstr <- malloc
-  cstring <- mallocBytes defaultStatusStringLen
-  poke pstr cstring
-  return $ OpRecvStatusOnClientContext pmetadata pstatus pstr
+  slice <- C.grpcSliceMalloc defaultStatusStringLen
+  return $ OpRecvStatusOnClientContext pmetadata pstatus slice
 createOpContext OpRecvCloseOnServer =
   fmap OpRecvCloseOnServerContext $ malloc
 
@@ -97,14 +94,13 @@ setOpArray arr i (OpSendMessageContext (bb,_)) =
 setOpArray arr i OpSendCloseFromClientContext =
   C.opSendCloseClient arr i
 setOpArray arr i (OpSendStatusFromServerContext kvs l code details) =
-  B.useAsCString details $ \cstr ->
-    C.opSendStatusServer arr i l kvs code cstr
+    C.opSendStatusServer arr i l kvs code details
 setOpArray arr i (OpRecvInitialMetadataContext pmetadata) =
   C.opRecvInitialMetadata arr i pmetadata
 setOpArray arr i (OpRecvMessageContext pbb) =
   C.opRecvMessage arr i pbb
-setOpArray arr i (OpRecvStatusOnClientContext pmetadata pstatus pstr) = do
-  C.opRecvStatusClient arr i pmetadata pstatus pstr defaultStatusStringLen
+setOpArray arr i (OpRecvStatusOnClientContext pmetadata pstatus slice) =
+  C.opRecvStatusClient arr i pmetadata pstatus slice
 setOpArray arr i (OpRecvCloseOnServerContext pcancelled) = do
   C.opRecvCloseServer arr i pcancelled
 
@@ -120,12 +116,10 @@ freeOpContext (OpRecvInitialMetadataContext metadata) =
   C.metadataArrayDestroy metadata
 freeOpContext (OpRecvMessageContext pbb) =
   C.destroyReceivingByteBuffer pbb
-freeOpContext (OpRecvStatusOnClientContext metadata pcode pstr) = do
+freeOpContext (OpRecvStatusOnClientContext metadata pcode slice) = do
   C.metadataArrayDestroy metadata
   C.destroyStatusCodePtr pcode
-  str <- peek pstr
-  free str
-  free pstr
+  C.freeSlice slice
 freeOpContext (OpRecvCloseOnServerContext pcancelled) =
   grpcDebug ("freeOpContext: freeing pcancelled: " ++ show pcancelled)
   >> free pcancelled
@@ -176,8 +170,7 @@ resultFromOpContext (OpRecvStatusOnClientContext pmetadata pcode pstr) = do
   metadata <- peek pmetadata
   metadataMap <- C.getAllMetadataArray metadata
   code <- C.derefStatusCodePtr pcode
-  cstr <- peek pstr
-  statusInfo <- B.packCString cstr
+  statusInfo <- C.sliceToByteString pstr
   return $ Just $ OpRecvStatusOnClientResult metadataMap code statusInfo
 resultFromOpContext (OpRecvCloseOnServerContext pcancelled) = do
   grpcDebug "resultFromOpContext: OpRecvCloseOnServerContext"

@@ -6,6 +6,7 @@ module Network.GRPC.Unsafe.Slice where
 #include <grpc_haskell.h>
 
 import qualified Data.ByteString as B
+import Data.ByteString (useAsCString, ByteString)
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
@@ -29,10 +30,15 @@ deriving instance Show Slice
 -- | Get the length of a slice.
 {#fun unsafe grpc_slice_length_ as ^ {`Slice'} -> `CULong'#}
 
+-- | Slices allocated using this function must be freed by
+-- 'freeSlice'
+{#fun unsafe grpc_slice_malloc_ as ^ {`Int'} -> `Slice'#}
+
 -- | Returns a pointer to the start of the character array contained by the
 -- slice.
 {#fun unsafe grpc_slice_start_ as ^ {`Slice'} -> `Ptr CChar' castPtr #}
 
+-- | Slices must be freed using 'freeSlice'.
 {#fun unsafe grpc_slice_from_copied_buffer_ as ^ {`CString', `Int'} -> `Slice'#}
 
 -- | Properly cleans up all memory used by a 'Slice'. Danger: the Slice should
