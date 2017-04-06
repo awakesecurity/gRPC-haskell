@@ -12,12 +12,10 @@ import           Control.Monad.Trans.Except
 import           Data.ByteString                       (ByteString)
 import qualified Data.ByteString                       as B
 import           Data.Maybe                            (catMaybes)
-import           Foreign.C.String                      (CString)
 import           Foreign.C.Types                       (CInt)
-import           Foreign.Marshal.Alloc                 (free, malloc,
-                                                        mallocBytes)
+import           Foreign.Marshal.Alloc                 (free, malloc)
 import           Foreign.Ptr                           (Ptr, nullPtr)
-import           Foreign.Storable                      (peek, poke)
+import           Foreign.Storable                      (peek)
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe                   as C (Call)

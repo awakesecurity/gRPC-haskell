@@ -6,7 +6,7 @@ module Network.GRPC.Unsafe where
 import Control.Exception (bracket)
 import Control.Monad
 
-import Data.ByteString (ByteString, useAsCString, packCString)
+import Data.ByteString (ByteString, useAsCString)
 
 import Foreign.C.String (CString, peekCString)
 import Foreign.Marshal.Alloc (free)

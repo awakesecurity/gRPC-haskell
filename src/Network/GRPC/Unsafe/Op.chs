@@ -5,7 +5,6 @@ module Network.GRPC.Unsafe.Op where
 {#import Network.GRPC.Unsafe.Slice#}
 
 import Control.Exception
-import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
 {#import Network.GRPC.Unsafe.ByteBuffer#}

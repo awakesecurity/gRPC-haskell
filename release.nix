@@ -62,7 +62,12 @@ let
   nixpkgs = import ./nixpkgs.nix;
   config = {
     packageOverrides = pkgs: rec {
-      cython = pkgs.buildPythonPackage rec {
+      protobuf3_2NoCheck =
+        pkgs.stdenv.lib.overrideDerivation
+          pkgs.pythonPackages.protobuf3_2
+          (oldAttrs : {doCheck = false; doInstallCheck = false;});
+
+      cython = pkgs.pythonPackages.buildPythonPackage rec {
         name = "Cython-${version}";
         version = "0.24.1";
 
@@ -127,7 +132,7 @@ let
         propagatedBuildInputs = [
           cython
           pkgs.pythonPackages.futures
-          pkgs.pythonPackages.protobuf3_0
+          protobuf3_2NoCheck
           pkgs.pythonPackages.enum34
         ];
       };
@@ -162,7 +167,7 @@ let
         propagatedBuildInputs = [
           cython
           pkgs.pythonPackages.futures
-          pkgs.pythonPackages.protobuf3_0
+          protobuf3_2NoCheck
           pkgs.pythonPackages.enum34
           grpcio
         ];

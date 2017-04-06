@@ -19,7 +19,7 @@ Flag Debug
 flag with-examples
   description: Also build example executables.
   manual:      True
-  default:     True
+  default:     False
 
 library
   build-depends:
@@ -29,7 +29,7 @@ library
     , stm == 2.4.*
     , containers ==0.5.*
     , managed >= 1.0.0 && < 1.1
-    , pipes ==4.1.*
+    , pipes >=4.1 && <=4.4
     , transformers
     , proto3-suite
     , proto3-wire
@@ -206,14 +206,14 @@ test-suite test
     , tasty-quickcheck ==0.8.*
     , containers ==0.5.*
     , managed >= 1.0.0 && < 1.1
-    , pipes ==4.1.*
+    , pipes >=4.1 && <=4.4
     , proto3-suite
     , transformers
     , safe
     , clock >=0.6.0 && <0.8.0
     , turtle >= 1.2.0
     , text
-    , QuickCheck ==2.8.*
+    , QuickCheck >=2.8 && <3.0
   other-modules:
     LowLevelTests,
     LowLevelTests.Op,
