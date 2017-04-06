@@ -6,7 +6,6 @@ module Network.GRPC.Unsafe.Slice where
 #include <grpc_haskell.h>
 
 import qualified Data.ByteString as B
-import Data.ByteString (useAsCString, ByteString)
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
