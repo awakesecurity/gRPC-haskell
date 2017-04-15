@@ -6,7 +6,7 @@ module Network.GRPC.Unsafe where
 import Control.Exception (bracket)
 import Control.Monad
 
-import Data.ByteString (ByteString, useAsCString, packCString)
+import Data.ByteString (ByteString, useAsCString)
 
 import Foreign.C.String (CString, peekCString)
 import Foreign.Marshal.Alloc (free)
@@ -20,10 +20,11 @@ import Network.GRPC.Unsafe.Constants
 {#import Network.GRPC.Unsafe.Op#}
 {#import Network.GRPC.Unsafe.Metadata#}
 {#import Network.GRPC.Unsafe.ChannelArgs#}
+{#import Network.GRPC.Unsafe.Slice#}
 
 #include <grpc/grpc.h>
 #include <grpc/status.h>
-#include <grpc/impl/codegen/alloc.h>
+#include <grpc/support/alloc.h>
 #include <grpc_haskell.h>
 
 {#context prefix = "grpc" #}
@@ -286,8 +287,8 @@ getPeerPeek cstr = do
    `CompletionQueue',unTag `Tag'}
   -> `CallError'#}
 
-{#fun unsafe call_details_get_method as ^ {`CallDetails'} -> `ByteString' packCString* #}
+{#fun unsafe call_details_get_method as ^ {`CallDetails'} -> `ByteString' sliceToByteString* #}
 
-{#fun unsafe call_details_get_host as ^ {`CallDetails'} -> `ByteString' packCString* #}
+{#fun unsafe call_details_get_host as ^ {`CallDetails'} -> `ByteString' sliceToByteString* #}
 
 {#fun call_details_get_deadline as ^ {`CallDetails'} -> `CTimeSpec' peek* #}

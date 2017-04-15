@@ -62,7 +62,12 @@ let
   nixpkgs = import ./nixpkgs.nix;
   config = {
     packageOverrides = pkgs: rec {
-      cython = pkgs.buildPythonPackage rec {
+      protobuf3_2NoCheck =
+        pkgs.stdenv.lib.overrideDerivation
+          pkgs.pythonPackages.protobuf3_2
+          (oldAttrs : {doCheck = false; doInstallCheck = false;});
+
+      cython = pkgs.pythonPackages.buildPythonPackage rec {
         name = "Cython-${version}";
         version = "0.24.1";
 
@@ -106,8 +111,8 @@ let
 
         src = pkgs.fetchgit {
           url    = "https://github.com/grpc/grpc.git";
-          rev    = "c204647295437b01337ad8e6c17c4296609c7a13";
-          sha256 = "0ifg5acwcb0qyf5g5mrja8ab4x3f1fxdw80rkmhn3kyjkhjzm9ik";
+          rev    = "e2cfe9df79c4eda4e376222df064c4c65e616352";
+          sha256 = "19ldbjlnbc287hkaylsigm8w9fai2bjdbfxk6315kl75cq54iprr";
         };
 
         preConfigure = ''
@@ -127,7 +132,7 @@ let
         propagatedBuildInputs = [
           cython
           pkgs.pythonPackages.futures
-          pkgs.pythonPackages.protobuf3_0
+          protobuf3_2NoCheck
           pkgs.pythonPackages.enum34
         ];
       };
@@ -139,8 +144,8 @@ let
 
         src = pkgs.fetchgit {
           url    = "https://github.com/grpc/grpc.git";
-          rev    = "c204647295437b01337ad8e6c17c4296609c7a13";
-          sha256 = "0ifg5acwcb0qyf5g5mrja8ab4x3f1fxdw80rkmhn3kyjkhjzm9ik";
+          rev    = "e2cfe9df79c4eda4e376222df064c4c65e616352";
+          sha256 = "19ldbjlnbc287hkaylsigm8w9fai2bjdbfxk6315kl75cq54iprr";
         };
 
         preConfigure = ''
@@ -162,7 +167,7 @@ let
         propagatedBuildInputs = [
           cython
           pkgs.pythonPackages.futures
-          pkgs.pythonPackages.protobuf3_0
+          protobuf3_2NoCheck
           pkgs.pythonPackages.enum34
           grpcio
         ];

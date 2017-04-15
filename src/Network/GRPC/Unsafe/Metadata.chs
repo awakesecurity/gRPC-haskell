@@ -4,11 +4,13 @@
 
 module Network.GRPC.Unsafe.Metadata where
 
+{#import Network.GRPC.Unsafe.Slice#}
+
 import Control.Exception
 import Control.Monad
 import Data.Function (on)
 import Data.ByteString (ByteString, useAsCString,
-                        useAsCStringLen, packCString, packCStringLen)
+                        useAsCStringLen)
 import Data.List (sortBy, groupBy)
 import qualified Data.SortedList as SL
 import qualified Data.Map.Strict as M
@@ -111,13 +113,10 @@ setMetadataKeyVal k v m i =
   useAsCStringLen v $ \(vStr, vLen) -> setMetadataKeyVal' k vStr vLen m i
 
 {#fun unsafe get_metadata_key as getMetadataKey'
-  {`MetadataKeyValPtr', `Int'} -> `CString'#}
+  {`MetadataKeyValPtr', `Int'} -> `Slice'#}
 
 {#fun unsafe get_metadata_val as getMetadataVal'
-  {`MetadataKeyValPtr', `Int'} -> `CString'#}
-
-{#fun unsafe get_metadata_val_len as getMetadataValLen
-  {`MetadataKeyValPtr', `Int'} -> `Int'#}
+  {`MetadataKeyValPtr', `Int'} -> `Slice'#}
 
 withMetadataArrayPtr :: (Ptr MetadataArray -> IO a) -> IO a
 withMetadataArrayPtr = bracket metadataArrayCreate metadataArrayDestroy
@@ -126,12 +125,11 @@ withMetadataKeyValPtr :: Int -> (MetadataKeyValPtr -> IO a) -> IO a
 withMetadataKeyValPtr i f = bracket (metadataAlloc i) metadataFree f
 
 getMetadataKey :: MetadataKeyValPtr -> Int -> IO ByteString
-getMetadataKey m = getMetadataKey' m >=> packCString
+getMetadataKey m = getMetadataKey' m >=> sliceToByteString
 
 getMetadataVal :: MetadataKeyValPtr -> Int -> IO ByteString
 getMetadataVal m i = do vStr <- getMetadataVal' m i
-                        vLen <- getMetadataValLen m i
-                        packCStringLen (vStr, vLen)
+                        sliceToByteString vStr
 
 createMetadata :: MetadataMap -> IO (MetadataKeyValPtr, Int)
 createMetadata m = do

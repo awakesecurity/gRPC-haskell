@@ -2,8 +2,9 @@
 
 module Network.GRPC.Unsafe.Op where
 
+{#import Network.GRPC.Unsafe.Slice#}
+
 import Control.Exception
-import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Ptr
 {#import Network.GRPC.Unsafe.ByteBuffer#}
@@ -90,7 +91,7 @@ withOpArray n f = bracket (opArrayCreate n) (flip opArrayDestroy n) f
 -- this call.
 {#fun unsafe op_recv_status_client as ^
   {`OpArray', `Int',id `Ptr MetadataArray', castPtr `Ptr StatusCode',
-   castPtr `Ptr CString', `Int'}
+   `Slice'}
   -> `()'#}
 
 -- | Creates an op of type GRPC_OP_RECV_CLOSE_ON_SERVER at the specified index
@@ -104,5 +105,5 @@ withOpArray n f = bracket (opArrayCreate n) (flip opArrayDestroy n) f
 -- Metadata and string are copied when creating the op, and can be safely
 -- destroyed immediately after calling this function.
 {#fun unsafe op_send_status_server as ^
-  {`OpArray', `Int', `Int', `MetadataKeyValPtr', `StatusCode', `CString'}
+  {`OpArray', `Int', `Int', `MetadataKeyValPtr', `StatusCode', `Slice'}
   -> `()'#}

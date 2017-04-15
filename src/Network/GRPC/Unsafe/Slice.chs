@@ -2,7 +2,7 @@
 
 module Network.GRPC.Unsafe.Slice where
 
-#include <grpc/impl/codegen/slice.h>
+#include <grpc/slice.h>
 #include <grpc_haskell.h>
 
 import qualified Data.ByteString as B
@@ -12,12 +12,12 @@ import Foreign.Ptr
 
 -- | A 'Slice' is gRPC's string type. We can easily convert these to and from
 -- ByteStrings. This type is a pointer to a C type.
-{#pointer *gpr_slice as Slice newtype #}
+{#pointer *grpc_slice as Slice newtype #}
 
 deriving instance Show Slice
 
 -- TODO: we could also represent this type as 'Ptr Slice', by doing this:
--- newtype Slice = Slice {#type gpr_slice#}
+-- newtype Slice = Slice {#type grpc_slice#}
 -- This would have no practical effect, but it would communicate intent more
 -- clearly by emphasizing that the type is indeed a pointer and that the data
 -- it is pointing to might change/be destroyed after running IO actions. To make
@@ -27,13 +27,18 @@ deriving instance Show Slice
 -- maybe the established idiom is to do what c2hs does.
 
 -- | Get the length of a slice.
-{#fun unsafe gpr_slice_length_ as ^ {`Slice'} -> `CULong'#}
+{#fun unsafe grpc_slice_length_ as ^ {`Slice'} -> `CULong'#}
+
+-- | Slices allocated using this function must be freed by
+-- 'freeSlice'
+{#fun unsafe grpc_slice_malloc_ as ^ {`Int'} -> `Slice'#}
 
 -- | Returns a pointer to the start of the character array contained by the
 -- slice.
-{#fun unsafe gpr_slice_start_ as ^ {`Slice'} -> `Ptr CChar' castPtr #}
+{#fun unsafe grpc_slice_start_ as ^ {`Slice'} -> `Ptr CChar' castPtr #}
 
-{#fun unsafe gpr_slice_from_copied_buffer_ as ^ {`CString', `Int'} -> `Slice'#}
+-- | Slices must be freed using 'freeSlice'.
+{#fun unsafe grpc_slice_from_copied_buffer_ as ^ {`CString', `Int'} -> `Slice'#}
 
 -- | Properly cleans up all memory used by a 'Slice'. Danger: the Slice should
 -- not be used after this function is called on it.
@@ -46,10 +51,10 @@ deriving instance Show Slice
 -- getting and freeing the slice behind the scenes.
 sliceToByteString :: Slice -> IO B.ByteString
 sliceToByteString slice = do
-  len <- fmap fromIntegral $ gprSliceLength slice
-  str <- gprSliceStart slice
+  len <- fmap fromIntegral $ grpcSliceLength slice
+  str <- grpcSliceStart slice
   B.packCStringLen (str, len)
 
 -- | Copies a 'ByteString' to a 'Slice'.
 byteStringToSlice :: B.ByteString -> IO Slice
-byteStringToSlice bs = B.useAsCStringLen bs $ uncurry gprSliceFromCopiedBuffer
+byteStringToSlice bs = B.useAsCStringLen bs $ uncurry grpcSliceFromCopiedBuffer
