@@ -7,7 +7,6 @@
 {-# LANGUAGE RecordWildCards            #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE TupleSections              #-}
-{-# LANGUAGE ViewPatterns               #-}
 {-# OPTIONS_GHC -fno-warn-orphans       #-}
 
 module LowLevelTests where
@@ -24,9 +23,9 @@ import qualified Data.Map.Strict                           as M
 import qualified Data.Set                                  as S
 import           GHC.Exts                                  (fromList, toList)
 import           Network.GRPC.LowLevel
-import           Network.GRPC.LowLevel.GRPC (threadDelaySecs)
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Client.Unregistered as U
+import           Network.GRPC.LowLevel.GRPC                (threadDelaySecs)
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
 import qualified Pipes                                     as P
 import           Test.Tasty
@@ -339,7 +338,7 @@ testAuthMetadataPropagate = testCase "auth metadata inherited by children" $ do
                                             (Just "tests/ssl/localhost.crt")
                                             Nothing
                                             (Just server1ClientPlugin)),
-                  serverPort = 50052
+                  clientServerPort = 50052
                 }
 
     server = do
