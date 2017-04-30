@@ -28,10 +28,17 @@ module Network.GRPC.HighLevel.Generated (
 
   -- * Server Auth
 , ServerSSLConfig(..)
+
+  -- * Client
+, withGRPCClient
+, ClientConfig(..)
+, ClientRequest(..)
+, ClientResult(..)
 )
 where
 
 import           Network.GRPC.HighLevel.Server
+import           Network.GRPC.HighLevel.Client
 import           Network.GRPC.LowLevel
 import           Network.GRPC.LowLevel.Call
 import           System.IO (hPutStrLn, stderr)
@@ -84,3 +91,6 @@ defaultServiceOptions = ServiceOptions
   , Network.GRPC.HighLevel.Generated.sslConfig       = Nothing
   , Network.GRPC.HighLevel.Generated.logger          = hPutStrLn stderr
   }
+
+withGRPCClient :: ClientConfig -> (Client -> IO a) -> IO a
+withGRPCClient c f = withGRPC $ \grpc -> withClient grpc c $ \client -> f client

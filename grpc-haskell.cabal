@@ -170,6 +170,51 @@ executable echo-server
   hs-source-dirs:   examples/echo/echo-hs
   main-is:          EchoServer.hs
 
+
+executable arithmetic-server
+  if flag(with-examples)
+    build-depends:
+      base >=4.8 && <5.0
+      , async
+      , bytestring == 0.10.*
+      , containers ==0.5.*
+      , grpc-haskell
+      , optparse-generic
+      , proto3-suite
+      , proto3-wire
+      , text
+      , vector
+    other-modules:
+      Arithmetic
+  else
+    buildable: False
+  default-language: Haskell2010
+  ghc-options:      -Wall -g -threaded -rtsopts -with-rtsopts=-N -O2
+  hs-source-dirs:   examples/tutorial/
+  main-is:          ArithmeticServer.hs
+
+executable arithmetic-client
+  if flag(with-examples)
+    build-depends:
+      base >=4.8 && <5.0
+      , async
+      , bytestring == 0.10.*
+      , containers ==0.5.*
+      , grpc-haskell
+      , optparse-generic
+      , proto3-suite
+      , proto3-wire
+      , text
+      , vector
+    other-modules:
+      Arithmetic
+  else
+    buildable: False
+  default-language: Haskell2010
+  ghc-options:      -Wall -g -threaded -rtsopts -with-rtsopts=-N -O2
+  hs-source-dirs:   examples/tutorial/
+  main-is:          ArithmeticClient.hs
+
 executable echo-client
   if flag(with-examples)
     build-depends:
