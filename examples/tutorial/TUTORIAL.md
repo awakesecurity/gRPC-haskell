@@ -41,6 +41,13 @@ The important things to notice in this generated file are:
 
 First, we need to turn on some language extensions:
 
+```
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE OverloadedStrings #-}
+```
+
 All we need to do to run a server is call the `arithmeticServer` function:
 
 ```
