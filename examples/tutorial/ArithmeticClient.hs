@@ -24,10 +24,11 @@ main = withGRPCClient clientConfig $ \client -> do
   -- Request for the RunningSum RPC
   ClientWriterResponse reply _streamMeta1 _streamMeta2 streamStatus streamDtls
     <- arithmeticRunningSum $ ClientWriterRequest 1 [] $ \send -> do
-        _ <- send (OneInt 1)
-        _ <- send (OneInt 2)
-        _ <- send (OneInt 3)
-        return ()
+        eithers <- sequence [send (OneInt 1), send (OneInt 2), send (OneInt 3)]
+                     :: IO [Either GRPCIOError ()]
+        case sequence eithers of
+          Left err -> error ("Error while streaming: " ++ show err)
+          Right _ -> return ()
 
   case reply of
     Just (OneInt y) -> print ("1 + 2 + 3 = " ++ show y)

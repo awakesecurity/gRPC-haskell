@@ -7,7 +7,7 @@ This will go through a basic example of using the library, with the `arithmetic`
 To build the examples, you can run
 
 ```
-stack build --flag grpc-haskell:with-examples
+$ stack build --flag grpc-haskell:with-examples
 ```
 
 The gRPC service we will be implementing provides two amazing functions:
@@ -32,7 +32,7 @@ This library exposes quite a few modules, but you won't need to worry about most
 To start out, we need to generate code for our protocol buffers and RPCs. The `compile-proto-file` command is provided as part of `grpc-haskell`. You can either use `stack install` to install the command globally, or use `stack exec` within the `grpc-haskell` directory.
 
 ```
-stack exec -- compile-proto-file --proto examples/echo/echo.proto > examples/echo/echo-hs/Echo.hs
+$ stack exec -- compile-proto-file --proto examples/echo/echo.proto > examples/echo/echo-hs/Echo.hs
 ```
 
 The `.proto` file compiler always names the generated module the same as the `.proto` file, capitalizing the first letter if it is not already. Since our proto file is `arithmetic.proto`, the generated code should be placed in `Arithmetic.hs`.
@@ -188,10 +188,29 @@ Doing a streaming request is slightly trickier. As input to the streaming RPC ac
 -- Request for the RunningSum RPC
 ClientWriterResponse reply _streamMeta1 _streamMeta2 streamStatus streamDtls
   <- arithmeticRunningSum $ ClientWriterRequest 1 [] $ \send -> do
-      _ <- send (OneInt 1)
-      _ <- send (OneInt 2)
-      _ <- send (OneInt 3)
-      return ()
+      eithers <- sequence [send (OneInt 1), send (OneInt 2), send (OneInt 3)]
+                   :: IO [Either GRPCIOError ()]
+      case sequence eithers of
+        Left err -> error ("Error while streaming: " ++ show err)
+        Right _ -> return ()
 ```
 
-Each `send` potentially returns an error message, but for the purposes of this tutorial, we skip the error checking and throw away the result.
+Each `send` potentially returns an error message, with the type `Either GRPCIOError ()`. We use `sequence` to run all the `send` actions, and then use `sequence` again to collapse all the `Either`s. If an error is encountered while streaming, there's nothing we can do to salvage the RPC, so a more serious program would need to do some application-specific error-handling. Since this is just a tutorial, we print an error message and exit. Otherwise, we `return ()` to finish sending.
+
+We can now inspect the `reply` to get our answer to the RPC.
+
+```haskell
+case reply of
+  Just (OneInt y) -> print ("1 + 2 + 3 = " ++ show y)
+  Nothing -> putStrLn ("Client stream failed with status "
+                       ++ show streamStatus
+                       ++ " and details "
+                       ++ show streamDtls)
+```
+
+To run the examples and see the requests, start the `arithmetic-server` process in the background, and then run the `arithmetic-client` process:
+
+```
+$ stack exec -- arithmetic-server &
+$ stack exec -- arithmetic-client
+```
