@@ -4,6 +4,12 @@
 
 This will go through a basic example of using the library, with the `arithmetic` example in the `examples/arithmetic` directory. After cloning this repository, it would be a good idea to run `stack haddock` from within the repository directory to generate the documentation so you can read more about the functions and types we're using as we go. Also remember that [typed holes](https://wiki.haskell.org/GHC/Typed_holes) can be very handy.
 
+To build the examples, you can run
+
+```
+stack build --flag grpc-haskell:with-examples
+```
+
 The gRPC service we will be implementing provides two amazing functions:
 
 1. `Add`, which adds two integers.
