@@ -41,7 +41,7 @@ The important things to notice in this generated file are:
 
 First, we need to turn on some language extensions:
 
-```
+```haskell
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedLists #-}
@@ -50,7 +50,7 @@ First, we need to turn on some language extensions:
 
 All we need to do to run a server is call the `arithmeticServer` function:
 
-```
+```haskell
 main :: IO ()
 main = arithmeticServer handlers options
 ```
@@ -59,14 +59,14 @@ So we just need to define `handlers` and `options`.
 
 `options` is easy-- it's just some basic options for the server. We can just use the default options for now, which will start the server listening on `localhost:50051`:
 
-```
+```haskell
 options :: ServiceOptions
 options = defaultServiceOptions
 ```
 
 `handlers` is a bit more involved. Its type is `Arithmetic ServerRequest ServerResponse`. Values of this type contain a record field for each RPC defined in your `.proto` file.
 
-```
+```haskell
 handlers :: Arithmetic ServerRequest ServerResponse
 handlers = Arithmetic { arithmeticAdd = addHandler
                       , arithmeticRunningSum = runningSumHandler
@@ -85,13 +85,13 @@ The `ServerRequest` passed to your handler contains all the tools you will need 
 
 So, let's pattern match on the `ServerRequest` for the `addHandler` function:
 
-```
+```haskell
 addHandler (ServerNormalRequest metadata (TwoInts x y)) = -- to be continued!
 ```
 
 The body of the `addHandler` function just needs to add `x` and `y` and then bundle the answer up in a `ServerResponse`:
 
-```
+```haskell
 addHandler (ServerNormalRequest _metadata (TwoInts x y)) = do
   let answer = OneInt (x + y)
   return (ServerNormalResponse answer
@@ -106,7 +106,7 @@ Since this is a non-streaming "Normal" RPC, we use the the `ServerNormalResponse
 
 Now let's make our `runningSumHandler`. Since this is an RPC where the server reads from a stream of numbers, we pattern match on the `ServerReaderRequest` constructor:
 
-```
+```haskell
 runningSumHandler req@(ServerReaderRequest metadata recv) = -- to be continued!
 ```
 
@@ -120,7 +120,7 @@ There are three possibilities when we try to receive another message from the cl
 
 We write a simple loop that keeps track of the running sum and finally sends off a `ServerReaderResponse` when the client finishes streaming or an error occurs:
 
-```
+```haskell
 runningSumHandler req@(ServerReaderRequest metadata recv) =
   loop 0
     where loop !i =
@@ -147,7 +147,7 @@ The client-side code generated for us is `arithmeticClient`, which takes a `Clie
 
 
 
-```
+```haskell
 clientConfig :: ClientConfig
 clientConfig = ClientConfig { clientServerHost = "localhost"
                             , clientServerPort = 50051
@@ -167,7 +167,7 @@ Now that we are on the client side, the `Arithmetic` record contains functions t
 
 Here we construct a `ClientNormalRequest`, which takes as input a message, a timeout in seconds, and metadata. The result is a `ClientNormalResponse`, containing our the server's response, the initial and trailing metadata for the call, and the status and status details string.
 
-```
+```haskell
 -- Request for the Add RPC
   ClientNormalResponse (OneInt x) _meta1 _meta2 _status _details
     <- arithmeticAdd (ClientNormalRequest (TwoInts 2 2) 1 [])
@@ -178,7 +178,7 @@ Here we construct a `ClientNormalRequest`, which takes as input a message, a tim
 
 Doing a streaming request is slightly trickier. As input to the streaming RPC action, we pass in another IO action that tells `grpc-haskell` what to send. It takes a `send` action as input. This is a bit convoluted, but it guarantees that you can't send streaming messages outside of the context of a streaming call!
 
-```
+```haskell
 -- Request for the RunningSum RPC
 ClientWriterResponse reply _streamMeta1 _streamMeta2 streamStatus streamDtls
   <- arithmeticRunningSum $ ClientWriterRequest 1 [] $ \send -> do
