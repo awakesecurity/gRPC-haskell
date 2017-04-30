@@ -17,6 +17,8 @@ $ nix-env -iA grpc-haskell -f release.nix
 Usage
 -----
 
+There is a tutorial [here](examples/tutorial/TUTORIAL.md)
+
 ```bash
 $ compile-proto-file --help
 Dumps a compiled .proto file to stdout
