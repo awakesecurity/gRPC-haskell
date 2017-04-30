@@ -188,7 +188,7 @@ Doing a streaming request is slightly trickier. As input to the streaming RPC ac
 -- Request for the RunningSum RPC
 ClientWriterResponse reply _streamMeta1 _streamMeta2 streamStatus streamDtls
   <- arithmeticRunningSum $ ClientWriterRequest 1 [] $ \send -> do
-      eithers <- sequence [send (OneInt 1), send (OneInt 2), send (OneInt 3)]
+      eithers <- mapM send [OneInt 1, OneInt 2, OneInt 3]
                    :: IO [Either GRPCIOError ()]
       case sequence eithers of
         Left err -> error ("Error while streaming: " ++ show err)
