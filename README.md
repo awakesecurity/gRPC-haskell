@@ -7,6 +7,8 @@ have extended and released under the same [`LICENSE`](./LICENSE)
 Installation
 ------------
 
+**The current version of this library requires gRPC version 1.2.0. Newer versions may work but have not been tested.**
+
 Run the following command from the root of this repository to install the
 `compile-proto-file` executable:
 
