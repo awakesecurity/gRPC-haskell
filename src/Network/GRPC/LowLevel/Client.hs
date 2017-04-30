@@ -54,8 +54,8 @@ data ClientSSLConfig = ClientSSLConfig
 
 -- | Configuration necessary to set up a client.
 
-data ClientConfig = ClientConfig {serverHost :: Host,
-                                  serverPort :: Port,
+data ClientConfig = ClientConfig {clientServerHost :: Host,
+                                  clientServerPort :: Port,
                                   clientArgs :: [C.Arg],
                                   -- ^ Optional arguments for setting up the
                                   -- channel on the client. Supplying an empty
@@ -69,7 +69,7 @@ data ClientConfig = ClientConfig {serverHost :: Host,
                                  }
 
 clientEndpoint :: ClientConfig -> Endpoint
-clientEndpoint ClientConfig{..} = endpoint serverHost serverPort
+clientEndpoint ClientConfig{..} = endpoint clientServerHost clientServerPort
 
 addMetadataCreds :: C.ChannelCredentials
                     -> Maybe C.ClientMetadataCreate
