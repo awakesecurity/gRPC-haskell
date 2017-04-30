@@ -171,7 +171,7 @@ Now that we are on the client side, the `Arithmetic` record contains functions t
 
 #### Requesting unary RPC
 
-Here we construct a `ClientNormalRequest`, which takes as input a message, a timeout in seconds, and metadata. The result is a `ClientNormalResponse`, containing our the server's response, the initial and trailing metadata for the call, and the status and status details string.
+Here we construct a `ClientNormalRequest`, which takes as input a message, a timeout in seconds, and metadata. The result is a `ClientNormalResponse`, containing the server's response, the initial and trailing metadata for the call, and the status and status details string.
 
 ```haskell
 -- Request for the Add RPC
