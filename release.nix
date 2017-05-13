@@ -192,6 +192,11 @@ let
                   pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
                     export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
                   '';
+
+                shellHook = ''
+                  export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+                '';
+
               });
 
           grpc-haskell =
@@ -278,10 +283,11 @@ let
         pkgs = import nixpkgs { inherit config; };
 
 in
-  { grpc-haskell-linux  =  linuxPkgs.haskellPackages.grpc-haskell;
-    grpc-haskell-darwin = darwinPkgs.haskellPackages.grpc-haskell;
-    grpc-haskell        =       pkgs.haskellPackages.grpc-haskell;
-    grpc-linux          =  linuxPkgs.grpc;
-    grpc-darwin         = darwinPkgs.grpc;
-    grpc                =       pkgs.grpc;
+  { grpc-haskell-linux    =  linuxPkgs.haskellPackages.grpc-haskell;
+    grpc-haskell-darwin   = darwinPkgs.haskellPackages.grpc-haskell;
+    grpc-haskell          =       pkgs.haskellPackages.grpc-haskell;
+    grpc-haskell-no-tests = pkgs.haskellPackages.grpc-haskell-no-tests;
+    grpc-linux            =  linuxPkgs.grpc;
+    grpc-darwin           = darwinPkgs.grpc;
+    grpc                  =       pkgs.grpc;
   }
