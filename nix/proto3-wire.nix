@@ -1,20 +1,21 @@
 { mkDerivation, base, bytestring, cereal, containers, deepseq
-, fetchgit, QuickCheck, safe, stdenv, tasty, tasty-hunit
-, tasty-quickcheck, text
+, doctest, fetchgit, hashable, QuickCheck, safe, stdenv, tasty
+, tasty-hunit, tasty-quickcheck, text, unordered-containers
 }:
 mkDerivation {
   pname = "proto3-wire";
   version = "1.0.0";
   src = fetchgit {
-    url = "https://github.com/awakenetworks/proto3-wire.git";
-    sha256 = "10z1sirmiz29r2nx5dza1y1p3kp83wsq80pz4msxqmaykpyh5iaa";
-    rev = "62b50ea460847dde5bc8e63d2f93360d9bfcae9d";
+    url = "https://github.com/awakenetworks/proto3-wire";
+    sha256 = "0s3b87rdbms0s261hbdnhxcw2ih17bv63l3v49dnb0z5xab4pszv";
+    rev = "4cf2f349cbf27ef36af28ae51e2712d6cf5f7723";
   };
   libraryHaskellDepends = [
-    base bytestring cereal containers deepseq QuickCheck safe text
+    base bytestring cereal containers deepseq hashable QuickCheck safe
+    text unordered-containers
   ];
   testHaskellDepends = [
-    base bytestring cereal QuickCheck tasty tasty-hunit
+    base bytestring cereal doctest QuickCheck tasty tasty-hunit
     tasty-quickcheck text
   ];
   description = "A low-level implementation of the Protocol Buffers (version 3) wire format";
