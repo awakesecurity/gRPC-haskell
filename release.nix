@@ -193,7 +193,7 @@ let
                     export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
                   '';
 
-                shellHook = ''
+                shellHook = (oldDerivation.shellHook or "") + ''
                   export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
                 '';
 
@@ -262,7 +262,7 @@ let
                       --prefix DYLD_LIBRARY_PATH : ${grpc}/lib
                   '';
 
-                  shellHook = ''
+                  shellHook = (oldDerivation.shellHook or "") + ''
                     export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
                     # This lets us use our custom ghc and python environments in the shell.
                     export PATH=${stack}/bin:${ghc}/bin:${python}/bin''${PATH:+:}$PATH
