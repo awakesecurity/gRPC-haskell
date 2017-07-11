@@ -154,14 +154,12 @@ addPort server conf@ServerConfig{..} =
            C.serverAddSecureHttp2Port server e creds
   where e = unEndpoint $ serverEndpoint conf
 
-startServer :: GRPC -> ServerConfig -> IO Server
+startServer :: GRPC -> ServerConfig -> IO (Server, Port)
 startServer grpc conf@ServerConfig{..} =
   C.withChannelArgs serverArgs $ \args -> do
     let e = serverEndpoint conf
     server <- C.grpcServerCreate args C.reserved
     actualPort <- addPort server conf
-    when (actualPort /= unPort port) $
-      error $ "Unable to bind port: " ++ show port
     cq <- createCompletionQueue grpc
     grpcDebug $ "startServer: server CQ: " ++ show cq
     serverRegisterCompletionQueue server cq
@@ -182,7 +180,9 @@ startServer grpc conf@ServerConfig{..} =
     forks <- newTVarIO S.empty
     shutdown <- newTVarIO False
     ccq <- createCompletionQueue grpc
-    return $ Server grpc server cq ccq ns ss cs bs conf forks shutdown
+    return ( Server grpc server cq ccq ns ss cs bs conf forks shutdown
+           , Port actualPort
+           )
 
 
 
@@ -229,8 +229,10 @@ stopServer Server{ unsafeServer = s, .. } = do
           grpcDebug "Server shutdown: All forks cleaned up."
 
 -- Uses 'bracket' to safely start and stop a server, even if exceptions occur.
-withServer :: GRPC -> ServerConfig -> (Server -> IO a) -> IO a
-withServer grpc cfg = bracket (startServer grpc cfg) stopServer
+withServer :: GRPC -> ServerConfig -> (Server -> Port -> IO a) -> IO a
+withServer grpc cfg f =
+  bracket (startServer grpc cfg) (stopServer . fst) $ \(server, port) ->
+    f server port
 
 -- | Less precisely-typed registration function used in
 -- 'serverRegisterMethodNormal', 'serverRegisterMethodServerStreaming',

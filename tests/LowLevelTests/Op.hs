@@ -47,7 +47,7 @@ withClientServerUnaryCall :: GRPC
 withClientServerUnaryCall grpc f = do
   withClient grpc clientConf $ \c -> do
     crm <- clientRegisterMethodNormal c "/foo"
-    withServer grpc serverConf $ \s ->
+    withServer grpc serverConf $ \s _ ->
       withClientCall c crm 10 $ \cc -> do
         let srm = head (normalMethods s)
         -- NOTE: We need to send client ops here or else `withServerCall` hangs,
