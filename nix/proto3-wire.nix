@@ -7,8 +7,8 @@ mkDerivation {
   version = "1.0.0";
   src = fetchgit {
     url = "https://github.com/awakenetworks/proto3-wire";
-    sha256 = "0s3b87rdbms0s261hbdnhxcw2ih17bv63l3v49dnb0z5xab4pszv";
-    rev = "4cf2f349cbf27ef36af28ae51e2712d6cf5f7723";
+    sha256 = "1979pccp8c8wvl69r203mji51c8s59mccng6zrw3kf2s1wz5xxqg";
+    rev = "8178cc717eb1c438272a7f451862590a8b2d41ff";
   };
   libraryHaskellDepends = [
     base bytestring cereal containers deepseq hashable QuickCheck safe
