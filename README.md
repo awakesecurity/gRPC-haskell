@@ -29,7 +29,7 @@ used to give you a development environment where you can use the `cabal` and
 
 ```bash
 $ nix-shell release-nix -A grpc-haskell.env
-[nix-shell]$ cabal configure --with-gcc=clang --enable-tests && cabal build && cabal test
+[nix-shell]$ cabal configure --enable-tests && cabal build && cabal test
 ```
 
 ```bash
