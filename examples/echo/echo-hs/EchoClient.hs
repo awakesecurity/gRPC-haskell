@@ -10,6 +10,8 @@
 import           Control.Monad
 import           Data.ByteString                  (ByteString)
 import           Data.Maybe                       (fromMaybe)
+import qualified Data.Text.Lazy                   as TL
+import           Echo
 import           GHC.Generics                     (Generic)
 import           Network.GRPC.HighLevel.Client
 import           Network.GRPC.HighLevel.Generated
@@ -17,12 +19,10 @@ import           Network.GRPC.LowLevel
 import           Options.Generic
 import           Prelude                          hiding (FilePath)
 
-import           Echo
-
 data Args = Args
   { bind       :: Maybe ByteString <?> "grpc endpoint hostname (default \"localhost\")"
   , port       :: Maybe Int        <?> "grpc endpoint port (default 50051)"
-  , payload    :: Maybe Text       <?> "string to echo (default \"hullo!\")"
+  , payload    :: Maybe TL.Text    <?> "string to echo (default \"hullo!\")"
   } deriving (Generic, Show)
 instance ParseRecord Args
 
