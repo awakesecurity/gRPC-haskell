@@ -29,7 +29,7 @@ This library exposes quite a few modules, but you won't need to worry about most
 
 ### Getting started
 
-To start out, we need to generate code for our protocol buffers and RPCs. The `compile-proto-file` command is provided as part of `proto3-suite`. You can either use `stack install` the `proto3-suite` repository to install the command globally, or use `stack exec` within the `grpc-haskell` directory.
+To start out, we need to generate code for our protocol buffers and RPCs. The `compile-proto-file` command is provided as part of `proto3-suite`. You can either use `stack install` in the `proto3-suite` repository to install the command globally, or use `stack exec` from within the `grpc-haskell` directory.
 
 ```
 $ stack exec -- compile-proto-file --proto examples/echo/echo.proto > examples/echo/echo-hs/Echo.hs
