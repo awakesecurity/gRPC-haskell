@@ -12,7 +12,7 @@ import qualified Proto3.Suite.Types as HsProtobuf
 import qualified Proto3.Suite.Class as HsProtobuf
 import qualified Proto3.Wire as HsProtobuf
 import Control.Applicative ((<*>), (<|>))
-import qualified Data.Text as Hs (Text)
+import qualified Data.Text.Lazy as Hs (Text)
 import qualified Data.ByteString as Hs
 import qualified Data.String as Hs (fromString)
 import qualified Data.Vector as Hs (Vector)
