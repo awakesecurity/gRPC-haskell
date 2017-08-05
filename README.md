@@ -33,7 +33,7 @@ $ nix-shell release-nix -A grpc-haskell.env
 ```
 
 ```bash
-$ nix-shell release-nix -A grpc-haskell.env
+$ nix-shell release.nix -A grpc-haskell.env
 [nix-shell]$ stack build --fast && stack test --fast
 ```
 
