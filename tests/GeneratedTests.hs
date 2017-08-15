@@ -1,3 +1,4 @@
+
 {-# LANGUAGE OverloadedStrings #-}
 
 module GeneratedTests where
@@ -77,7 +78,7 @@ pyTmpDir = "tests/py-tmp"
 
 compileSimpleDotProto :: IO ()
 compileSimpleDotProto =
-  do dpRes <- readDotProtoWithContext "tests/simple.proto"
+  do dpRes <- readDotProtoWithContext [] "tests/simple.proto"
      case dpRes of
        Left err -> fail (show err)
        Right (dp, ctxt) ->
