@@ -10,8 +10,8 @@ mkDerivation {
   version = "0.1.0.0";
   src = fetchgit {
     url = "https://github.com/awakesecurity/proto3-suite";
-    sha256 = "0pmpnjyw381ksy63nqa9bafzz8gs08k7h3jad7a7hyh1ygxjv19i";
-    rev = "88ea97236ac5a03c918badb0961db63f2b0e038c";
+    sha256 = "11zrkpnr5i3axw8m0dxi0camffdmcz0a0dnd6ivsw8s187a1k07c";
+    rev = "683f100ca3200594f3dc4a723e52cc5b5e237053";
   };
   isLibrary = true;
   isExecutable = true;
