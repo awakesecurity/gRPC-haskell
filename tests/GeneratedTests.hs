@@ -21,7 +21,7 @@ testServerGeneration = testCase "server generation" $ do
   mktree hsTmpDir
   mktree pyTmpDir
 
-  compileSimpleDotProto
+  compileDotProtoFileOrDie hsTmpDir ["tests"] "simple.proto"
 
   do exitCode <- proc "tests/simple-server.sh" [hsTmpDir] empty
      exitCode @?= ExitSuccess
@@ -49,7 +49,7 @@ testClientGeneration = testCase "client generation" $ do
   mktree hsTmpDir
   mktree pyTmpDir
 
-  compileSimpleDotProto
+  compileDotProtoFileOrDie hsTmpDir ["tests"] "simple.proto"
 
   do exitCode <- proc "tests/simple-client.sh" [hsTmpDir] empty
      exitCode @?= ExitSuccess
@@ -75,13 +75,3 @@ testClientGeneration = testCase "client generation" $ do
 hsTmpDir, pyTmpDir :: IsString a => a
 hsTmpDir = "tests/tmp"
 pyTmpDir = "tests/py-tmp"
-
-compileSimpleDotProto :: IO ()
-compileSimpleDotProto =
-  do dpRes <- readDotProtoWithContext [] "tests/simple.proto"
-     case dpRes of
-       Left err -> fail (show err)
-       Right (dp, ctxt) ->
-         case renderHsModuleForDotProto dp ctxt of
-           Left err -> fail ("compileSimpleDotProto: Error compiling test.proto: " <> show err)
-           Right hsSrc -> writeFile (hsTmpDir ++ "/Simple.hs") hsSrc
