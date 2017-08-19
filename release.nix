@@ -175,6 +175,12 @@ let
 
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: rec {
+          optparse-applicative =
+            haskellPackagesNew.callPackage ./nix/optparse-applicative.nix { };
+
+          optparse-generic =
+            haskellPackagesNew.callPackage ./nix/optparse-generic.nix { };
+
           proto3-wire =
             haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
 
@@ -218,10 +224,6 @@ let
                     grpcio-tools
                   ]);
 
-                  # So users can use `stack` inside of `nix-shell` if they do not
-                  # already have it installed.
-                  stack = haskellPackages.stack;
-
                 in rec {
                   buildDepends = [
                     pkgs.makeWrapper
@@ -260,9 +262,13 @@ let
                   shellHook = (oldDerivation.shellHook or "") + ''
                     export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
                     # This lets us use our custom ghc and python environments in the shell.
-                    export PATH=${stack}/bin:${ghc}/bin:${python}/bin''${PATH:+:}$PATH
+                    export PATH=${ghc}/bin:${python}/bin''${PATH:+:}$PATH
                   '';
                 });
+
+          turtle =
+            haskellPackagesNew.callPackage ./nix/turtle.nix { };
+
         };
       };
     };
