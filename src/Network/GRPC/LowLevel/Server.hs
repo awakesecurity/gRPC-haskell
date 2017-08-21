@@ -52,6 +52,7 @@ import qualified Network.GRPC.Unsafe.Security          as C
 data Server = Server
   { serverGRPC           :: GRPC
   , unsafeServer         :: C.Server
+  , listeningPort        :: Port
   , serverCQ             :: CompletionQueue
   -- ^ CQ used for receiving new calls.
   , serverCallCQ               :: CompletionQueue
@@ -160,7 +161,7 @@ startServer grpc conf@ServerConfig{..} =
     let e = serverEndpoint conf
     server <- C.grpcServerCreate args C.reserved
     actualPort <- addPort server conf
-    when (actualPort /= unPort port) $
+    when (unPort port > 0 && actualPort /= unPort port) $
       error $ "Unable to bind port: " ++ show port
     cq <- createCompletionQueue grpc
     grpcDebug $ "startServer: server CQ: " ++ show cq
@@ -182,7 +183,8 @@ startServer grpc conf@ServerConfig{..} =
     forks <- newTVarIO S.empty
     shutdown <- newTVarIO False
     ccq <- createCompletionQueue grpc
-    return $ Server grpc server cq ccq ns ss cs bs conf forks shutdown
+    return $ Server grpc server (Port actualPort) cq ccq ns ss cs bs conf forks
+      shutdown
 
 
 
