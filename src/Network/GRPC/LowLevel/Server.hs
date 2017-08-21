@@ -52,6 +52,7 @@ import qualified Network.GRPC.Unsafe.Security          as C
 data Server = Server
   { serverGRPC           :: GRPC
   , unsafeServer         :: C.Server
+  , listeningPort        :: Port
   , serverCQ             :: CompletionQueue
   -- ^ CQ used for receiving new calls.
   , serverCallCQ               :: CompletionQueue
@@ -154,7 +155,7 @@ addPort server conf@ServerConfig{..} =
            C.serverAddSecureHttp2Port server e creds
   where e = unEndpoint $ serverEndpoint conf
 
-startServer :: GRPC -> ServerConfig -> IO (Server, Port)
+startServer :: GRPC -> ServerConfig -> IO Server
 startServer grpc conf@ServerConfig{..} =
   C.withChannelArgs serverArgs $ \args -> do
     let e = serverEndpoint conf
@@ -182,9 +183,8 @@ startServer grpc conf@ServerConfig{..} =
     forks <- newTVarIO S.empty
     shutdown <- newTVarIO False
     ccq <- createCompletionQueue grpc
-    return ( Server grpc server cq ccq ns ss cs bs conf forks shutdown
-           , Port actualPort
-           )
+    return $ Server grpc server (Port actualPort) cq ccq ns ss cs bs conf forks
+      shutdown
 
 
 
@@ -231,10 +231,9 @@ stopServer Server{ unsafeServer = s, .. } = do
           grpcDebug "Server shutdown: All forks cleaned up."
 
 -- Uses 'bracket' to safely start and stop a server, even if exceptions occur.
-withServer :: GRPC -> ServerConfig -> (Server -> Port -> IO a) -> IO a
-withServer grpc cfg f =
-  bracket (startServer grpc cfg) (stopServer . fst) $ \(server, port) ->
-    f server port
+withServer :: GRPC -> ServerConfig -> (Server -> IO a) -> IO a
+withServer grpc cfg =
+  bracket (startServer grpc cfg) stopServer
 
 -- | Less precisely-typed registration function used in
 -- 'serverRegisterMethodNormal', 'serverRegisterMethodServerStreaming',

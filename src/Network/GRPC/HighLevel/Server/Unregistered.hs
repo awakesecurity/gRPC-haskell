@@ -70,7 +70,7 @@ serverLoop ServerOptions{..} = do
   -- We run the loop in a new thread so that we can kill the serverLoop thread.
   -- Without this fork, we block on a foreign call, which can't be interrupted.
   tid <- async $ withGRPC $ \grpc ->
-    withServer grpc config $ \server _port -> do
+    withServer grpc config $ \server -> do
       dispatchLoop server
                    optLogger
                    optInitialMetadata
