@@ -343,7 +343,7 @@ testAuthMetadataPropagate = testCase "auth metadata inherited by children" $ do
 
     server = do
       threadDelaySecs 2
-      withGRPC $ \g -> withServer g server1ServerConf $ \s _ ->
+      withGRPC $ \g -> withServer g server1ServerConf $ \s ->
         withClient g server1ClientConf $ \c -> do
           let rm = head (normalMethods s)
           serverHandleNormalCall s rm mempty $ \call -> do
@@ -373,7 +373,7 @@ testAuthMetadataPropagate = testCase "auth metadata inherited by children" $ do
                   port = 50052
                 }
 
-    server2 = withGRPC $ \g -> withServer g server2ServerConf $ \s _ -> do
+    server2 = withGRPC $ \g -> withServer g server2ServerConf $ \s -> do
         let rm = head (normalMethods s)
         serverHandleNormalCall s rm mempty $ \_call -> do
           return ("server2 reply", mempty, StatusOk, "")
@@ -873,6 +873,4 @@ mgdClient :: ClientConfig -> GRPC -> Managed Client
 mgdClient conf g = managed $ withClient g conf
 
 mgdServer :: ServerConfig -> GRPC -> Managed Server
-mgdServer conf g = managed withServer'
-  where
-    withServer' cont = withServer g conf $ \s _ -> cont s
+mgdServer conf g = managed $ withServer g conf
