@@ -50,7 +50,14 @@ serverRequestCall s scq ccq =
       runExceptT $ case ce of
         C.CallOk -> do
           ExceptT $ do
-            r <- pluck' scq tag Nothing
+            let
+              rec = do
+                -- yield every second, for interruptibility
+                r <- pluck' scq tag (Just 1)
+                case r of
+                  Left GRPCIOTimeout -> rec
+                  _ -> return r
+            r <- rec
             dbug $ "pluck' finished: " ++ show r
             return r
           lift $
