@@ -160,6 +160,8 @@ startServer grpc conf@ServerConfig{..} =
     let e = serverEndpoint conf
     server <- C.grpcServerCreate args C.reserved
     actualPort <- addPort server conf
+    when (unPort port > 0 && actualPort /= unPort port) $
+      error $ "Unable to bind port: " ++ show port
     cq <- createCompletionQueue grpc
     grpcDebug $ "startServer: server CQ: " ++ show cq
     serverRegisterCompletionQueue server cq
