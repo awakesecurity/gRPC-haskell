@@ -232,8 +232,7 @@ stopServer Server{ unsafeServer = s, .. } = do
 
 -- Uses 'bracket' to safely start and stop a server, even if exceptions occur.
 withServer :: GRPC -> ServerConfig -> (Server -> IO a) -> IO a
-withServer grpc cfg =
-  bracket (startServer grpc cfg) stopServer
+withServer grpc cfg = bracket (startServer grpc cfg) stopServer
 
 -- | Less precisely-typed registration function used in
 -- 'serverRegisterMethodNormal', 'serverRegisterMethodServerStreaming',
