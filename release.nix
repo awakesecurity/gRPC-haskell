@@ -175,6 +175,10 @@ let
 
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: rec {
+          aeson =
+            pkgs.haskell.lib.dontCheck
+              (haskellPackagesNew.callPackage ./nix/aeson.nix {});
+
           optparse-applicative =
             haskellPackagesNew.callPackage ./nix/optparse-applicative.nix { };
 

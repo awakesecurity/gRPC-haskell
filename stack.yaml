@@ -9,14 +9,16 @@ packages:
 - '.'
 - location:
     git: git@github.com:awakenetworks/proto3-suite.git
-    commit: d9d0282978a785385c47642a9a46037e4263a87d
+    commit: 8bd72bb843cc8aaa6c09886e2103046169791403
   extra-dep: true
 - location:
     git: git@github.com:awakenetworks/proto3-wire.git
     commit: 077b7e329fd7f43b0628c23b83c5e2e05334002e
   extra-dep: true
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
-extra-deps: [managed-1.0.5]
+extra-deps: [ aeson-1.1.1.0
+            , managed-1.0.5
+            ]
 
 # Override default flag values for local packages and extra-deps
 flags: {}
