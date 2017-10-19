@@ -438,6 +438,8 @@ char* translate_arg_key(enum supported_arg_key key){
       return GRPC_ARG_PRIMARY_USER_AGENT_STRING;
     case user_agent_suffix_key:
       return GRPC_ARG_SECONDARY_USER_AGENT_STRING;
+    case max_receive_message_length_key:
+      return GRPC_ARG_MAX_RECEIVE_MESSAGE_LENGTH;
     default:
       return "unknown_arg_key";
   }
