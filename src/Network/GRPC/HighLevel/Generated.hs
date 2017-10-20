@@ -32,6 +32,7 @@ module Network.GRPC.HighLevel.Generated (
   -- * Client
 , withGRPCClient
 , ClientConfig(..)
+, ClientError(..)
 , ClientRequest(..)
 , ClientResult(..)
 )
