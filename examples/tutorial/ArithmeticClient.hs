@@ -1,9 +1,10 @@
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RecordWildCards   #-}
 
-import Arithmetic
-import Network.GRPC.HighLevel.Generated
+import           Arithmetic
+import           Network.GRPC.HighLevel.Generated
 
 clientConfig :: ClientConfig
 clientConfig = ClientConfig { clientServerHost = "localhost"
@@ -14,7 +15,7 @@ clientConfig = ClientConfig { clientServerHost = "localhost"
 
 main :: IO ()
 main = withGRPCClient clientConfig $ \client -> do
-  (Arithmetic arithmeticAdd arithmeticRunningSum) <- arithmeticClient client
+  Arithmetic{..} <- arithmeticClient client
 
   -- Request for the Add RPC
   ClientNormalResponse (OneInt x) _meta1 _meta2 _status _details
@@ -28,7 +29,7 @@ main = withGRPCClient clientConfig $ \client -> do
                      :: IO [Either GRPCIOError ()]
         case sequence eithers of
           Left err -> error ("Error while streaming: " ++ show err)
-          Right _ -> return ()
+          Right _  -> return ()
 
   case reply of
     Just (OneInt y) -> print ("1 + 2 + 3 = " ++ show y)
