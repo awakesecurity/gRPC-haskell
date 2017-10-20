@@ -57,6 +57,7 @@ lowLevelTests = testGroup "Unit tests of low-level Haskell library"
   , testCustomUserAgent
   , testClientCompression
   , testClientServerCompression
+  , testClientMaxReceiveMessageLengthChannelArg
   , testClientStreaming
   , testClientStreamingUnregistered
   , testServerStreaming
@@ -765,6 +766,42 @@ testClientServerCompressionLvl =
         payload sc @?= "hello"
         return ("hello", dummyMeta, StatusOk, StatusDetails "")
       return ()
+
+testClientMaxReceiveMessageLengthChannelArg :: TestTree
+testClientMaxReceiveMessageLengthChannelArg = do
+  testGroup "max receive message length channel arg (client channel)"
+    [ csTest' "payload size < small bound succeeds" shouldSucceed server
+    , csTest' "payload size > small bound fails"    shouldFail    server
+    ]
+  where
+    -- The server always sends a 4-byte payload
+    pay    = "four"
+    server = TestServer (ServerConfig "localhost" 50051 ["/foo"] [] [] [] [] Nothing) $ \s -> do
+      let rm = head (normalMethods s)
+      void $ serverHandleNormalCall s rm mempty $ \sc -> do
+        payload sc @?= pay
+        pure (pay, mempty, StatusOk, StatusDetails "")
+
+    clientMax n k = TestClient conf $ \c -> do
+      rm <- clientRegisterMethodNormal c "/foo"
+      clientRequest c rm 1 pay mempty >>= k
+      where
+        conf = ClientConfig "localhost" 50051 [MaxReceiveMessageLength n] Nothing
+
+    -- Expect success when the max recv payload size is set to 4 bytes, and we
+    -- are sent 4.
+    shouldSucceed = clientMax 4 $ checkReqRslt $ \NormalRequestResult{..} -> do
+      rspCode @?= StatusOk
+      rspBody @?= pay
+      details @?= ""
+
+    -- Expect failure when the max recv payload size is set to 3 bytes, and we
+    -- are sent 4.
+    shouldFail = clientMax 3 $ \case
+        Left (GRPCIOBadStatusCode StatusInvalidArgument _)
+          -> pure ()
+        rsp
+          -> clientFail ("Expected failure response, but got: " ++ show rsp)
 
 --------------------------------------------------------------------------------
 -- Utilities and helpers

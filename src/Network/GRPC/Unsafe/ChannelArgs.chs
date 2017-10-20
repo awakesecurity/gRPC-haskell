@@ -6,6 +6,7 @@ import           Control.Exception
 import           Control.Monad
 import           Foreign.Marshal.Alloc (malloc, free)
 import           Foreign.Storable
+import           Numeric.Natural
 
 #include <grpc/grpc.h>
 #include <grpc/status.h>
@@ -47,9 +48,10 @@ data ArgValue = StringArg String | IntArg Int
 -- | Supported arguments for a channel. More cases will be added as we figure
 -- out what they are.
 data Arg = CompressionAlgArg CompressionAlgorithm
-           | CompressionLevelArg CompressionLevel
-           | UserAgentPrefix String
-           | UserAgentSuffix String
+         | CompressionLevelArg CompressionLevel
+         | UserAgentPrefix String
+         | UserAgentSuffix String
+         | MaxReceiveMessageLength Natural
   deriving (Show, Eq)
 
 {#fun create_string_arg as ^ {`GrpcArg', `Int', `ArgKey', `String'} -> `()'#}
@@ -67,6 +69,9 @@ createArg array (UserAgentPrefix prefix) i =
   createStringArg array i UserAgentPrefixKey prefix
 createArg array (UserAgentSuffix suffix) i =
   createStringArg array i UserAgentSuffixKey suffix
+createArg array (MaxReceiveMessageLength n) i =
+  createIntArg array i MaxReceiveMessageLengthKey $
+    fromIntegral (min n (fromIntegral (maxBound :: Int)))
 
 createChannelArgs :: [Arg] -> IO GrpcChannelArgs
 createChannelArgs args = do

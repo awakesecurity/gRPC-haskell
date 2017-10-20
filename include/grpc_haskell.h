@@ -154,7 +154,8 @@ enum supported_arg_key {
   compression_algorithm_key = 0,
   compression_level_key,
   user_agent_prefix_key,
-  user_agent_suffix_key
+  user_agent_suffix_key,
+  max_receive_message_length_key,
 };
 
 grpc_arg* create_arg_array(size_t n);
