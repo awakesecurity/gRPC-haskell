@@ -26,7 +26,7 @@ addHandler (ServerNormalRequest _metadata (TwoInts x y)) = do
 
 runningSumHandler :: ServerRequest 'ClientStreaming OneInt OneInt
                      -> IO (ServerResponse 'ClientStreaming OneInt)
-runningSumHandler req@(ServerReaderRequest metadata recv) =
+runningSumHandler (ServerReaderRequest _metadata recv) =
   loop 0
     where loop !i =
             do msg <- recv
