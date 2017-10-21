@@ -1,4 +1,3 @@
-{-# LANGUAGE MultiWayIf      #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Network.GRPC.Unsafe.ChannelArgs where
