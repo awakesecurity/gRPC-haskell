@@ -44,5 +44,5 @@ main = do
         | rsp == expected             -> return ()
         | otherwise                   -> fail $ "Got unexpected response: '" ++ show rsp ++ "', expected: '" ++ show expected ++ "'"
       ClientNormalResponse _ _ _ st _ -> fail $ "Got unexpected status " ++ show st ++ " from call, expecting StatusOk"
-      ClientError e                   -> fail $ "Got client error: " ++ show e
+      ClientErrorResponse e           -> fail $ "Got client error: " ++ show e
   putStrLn $ "echo-client success: sent " ++ show pay ++ ", got " ++ show pay

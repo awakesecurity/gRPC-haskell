@@ -39,7 +39,7 @@ testNormalCall client = testCase "Normal call" $
      res <- simpleServiceNormalCall client
               (ClientNormalRequest req 10 mempty)
      case res of
-       ClientError err -> assertString ("ClientError: " <> show err)
+       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
        ClientNormalResponse res _ _ stsCode _ ->
          do stsCode @?= StatusOk
             simpleServiceResponseResponse res @?= "NormalRequest"
@@ -60,7 +60,7 @@ testClientStreamingCall client = testCase "Client-streaming call" $
 
      (finalName, totalSum) <- readMVar v
      case res of
-       ClientError err -> assertString ("ClientError: " <> show err)
+       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
        ClientWriterResponse Nothing _ _ _ _ -> assertString "No response received"
        ClientWriterResponse (Just res) _ _ stsCode _ ->
          do stsCode @?= StatusOk
@@ -90,7 +90,7 @@ testServerStreamingCall client = testCase "Server-streaming call" $
             ClientReaderRequest (SimpleServiceRequest "Test" (fromList nums)) 10 mempty
               (\_ -> checkResults nums)
      case res of
-       ClientError err -> assertString ("ClientError: " <> show err)
+       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
        ClientReaderResponse _ sts _ ->
          sts @?= StatusOk
 
@@ -116,7 +116,7 @@ testBiDiStreamingCall client = testCase "Bidi-streaming call" $
      res <- simpleServiceBiDiStreamingCall client $
             ClientBiDiRequest 10 mempty (\_ -> handleRequests iterations)
      case res of
-       ClientError err -> assertString ("ClientError: " <> show err)
+       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
        ClientBiDiResponse _ sts _ ->
          sts @?= StatusOk
 
@@ -133,4 +133,3 @@ main = do
           , testServerStreamingCall service
           , testBiDiStreamingCall service ]) `finally`
          (simpleServiceDone service (ClientNormalRequest SimpleServiceDone 10 mempty))
-
