@@ -9,9 +9,9 @@ mkDerivation {
   pname = "proto3-suite";
   version = "0.1.0.0";
   src = fetchgit {
-    url = "https://github.com/awakesecurity/proto3-suite.git";
-    sha256 = "0fa5jdzzs45p54fxc8prpbrc1ckpa86lsp3lkjdzf5rbhlvpvim3";
-    rev = "281a533df6b1d1cfa369729f2a149374958e78c2";
+    url = "git@github.com:awakenetworks/proto3-suite.git";
+    sha256 = "0qlr8bia34fyy0qh0y8g36h41qdmgxxd8ji894xrwam6bzh0fbb2";
+    rev = "9394adeb6410ada2a4acba5046207c552a3c38fe";
   };
   isLibrary = true;
   isExecutable = true;
