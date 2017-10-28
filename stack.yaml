@@ -9,11 +9,11 @@ packages:
 - '.'
 - location:
     git: git@github.com:awakenetworks/proto3-suite.git
-    commit: 56cf36f596d275ce706bf952a86bcbb3c5342599
+    commit: e8f2acb2b48a0f1c1eadbfdb5c8351e2ac8557bb
   extra-dep: true
 - location:
     git: git@github.com:awakenetworks/proto3-wire.git
-    commit: 077b7e329fd7f43b0628c23b83c5e2e05334002e
+    commit: a938330bf794cf3fa05591d03906915df98d157c
   extra-dep: true
 # Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
 extra-deps: [ aeson-1.1.1.0
