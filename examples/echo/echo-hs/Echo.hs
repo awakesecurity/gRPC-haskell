@@ -88,8 +88,8 @@ instance HsProtobuf.Message EchoRequest where
                 Hs.Nothing)]
  
 instance HsJSONPB.ToJSONPB EchoRequest where
-        toEncodingPB (EchoRequest f1)
-          = (HsJSONPB.fieldsPB ["message" .= f1])
+        toJSONPB (EchoRequest f1) = (HsJSONPB.object ["message" .= f1])
+        toEncodingPB (EchoRequest f1) = (HsJSONPB.pairs ["message" .= f1])
  
 instance HsJSONPB.FromJSONPB EchoRequest where
         parseJSONPB
@@ -120,8 +120,8 @@ instance HsProtobuf.Message EchoResponse where
                 Hs.Nothing)]
  
 instance HsJSONPB.ToJSONPB EchoResponse where
-        toEncodingPB (EchoResponse f1)
-          = (HsJSONPB.fieldsPB ["message" .= f1])
+        toJSONPB (EchoResponse f1) = (HsJSONPB.object ["message" .= f1])
+        toEncodingPB (EchoResponse f1) = (HsJSONPB.pairs ["message" .= f1])
  
 instance HsJSONPB.FromJSONPB EchoResponse where
         parseJSONPB

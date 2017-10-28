@@ -117,8 +117,9 @@ instance HsProtobuf.Message TwoInts where
                 Hs.Nothing)]
  
 instance HsJSONPB.ToJSONPB TwoInts where
+        toJSONPB (TwoInts f1 f2) = (HsJSONPB.object ["x" .= f1, "y" .= f2])
         toEncodingPB (TwoInts f1 f2)
-          = (HsJSONPB.fieldsPB ["x" .= f1, "y" .= f2])
+          = (HsJSONPB.pairs ["x" .= f1, "y" .= f2])
  
 instance HsJSONPB.FromJSONPB TwoInts where
         parseJSONPB
@@ -148,7 +149,8 @@ instance HsProtobuf.Message OneInt where
                 Hs.Nothing)]
  
 instance HsJSONPB.ToJSONPB OneInt where
-        toEncodingPB (OneInt f1) = (HsJSONPB.fieldsPB ["result" .= f1])
+        toJSONPB (OneInt f1) = (HsJSONPB.object ["result" .= f1])
+        toEncodingPB (OneInt f1) = (HsJSONPB.pairs ["result" .= f1])
  
 instance HsJSONPB.FromJSONPB OneInt where
         parseJSONPB
