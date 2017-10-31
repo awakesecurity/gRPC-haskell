@@ -179,6 +179,12 @@ let
             pkgs.haskell.lib.dontCheck
               (haskellPackagesNew.callPackage ./nix/aeson.nix {});
 
+          cabal-doctest =
+            haskellPackagesNew.callPackage ./nix/cabal-doctest.nix { };
+
+          insert-ordered-containers =
+            haskellPackagesNew.callPackage ./nix/insert-ordered-containers.nix { };
+
           optparse-applicative =
             haskellPackagesNew.callPackage ./nix/optparse-applicative.nix { };
 
@@ -269,6 +275,9 @@ let
                     export PATH=${ghc}/bin:${python}/bin''${PATH:+:}$PATH
                   '';
                 });
+
+          swagger2 =
+            pkgs.haskell.lib.dontHaddock (haskellPackagesNew.callPackage ./nix/swagger2.nix { });
 
           turtle =
             haskellPackagesNew.callPackage ./nix/turtle.nix { };
