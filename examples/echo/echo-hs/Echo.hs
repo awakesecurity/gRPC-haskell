@@ -96,6 +96,16 @@ instance HsJSONPB.FromJSONPB EchoRequest where
           = (HsJSONPB.withObject "EchoRequest"
                (\ obj -> (Hs.pure EchoRequest) <*> obj .: "message"))
  
+instance HsJSONPB.ToJSON EchoRequest where
+        toJSON = HsJSONPB.toAesonValue
+        toEncoding = HsJSONPB.toAesonEncoding
+ 
+instance HsJSONPB.FromJSON EchoRequest where
+        parseJSON = HsJSONPB.parseJSONPB
+ 
+instance HsJSONPB.ToSchema EchoRequest where
+        declareNamedSchema = HsJSONPB.genericDeclareNamedSchemaJSONPB
+ 
 data EchoResponse = EchoResponse{echoResponseMessage :: Hs.Text}
                   deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
  
@@ -127,3 +137,13 @@ instance HsJSONPB.FromJSONPB EchoResponse where
         parseJSONPB
           = (HsJSONPB.withObject "EchoResponse"
                (\ obj -> (Hs.pure EchoResponse) <*> obj .: "message"))
+ 
+instance HsJSONPB.ToJSON EchoResponse where
+        toJSON = HsJSONPB.toAesonValue
+        toEncoding = HsJSONPB.toAesonEncoding
+ 
+instance HsJSONPB.FromJSON EchoResponse where
+        parseJSON = HsJSONPB.parseJSONPB
+ 
+instance HsJSONPB.ToSchema EchoResponse where
+        declareNamedSchema = HsJSONPB.genericDeclareNamedSchemaJSONPB

@@ -126,6 +126,16 @@ instance HsJSONPB.FromJSONPB TwoInts where
           = (HsJSONPB.withObject "TwoInts"
                (\ obj -> (Hs.pure TwoInts) <*> obj .: "x" <*> obj .: "y"))
  
+instance HsJSONPB.ToJSON TwoInts where
+        toJSON = HsJSONPB.toAesonValue
+        toEncoding = HsJSONPB.toAesonEncoding
+ 
+instance HsJSONPB.FromJSON TwoInts where
+        parseJSON = HsJSONPB.parseJSONPB
+ 
+instance HsJSONPB.ToSchema TwoInts where
+        declareNamedSchema = HsJSONPB.genericDeclareNamedSchemaJSONPB
+ 
 data OneInt = OneInt{oneIntResult :: Hs.Int32}
             deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
  
@@ -156,3 +166,13 @@ instance HsJSONPB.FromJSONPB OneInt where
         parseJSONPB
           = (HsJSONPB.withObject "OneInt"
                (\ obj -> (Hs.pure OneInt) <*> obj .: "result"))
+ 
+instance HsJSONPB.ToJSON OneInt where
+        toJSON = HsJSONPB.toAesonValue
+        toEncoding = HsJSONPB.toAesonEncoding
+ 
+instance HsJSONPB.FromJSON OneInt where
+        parseJSON = HsJSONPB.parseJSONPB
+ 
+instance HsJSONPB.ToSchema OneInt where
+        declareNamedSchema = HsJSONPB.genericDeclareNamedSchemaJSONPB
