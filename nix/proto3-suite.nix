@@ -1,25 +1,27 @@
-{ mkDerivation, aeson, attoparsec, base, base64-bytestring
-, bytestring, cereal, containers, deepseq, doctest, fetchgit, foldl
-, haskell-src, lens, mtl, neat-interpolation, optparse-generic
-, parsec, parsers, pretty, pretty-show, proto3-wire, QuickCheck
-, range-set-list, safe, semigroups, stdenv, system-filepath, tasty
-, tasty-hunit, tasty-quickcheck, text, transformers, turtle, vector
+{ mkDerivation, aeson, aeson-pretty, attoparsec, base
+, base64-bytestring, bytestring, cereal, containers, deepseq
+, doctest, fetchgit, foldl, haskell-src, lens, mtl
+, neat-interpolation, optparse-generic, parsec, parsers, pretty
+, pretty-show, proto3-wire, QuickCheck, range-set-list, safe
+, semigroups, stdenv, swagger2, system-filepath, tasty, tasty-hunit
+, tasty-quickcheck, text, transformers, turtle, vector
 }:
 mkDerivation {
   pname = "proto3-suite";
   version = "0.1.0.0";
   src = fetchgit {
-    url = "https://github.com/awakesecurity/proto3-suite.git";
-    sha256 = "0fa5jdzzs45p54fxc8prpbrc1ckpa86lsp3lkjdzf5rbhlvpvim3";
-    rev = "281a533df6b1d1cfa369729f2a149374958e78c2";
+    url = "https://github.com/awakenetworks/proto3-suite";
+    sha256 = "076fh739580vp9h23d4zw3mddmd0md39c7k4x8macwy502wgdf1j";
+    rev = "97c4f66c8972416cca8b0bd1d9b307863bbc82e2";
   };
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    aeson attoparsec base base64-bytestring bytestring cereal
-    containers deepseq foldl haskell-src lens mtl neat-interpolation
-    parsec parsers pretty pretty-show proto3-wire QuickCheck safe
-    semigroups system-filepath text transformers turtle vector
+    aeson aeson-pretty attoparsec base base64-bytestring bytestring
+    cereal containers deepseq foldl haskell-src lens mtl
+    neat-interpolation parsec parsers pretty pretty-show proto3-wire
+    QuickCheck safe semigroups swagger2 system-filepath text
+    transformers turtle vector
   ];
   executableHaskellDepends = [
     base containers optparse-generic proto3-wire range-set-list
