@@ -1,21 +1,12 @@
-let
-  # NOTE: This is the only non-deterministic part of our system since we need a
-  # a starting point in order to be able to fetch the pinned `nixpkgs`.  From
-  # that point forward our build is deterministic and pinned
-  #
-  # We only use this for the `fetchFromGitHub` utility so as long as that
-  # remains stable then we shouldn't have migration issues.
-  inherit (import <nixpkgs> { }) fetchFromGitHub;
+# Given a Git revision hash `<rev>`, you get the new SHA256 by running:
+#
+# ```bash
+# $ nix-prefetch-url "https://github.com/NixOS/nixpkgs/archive/<rev>.tar.gz"
+# ```
+#
+# The SHA256 will be printed as the last line of stdout.
 
-  # In order to update `nixpkgs.json` to a specific revision, run:
-  #
-  # ```bash
-  # $ nix-prefetch-git https://github.com/NixOS/nixpkgs.git "${REVISION}" > nixpkgs.json
-  # ```
-  nixpkgs = builtins.fromJSON (builtins.readFile ./nixpkgs.json);
-in
-  fetchFromGitHub {
-    owner = "NixOS";
-    repo  = "nixpkgs";
-    inherit (nixpkgs) rev sha256;
-  }
+import ./fetch-nixpkgs.nix {
+  rev    = "1849e695b00a54cda86cb75202240d949c10c7ce";
+  sha256 = "1riv7n11rqbfdnikr2wm263fcppzh0760kqhwn5gscl89qmliw2y";
+}
