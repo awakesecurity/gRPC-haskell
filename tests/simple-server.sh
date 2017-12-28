@@ -1,5 +1,5 @@
-#!/bin/bash -eu
-
+#!/usr/bin/env bash
+set -eu
 hsTmpDir=$1
 
 ghc                            \
