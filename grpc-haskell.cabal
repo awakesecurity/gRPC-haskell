@@ -33,6 +33,7 @@ library
     , transformers
     , proto3-suite
     , proto3-wire
+    , grpc-haskell-lowlevel
 
     , async ==2.1.*
     , tasty >= 0.11 && <0.12
@@ -42,46 +43,12 @@ library
     , vector
     , sorted-list >=0.1.6.1 && <=0.3
 
-  c-sources:
-    cbits/grpc_haskell.c
   exposed-modules:
-  -- NOTE: the order of these matters to c2hs.
-    Network.GRPC.Unsafe.Constants
-    Network.GRPC.Unsafe.Time
-    Network.GRPC.Unsafe.Slice
-    Network.GRPC.Unsafe.ChannelArgs
-    Network.GRPC.Unsafe.ByteBuffer
-    Network.GRPC.Unsafe.Metadata
-    Network.GRPC.Unsafe.Op
-    Network.GRPC.Unsafe
-    Network.GRPC.Unsafe.Security
-    Network.GRPC.LowLevel
-    Network.GRPC.LowLevel.Server.Unregistered
-    Network.GRPC.LowLevel.Client.Unregistered
-    Network.GRPC.LowLevel.CompletionQueue
-    Network.GRPC.LowLevel.CompletionQueue.Internal
-    Network.GRPC.LowLevel.CompletionQueue.Unregistered
-    Network.GRPC.LowLevel.GRPC
-    Network.GRPC.LowLevel.Op
-    Network.GRPC.LowLevel.Server
-    Network.GRPC.LowLevel.Call
-    Network.GRPC.LowLevel.Call.Unregistered
-    Network.GRPC.LowLevel.Client
     Network.GRPC.HighLevel
     Network.GRPC.HighLevel.Generated
     Network.GRPC.HighLevel.Server
     Network.GRPC.HighLevel.Server.Unregistered
     Network.GRPC.HighLevel.Client
-  extra-libraries:
-    grpc
-  includes:
-      include/grpc_haskell.h
-    , grpc/grpc.h
-    , grpc/status.h
-    , grpc/support/time.h
-    , grpc/impl/codegen/compression_types.h
-    , grpc/slice_buffer.h
-    , grpc/slice.h
   build-tools:          c2hs
   default-language:     Haskell2010
   ghc-options:          -Wall -fwarn-incomplete-patterns -fno-warn-unused-do-bind
@@ -101,6 +68,7 @@ executable hellos-server
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
+      , grpc-haskell-lowlevel
       , proto3-suite
       , proto3-wire
       , text
@@ -120,6 +88,7 @@ executable hellos-client
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
+      , grpc-haskell-lowlevel
       , proto3-suite
       , proto3-wire
       , text
@@ -139,6 +108,7 @@ executable echo-server
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
+      , grpc-haskell-lowlevel
       , optparse-generic
       , proto3-suite
       , proto3-wire
@@ -162,6 +132,7 @@ executable arithmetic-server
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
+      , grpc-haskell-lowlevel
       , optparse-generic
       , proto3-suite
       , proto3-wire
@@ -184,6 +155,7 @@ executable arithmetic-client
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
+      , grpc-haskell-lowlevel
       , optparse-generic
       , proto3-suite
       , proto3-wire
@@ -206,6 +178,7 @@ executable echo-client
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
+      , grpc-haskell-lowlevel
       , optparse-generic
       , proto3-suite
       , proto3-wire
@@ -243,9 +216,6 @@ test-suite tests
     , text
     , QuickCheck >=2.8 && <3.0
   other-modules:
-    LowLevelTests,
-    LowLevelTests.Op,
-    UnsafeTests,
     GeneratedTests
   default-language:     Haskell2010
   ghc-options:          -Wall -fwarn-incomplete-patterns -fno-warn-unused-do-bind -g -threaded -rtsopts

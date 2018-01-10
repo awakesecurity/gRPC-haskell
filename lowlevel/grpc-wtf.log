@@ -1,0 +1,100 @@
+these derivations will be built:
+  /nix/store/ds475dvh1kyjvvvxyqwnlpk3wda8vp15-grpc-haskell-0.0.0.0.drv
+  /nix/store/9psg2p0cj48iyyqz8gyapzgd958iq2gx-ghc-8.0.2-with-packages.drv
+building path(s) ‘/nix/store/l0jccwz2422mkh40w7c092cxq5xpifg5-grpc-haskell-0.0.0.0’
+setupCompilerEnvironmentPhase
+Build with /nix/store/hg0ppf88q1rw0q7x3zqhlxbnviq0ddcg-ghc-8.0.2.
+unpacking sources
+unpacking source archive /nix/store/icbw54842rh6pppwinamf4mq9y8pyk7n-gRPC-haskell
+source root is gRPC-haskell
+patching sources
+compileBuildDriverPhase
+setupCompileFlags: -package-db=/tmp/nix-build-grpc-haskell-0.0.0.0.drv-0/package.conf.d -j4 -threaded
+[1 of 1] Compiling Main             ( Setup.hs, /tmp/nix-build-grpc-haskell-0.0.0.0.drv-0/Main.o )
+Linking Setup ...
+configuring
+configureFlags: --verbose --prefix=/nix/store/l0jccwz2422mkh40w7c092cxq5xpifg5-grpc-haskell-0.0.0.0 --libdir=$prefix/lib/$compiler --libsubdir=$pkgid --with-gcc=gcc --package-db=/tmp/nix-build-grpc-haskell-0.0.0.0.drv-0/package.conf.d --ghc-option=-optl=-Wl,-rpath=/nix/store/l0jccwz2422mkh40w7c092cxq5xpifg5-grpc-haskell-0.0.0.0/lib/ghc-8.0.2/grpc-haskell-0.0.0.0 --ghc-option=-j4 --disable-split-objs --disable-library-profiling --disable-profiling --enable-shared --disable-coverage --enable-library-vanilla --enable-executable-dynamic --disable-tests --ghc-option=-split-sections --extra-include-dirs=/nix/store/ajvhxxnnx0xiajn0n4vls7v3v29bbmjm-grpc-1.2.0-e2cfe9d/include --extra-lib-dirs=/nix/store/ajvhxxnnx0xiajn0n4vls7v3v29bbmjm-grpc-1.2.0-e2cfe9d/lib
+Configuring grpc-haskell-0.0.0.0...
+Flags chosen: with-examples=False, debug=False
+Dependency async ==2.1.*: using async-2.1.1
+Dependency base >=4.8 && <5.0: using base-4.9.1.0
+Dependency bytestring ==0.10.*: using bytestring-0.10.8.1
+Dependency clock >=0.6.0 && <0.8.0: using clock-0.7.2
+Dependency containers ==0.5.*: using containers-0.5.7.1
+Dependency managed >=1.0.0 && <1.1: using managed-1.0.5
+Dependency pipes >=4.1 && <=4.4: using pipes-4.3.2
+Dependency proto3-suite -any: using proto3-suite-0.1.0.0
+Dependency proto3-wire -any: using proto3-wire-1.0.0
+Dependency safe ==0.3.*: using safe-0.3.14
+Dependency sorted-list >=0.1.6.1 && <=0.3: using sorted-list-0.2.0.0
+Dependency stm ==2.4.*: using stm-2.4.4.1
+Dependency tasty ==0.11.*: using tasty-0.11.2
+Dependency tasty-hunit ==0.9.*: using tasty-hunit-0.9.2
+Dependency tasty-quickcheck >=0.8.4 && <0.9: using tasty-quickcheck-0.8.4
+Dependency transformers -any: using transformers-0.5.2.0
+Dependency vector -any: using vector-0.11.0.0
+Using Cabal-1.24.2.0 compiled by ghc-8.0
+Using compiler: ghc-8.0.2
+Using install prefix:
+/nix/store/l0jccwz2422mkh40w7c092cxq5xpifg5-grpc-haskell-0.0.0.0
+Binaries installed in:
+/nix/store/l0jccwz2422mkh40w7c092cxq5xpifg5-grpc-haskell-0.0.0.0/bin
+Libraries installed in:
+/nix/store/l0jccwz2422mkh40w7c092cxq5xpifg5-grpc-haskell-0.0.0.0/lib/ghc-8.0.2/grpc-haskell-0.0.0.0
+Dynamic libraries installed in:
+/nix/store/l0jccwz2422mkh40w7c092cxq5xpifg5-grpc-haskell-0.0.0.0/lib/ghc-8.0.2/x86_64-linux-ghc-8.0.2
+Private binaries installed in:
+/nix/store/l0jccwz2422mkh40w7c092cxq5xpifg5-grpc-haskell-0.0.0.0/libexec
+Data files installed in:
+/nix/store/l0jccwz2422mkh40w7c092cxq5xpifg5-grpc-haskell-0.0.0.0/share/x86_64-linux-ghc-8.0.2/grpc-haskell-0.0.0.0
+Documentation installed in:
+/nix/store/l0jccwz2422mkh40w7c092cxq5xpifg5-grpc-haskell-0.0.0.0/share/doc/x86_64-linux-ghc-8.0.2/grpc-haskell-0.0.0.0
+Configuration files installed in:
+/nix/store/l0jccwz2422mkh40w7c092cxq5xpifg5-grpc-haskell-0.0.0.0/etc
+No alex found
+Using ar found on system at:
+/nix/store/p6wcdqa2ks82xq7d4d5019drrjxlqrdj-binutils-2.27/bin/ar
+Using c2hs version 0.28.1 found on system at:
+/nix/store/rm05q3q5igssqy6qvqzaxz1y1fnxf47m-c2hs-0.28.1/bin/c2hs
+No cpphs found
+Using gcc version 5.4.0 given by user at:
+/nix/store/r54jv402shjggj3fn2dy895iycy3afxi-gcc-wrapper-5.4.0/bin/gcc
+Using ghc version 8.0.2 found on system at:
+/nix/store/hg0ppf88q1rw0q7x3zqhlxbnviq0ddcg-ghc-8.0.2/bin/ghc
+Using ghc-pkg version 8.0.2 found on system at:
+/nix/store/hg0ppf88q1rw0q7x3zqhlxbnviq0ddcg-ghc-8.0.2/bin/ghc-pkg
+No ghcjs found
+No ghcjs-pkg found
+No greencard found
+Using haddock version 2.17.3 found on system at:
+/nix/store/hg0ppf88q1rw0q7x3zqhlxbnviq0ddcg-ghc-8.0.2/bin/haddock
+No happy found
+Using haskell-suite found on system at: haskell-suite-dummy-location
+Using haskell-suite-pkg found on system at: haskell-suite-pkg-dummy-location
+No hmake found
+Using hpc version 0.67 found on system at:
+/nix/store/hg0ppf88q1rw0q7x3zqhlxbnviq0ddcg-ghc-8.0.2/bin/hpc
+Using hsc2hs version 0.68.1 found on system at:
+/nix/store/hg0ppf88q1rw0q7x3zqhlxbnviq0ddcg-ghc-8.0.2/bin/hsc2hs
+Using hscolour version 1.24 found on system at:
+/nix/store/bgcks3g9g5nqpgnvbfgri8pynmm3sks9-hscolour-1.24.1/bin/HsColour
+No jhc found
+Using ld found on system at:
+/nix/store/r54jv402shjggj3fn2dy895iycy3afxi-gcc-wrapper-5.4.0/bin/ld
+No lhc found
+No lhc-pkg found
+No pkg-config found
+Using strip version 2.27 found on system at:
+/nix/store/p6wcdqa2ks82xq7d4d5019drrjxlqrdj-binutils-2.27/bin/strip
+Using tar found on system at:
+/nix/store/rhjsykhxrzj3ca8da6b4g6v1yx53xpi3-gnutar-1.29/bin/tar
+No uhc found
+building
+Building grpc-haskell-0.0.0.0...
+Preprocessing library grpc-haskell-0.0.0.0...
+Setup: can't find source for Network/GRPC/Unsafe/Constants in src,
+dist/build/autogen
+builder for ‘/nix/store/ds475dvh1kyjvvvxyqwnlpk3wda8vp15-grpc-haskell-0.0.0.0.drv’ failed with exit code 1
+cannot build derivation ‘/nix/store/9psg2p0cj48iyyqz8gyapzgd958iq2gx-ghc-8.0.2-with-packages.drv’: 1 dependencies couldn't be built
+error: build of ‘/nix/store/9psg2p0cj48iyyqz8gyapzgd958iq2gx-ghc-8.0.2-with-packages.drv’ failed
+/home/clavoie/.nix-profile/bin/nix-shell: failed to build all dependencies
