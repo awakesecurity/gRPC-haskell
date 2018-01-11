@@ -1,4 +1,4 @@
-name:                grpc-haskell-lowlevel
+name:                grpc-haskell-core
 version:             0.0.0.0
 synopsis:            Haskell implementation of gRPC layered on shared C library.
 homepage:            https://github.com/awakenetworks/gRPC-haskell
@@ -86,7 +86,7 @@ library
 test-suite tests
   build-depends:
       base >=4.8 && <5.0
-    , grpc-haskell-lowlevel
+    , grpc-haskell-core
     , bytestring ==0.10.*
     , unix
     , time

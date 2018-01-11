@@ -33,7 +33,7 @@ library
     , transformers
     , proto3-suite
     , proto3-wire
-    , grpc-haskell-lowlevel
+    , grpc-haskell-core
 
     , async ==2.1.*
     , tasty >= 0.11 && <0.12
@@ -68,7 +68,7 @@ executable hellos-server
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
-      , grpc-haskell-lowlevel
+      , grpc-haskell-core
       , proto3-suite
       , proto3-wire
       , text
@@ -88,7 +88,7 @@ executable hellos-client
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
-      , grpc-haskell-lowlevel
+      , grpc-haskell-core
       , proto3-suite
       , proto3-wire
       , text
@@ -108,7 +108,7 @@ executable echo-server
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
-      , grpc-haskell-lowlevel
+      , grpc-haskell-core
       , optparse-generic
       , proto3-suite
       , proto3-wire
@@ -132,7 +132,7 @@ executable arithmetic-server
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
-      , grpc-haskell-lowlevel
+      , grpc-haskell-core
       , optparse-generic
       , proto3-suite
       , proto3-wire
@@ -155,7 +155,7 @@ executable arithmetic-client
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
-      , grpc-haskell-lowlevel
+      , grpc-haskell-core
       , optparse-generic
       , proto3-suite
       , proto3-wire
@@ -178,7 +178,7 @@ executable echo-client
       , bytestring == 0.10.*
       , containers ==0.5.*
       , grpc-haskell
-      , grpc-haskell-lowlevel
+      , grpc-haskell-core
       , optparse-generic
       , proto3-suite
       , proto3-wire

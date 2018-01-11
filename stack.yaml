@@ -6,8 +6,8 @@ resolver: lts-8.23
 
 # Local packages, usually specified by relative directory name
 packages:
-- 'lowlevel'
 - '.'
+- 'core'
 - location:
     git: git@github.com:awakenetworks/proto3-suite.git
     commit: 97c4f66c8972416cca8b0bd1d9b307863bbc82e2
