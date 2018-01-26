@@ -22,6 +22,7 @@ import           Data.List                                 (find)
 import qualified Data.Map.Strict                           as M
 import qualified Data.Set                                  as S
 import           GHC.Exts                                  (fromList, toList)
+import           Network.GRPC.Unsafe.ChannelArgs           (Arg(..))
 import           Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Client.Unregistered as U
