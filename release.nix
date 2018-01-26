@@ -277,7 +277,7 @@ let
                 });
 
           swagger2 =
-            pkgs.haskell.lib.dontHaddock (haskellPackagesNew.callPackage ./nix/swagger2.nix { });
+            pkgs.haskell.lib.dontCheck (pkgs.haskell.lib.dontHaddock (haskellPackagesNew.callPackage ./nix/swagger2.nix { }));
 
           turtle =
             haskellPackagesNew.callPackage ./nix/turtle.nix { };
