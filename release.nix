@@ -173,6 +173,20 @@ let
         ];
       };
 
+      usesGRPC = haskellPackage:
+        pkgs.haskell.lib.overrideCabal haskellPackage (oldAttributes: {
+            preBuild = (oldAttributes.preBuild or "") +
+              pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+              '';
+
+            shellHook = (oldAttributes.shellHook or "") +
+              pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+              '';
+          }
+        );
+
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: rec {
           aeson =
@@ -198,83 +212,71 @@ let
             pkgs.haskell.lib.dontCheck
               (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
 
+          grpc-haskell-core =
+            usesGRPC (haskellPackagesNew.callPackage ./core { });
+
           grpc-haskell-no-tests =
-            pkgs.haskell.lib.overrideCabal
-              (haskellPackagesNew.callPackage ./default.nix { })
-              (oldDerivation: {
-                doCheck = false;
-
-                preBuild =
-                  pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
-                    export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-                  '';
-
-                shellHook = (oldDerivation.shellHook or "") + ''
-                  export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-                '';
-
-              });
+            usesGRPC
+              (pkgs.haskell.lib.dontCheck
+                (haskellPackagesNew.callPackage ./default.nix { })
+              );
 
           grpc-haskell =
-            pkgs.haskell.lib.overrideCabal
-              (haskellPackagesNew.callPackage ./default.nix { })
-              (oldDerivation:
-                let
-                  ghc =
-                    haskellPackagesNew.ghcWithPackages (pkgs: [
-                      pkgs.grpc-haskell-no-tests
-                      # Include some additional packages in this custom ghc for
-                      # running tests in the nix-shell environment.
-                      pkgs.tasty-quickcheck
-                      pkgs.turtle
+            usesGRPC
+              (pkgs.haskell.lib.overrideCabal
+                (haskellPackagesNew.callPackage ./default.nix { })
+                (oldDerivation:
+                  let
+                    ghc =
+                      haskellPackagesNew.ghcWithPackages (pkgs: [
+                        pkgs.grpc-haskell-no-tests
+                        # Include some additional packages in this custom ghc for
+                        # running tests in the nix-shell environment.
+                        pkgs.tasty-quickcheck
+                        pkgs.turtle
+                      ]);
+
+                    python = pkgs.python.withPackages (pkgs: [
+                      # pkgs.protobuf3_0
+                      grpcio-tools
                     ]);
 
-                  python = pkgs.python.withPackages (pkgs: [
-                    # pkgs.protobuf3_0
-                    grpcio-tools
-                  ]);
+                  in rec {
+                    buildDepends = [
+                      pkgs.makeWrapper
+                      # Give our nix-shell its own cabal so we don't pick up one
+                      # from the user's environment by accident.
+                      haskellPackagesNew.cabal-install
+                    ];
 
-                in rec {
-                  buildDepends = [
-                    pkgs.makeWrapper
-                    # Give our nix-shell its own cabal so we don't pick up one
-                    # from the user's environment by accident.
-                    haskellPackagesNew.cabal-install
-                  ];
+                    patches = [ tests/tests.patch ];
 
-                  patches = [ tests/tests.patch ];
-
-                  preBuild =
-                    pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
-                      export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+                    postPatch = ''
+                      patchShebangs tests
+                      substituteInPlace tests/simple-client.sh \
+                        --replace @makeWrapper@ ${pkgs.makeWrapper} \
+                        --replace @grpc@ ${grpc}
+                      substituteInPlace tests/simple-server.sh \
+                        --replace @makeWrapper@ ${pkgs.makeWrapper} \
+                        --replace @grpc@ ${grpc}
+                      wrapProgram tests/protoc.sh \
+                        --prefix PATH : ${python}/bin
+                      wrapProgram tests/test-client.sh \
+                        --prefix PATH : ${python}/bin
+                      wrapProgram tests/test-server.sh \
+                        --prefix PATH : ${python}/bin
+                      wrapProgram tests/simple-client.sh \
+                        --prefix PATH : ${ghc}/bin
+                      wrapProgram tests/simple-server.sh \
+                        --prefix PATH : ${ghc}/bin
                     '';
 
-                  postPatch = ''
-                    patchShebangs tests
-                    substituteInPlace tests/simple-client.sh \
-                      --replace @makeWrapper@ ${pkgs.makeWrapper} \
-                      --replace @grpc@ ${grpc}
-                    substituteInPlace tests/simple-server.sh \
-                      --replace @makeWrapper@ ${pkgs.makeWrapper} \
-                      --replace @grpc@ ${grpc}
-                    wrapProgram tests/protoc.sh \
-                      --prefix PATH : ${python}/bin
-                    wrapProgram tests/test-client.sh \
-                      --prefix PATH : ${python}/bin
-                    wrapProgram tests/test-server.sh \
-                      --prefix PATH : ${python}/bin
-                    wrapProgram tests/simple-client.sh \
-                      --prefix PATH : ${ghc}/bin
-                    wrapProgram tests/simple-server.sh \
-                      --prefix PATH : ${ghc}/bin
-                  '';
-
-                  shellHook = (oldDerivation.shellHook or "") + ''
-                    export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-                    # This lets us use our custom ghc and python environments in the shell.
-                    export PATH=${ghc}/bin:${python}/bin''${PATH:+:}$PATH
-                  '';
-                });
+                    shellHook = (oldDerivation.shellHook or "") + ''
+                      # This lets us use our custom ghc and python environments in the shell.
+                      export PATH=${ghc}/bin:${python}/bin''${PATH:+:}$PATH
+                    '';
+                  })
+              );
 
           swagger2 =
             pkgs.haskell.lib.dontCheck (pkgs.haskell.lib.dontHaddock (haskellPackagesNew.callPackage ./nix/swagger2.nix { }));
