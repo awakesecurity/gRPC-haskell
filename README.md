@@ -28,7 +28,7 @@ used to give you a development environment where you can use the `cabal` and
 `stack` toolchains for development and testing:
 
 ```bash
-$ nix-shell release-nix -A grpc-haskell.env
+$ nix-shell release.nix -A grpc-haskell.env
 [nix-shell]$ cabal configure --enable-tests && cabal build && cabal test
 ```
 
