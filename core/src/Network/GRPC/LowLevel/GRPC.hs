@@ -21,7 +21,6 @@ import           Data.Typeable
 import qualified Network.GRPC.Unsafe    as C
 import qualified Network.GRPC.Unsafe.Op as C
 import qualified Network.GRPC.Unsafe.Metadata as C
-import           Proto3.Wire.Decode     (ParseError)
 
 -- | Functions as a proof that the gRPC core has been started. The gRPC core
 -- must be initialized to create any gRPC state, so this is a requirement for
@@ -50,7 +49,7 @@ data GRPCIOError = GRPCIOCallError C.CallError
                    | GRPCIOUnknownError
                    | GRPCIOBadStatusCode C.StatusCode C.StatusDetails
 
-                   | GRPCIODecodeError ParseError
+                   | GRPCIODecodeError String
                    | GRPCIOInternalUnexpectedRecv String -- debugging description
                    | GRPCIOHandlerException String
   deriving (Eq, Show, Typeable)
