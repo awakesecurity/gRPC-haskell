@@ -53,7 +53,7 @@ convertServerHandler :: (Message a, Message b)
                      => ServerHandler a b
                      -> ServerHandlerLL
 convertServerHandler f c = case fromByteString (payload c) of
-  Left x  -> CE.throw (GRPCIODecodeError x)
+  Left x  -> CE.throw (GRPCIODecodeError $ show x)
   Right x -> do (y, tm, sc, sd) <- f (fmap (const x) c)
                 return (toBS y, tm, sc, sd)
 
@@ -99,7 +99,7 @@ convertServerWriterHandler f c send =
   f (convert <$> c) (convertSend send)
   where
     convert bs = case fromByteString bs of
-      Left x  -> CE.throw (GRPCIODecodeError x)
+      Left x  -> CE.throw (GRPCIODecodeError $ show x)
       Right x -> x
 
 type ServerRWHandler a b
@@ -129,7 +129,7 @@ convertRecv =
     case msg of
       Nothing -> return Nothing
       Just bs -> case fromByteString bs of
-                   Left x  -> Left (GRPCIODecodeError x)
+                   Left x  -> Left (GRPCIODecodeError $ show x)
                    Right x -> return (Just x)
 
 convertSend :: Message a => StreamSend ByteString -> StreamSend a
