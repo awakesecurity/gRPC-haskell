@@ -1,5 +1,6 @@
 { rev                             # The Git revision of nixpkgs to fetch
 , sha256                          # The SHA256 of the downloaded data
+, outputSha256 ? null             # The SHA256 output hash
 , system ? builtins.currentSystem # This is overridable if necessary
 }:
 
@@ -34,7 +35,7 @@ ifThenElse {
         "$gzip" --decompress < "$tarball" | "$tar" -x --strip-components=1
       '';
 
-      nixpkgs = builtins.derivation {
+      nixpkgs = builtins.derivation ({
         name = "nixpkgs-${builtins.substring 0 6 rev}";
 
         builder = builtins.storePath builtin-paths.shell;
@@ -46,6 +47,10 @@ ifThenElse {
         tar       = builtins.storePath builtin-paths.tar;
         gzip      = builtins.storePath builtin-paths.gzip;
         coreutils = builtins.storePath builtin-paths.coreutils;
-      };
+      } // (if null == outputSha256 then { } else {
+        outputHashMode = "recursive";
+        outputHashAlgo = "sha256";
+        outputHash = outputSha256;
+      }));
     }).nixpkgs);
 }
