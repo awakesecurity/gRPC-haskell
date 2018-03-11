@@ -18,8 +18,8 @@ ifThenElse {
       url = "https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz";
 
       # builtins.fetchTarball does not need the sha256 hash of the
-      # unpacked tarball but it _does_ need the fixed-output sha256
-      # hash.
+      # packed and compressed tarball but it _does_ need the
+      # fixed-output sha256 hash.
       sha256 = outputSha256;
     });
 
