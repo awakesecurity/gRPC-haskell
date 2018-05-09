@@ -209,11 +209,11 @@ debugServerCall = const $ return ()
 destroyClientCall :: ClientCall -> IO ()
 destroyClientCall cc = do
   grpcDebug "Destroying client-side call object."
-  C.grpcCallDestroy (unsafeCC cc)
+  C.grpcCallUnref (unsafeCC cc)
 
 destroyServerCall :: ServerCall a -> IO ()
 destroyServerCall sc@ServerCall{ unsafeSC = c, .. } = do
   grpcDebug "destroyServerCall(R): entered."
   debugServerCall sc
   grpcDebug $ "Destroying server-side call object: " ++ show c
-  C.grpcCallDestroy c
+  C.grpcCallUnref c

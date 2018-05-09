@@ -32,6 +32,14 @@ import Network.GRPC.Unsafe.Constants
 newtype StatusDetails = StatusDetails {unStatusDetails :: ByteString}
   deriving (Eq, IsString, Monoid, Show)
 
+{#pointer *grpc_completion_queue_factory as CompletionQueueFactory newtype #}
+
+deriving instance Show CompletionQueueFactory
+
+{#pointer *grpc_completion_queue_attributes as CompletionQueueAttributes newtype #}
+
+deriving instance Show CompletionQueueAttributes
+
 {#pointer *grpc_completion_queue as CompletionQueue newtype #}
 
 deriving instance Show CompletionQueue
@@ -143,7 +151,7 @@ castPeek p = do
 -- | Create a new 'CompletionQueue'. See the docs for
 -- 'grpcCompletionQueueShutdown' for instructions on how to clean up afterwards.
 {#fun grpc_completion_queue_create as ^
-  {unReserved `Reserved'} -> `CompletionQueue'#}
+  {`CompletionQueueFactory', `CompletionQueueAttributes', unReserved `Reserved'} -> `CompletionQueue'#}
 
 -- | Block until we get the next event off the given 'CompletionQueue',
 -- using the given 'CTimeSpecPtr' as a deadline specifying the max amount of
