@@ -21,7 +21,7 @@
 module Network.GRPC.LowLevel.CompletionQueue
   ( CompletionQueue
   , withCompletionQueue
-  , createCompletionQueue
+  , createCompletionQueueForPluck
   , shutdownCompletionQueue
   , pluck
   , startBatch

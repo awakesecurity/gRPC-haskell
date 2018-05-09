@@ -101,7 +101,7 @@ createClient :: GRPC -> ClientConfig -> IO Client
 createClient grpc clientConfig =
   C.withChannelArgs (clientArgs clientConfig) $ \chanargs -> do
     clientChannel <- createChannel clientConfig chanargs
-    clientCQ <- createCompletionQueue grpc
+    clientCQ <- createCompletionQueueForPluck grpc
     return Client{..}
 
 destroyClient :: Client -> IO ()

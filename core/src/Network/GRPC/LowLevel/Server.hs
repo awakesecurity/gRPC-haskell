@@ -35,7 +35,7 @@ import qualified Data.ByteString                       as B
 import qualified Data.Set as S
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
-                                                        createCompletionQueue,
+                                                        createCompletionQueueForPluck,
                                                         pluck,
                                                         serverRegisterCompletionQueue,
                                                         serverRequestCall,
@@ -163,7 +163,7 @@ startServer grpc conf@ServerConfig{..} =
     actualPort <- addPort server conf
     when (unPort port > 0 && actualPort /= unPort port) $
       error $ "Unable to bind port: " ++ show port
-    cq <- createCompletionQueue grpc
+    cq <- createCompletionQueueForPluck grpc
     grpcDebug $ "startServer: server CQ: " ++ show cq
     serverRegisterCompletionQueue server cq
 
@@ -182,7 +182,7 @@ startServer grpc conf@ServerConfig{..} =
     C.grpcServerStart server
     forks <- newTVarIO S.empty
     shutdown <- newTVarIO False
-    ccq <- createCompletionQueue grpc
+    ccq <- createCompletionQueueForPluck grpc
     return $ Server grpc server (Port actualPort) cq ccq ns ss cs bs conf forks
       shutdown
 
