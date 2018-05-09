@@ -799,7 +799,7 @@ testClientMaxReceiveMessageLengthChannelArg = do
     -- Expect failure when the max recv payload size is set to 3 bytes, and we
     -- are sent 4.
     shouldFail = clientMax 3 $ \case
-        Left (GRPCIOBadStatusCode StatusInvalidArgument _)
+        Left (GRPCIOBadStatusCode StatusResourceExhausted _)
           -> pure ()
         rsp
           -> clientFail ("Expected failure response, but got: " ++ show rsp)
