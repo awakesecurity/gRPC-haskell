@@ -149,8 +149,8 @@ getLimit Pluck = C.maxCompletionQueuePluckers
 -- for the strategy we use to ensure that no one tries to use the
 -- queue after we begin the shutdown process. Errors with
 -- 'GRPCIOShutdownFailure' if the queue can't be shut down within 5 seconds.
-shutdownCompletionQueue :: CompletionQueue -> IO (Either GRPCIOError ())
-shutdownCompletionQueue scq@CompletionQueue{..} = do
+shutdownCompletionQueueForPluck :: CompletionQueue -> IO (Either GRPCIOError ())
+shutdownCompletionQueueForPluck scq@CompletionQueue{..} = do
   atomically $ writeTVar shuttingDown True
   atomically $ do
     readTVar currentPushers  >>= check . (==0)
@@ -169,6 +169,31 @@ shutdownCompletionQueue scq@CompletionQueue{..} = do
           tag <- newTag scq
           ev <- C.withDeadlineSeconds 1 $ \deadline ->
                   C.grpcCompletionQueuePluck unsafeCQ tag deadline C.reserved
+          grpcDebug $ "drainLoop: next() call got " ++ show ev
+          case C.eventCompletionType ev of
+            C.QueueShutdown -> return ()
+            C.QueueTimeout -> drainLoop
+            C.OpComplete -> drainLoop
+
+shutdownCompletionQueueForNext :: CompletionQueue -> IO (Either GRPCIOError ())
+shutdownCompletionQueueForNext scq@CompletionQueue{..} = do
+  atomically $ writeTVar shuttingDown True
+  atomically $ do
+    readTVar currentPushers  >>= check . (==0)
+    readTVar currentPluckers >>= check . (==0)
+  --drain the queue
+  C.grpcCompletionQueueShutdown unsafeCQ
+  loopRes <- timeout (5*10^(6::Int)) drainLoop
+  grpcDebug $ "Got CQ loop shutdown result of: " ++ show loopRes
+  case loopRes of
+    Nothing -> return $ Left GRPCIOShutdownFailure
+    Just () -> C.grpcCompletionQueueDestroy unsafeCQ >> return (Right ())
+
+  where drainLoop :: IO ()
+        drainLoop = do
+          grpcDebug "drainLoop: before next() call"
+          ev <- C.withDeadlineSeconds 1 $ \deadline ->
+                  C.grpcCompletionQueueNext unsafeCQ deadline C.reserved
           grpcDebug $ "drainLoop: next() call got " ++ show ev
           case C.eventCompletionType ev of
             C.QueueShutdown -> return ()

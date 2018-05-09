@@ -20,9 +20,12 @@
 
 module Network.GRPC.LowLevel.CompletionQueue
   ( CompletionQueue
-  , withCompletionQueue
+  , withCompletionQueueForPluck
+  , withCompletionQueueForNext
   , createCompletionQueueForPluck
-  , shutdownCompletionQueue
+  , createCompletionQueueForNext
+  , shutdownCompletionQueueForPluck
+  , shutdownCompletionQueueForNext
   , pluck
   , startBatch
   , channelCreateCall
@@ -56,9 +59,22 @@ import           System.Clock                                   (Clock (..),
                                                                  getTime)
 import           System.Info                                    (os)
 
-withCompletionQueue :: GRPC -> (CompletionQueue -> IO a) -> IO a
-withCompletionQueue grpc = bracket (createCompletionQueueForPluck grpc)
-                                   shutdownCompletionQueue
+withCompletionQueueForNext :: GRPC -> (CompletionQueue -> IO a) -> IO a
+withCompletionQueueForNext grpc = bracket (createCompletionQueueForNext grpc)
+                                   shutdownCompletionQueueForNext
+
+withCompletionQueueForPluck :: GRPC -> (CompletionQueue -> IO a) -> IO a
+withCompletionQueueForPluck grpc = bracket (createCompletionQueueForPluck grpc)
+                                   shutdownCompletionQueueForPluck
+
+createCompletionQueueForNext :: GRPC -> IO CompletionQueue
+createCompletionQueueForNext _ = do
+  unsafeCQ <- C.grpcCompletionQueueCreateForNext C.reserved
+  currentPluckers <- newTVarIO 0
+  currentPushers <- newTVarIO 0
+  shuttingDown <- newTVarIO False
+  nextTag <- newIORef minBound
+  return CompletionQueue{..}
 
 createCompletionQueueForPluck :: GRPC -> IO CompletionQueue
 createCompletionQueueForPluck _ = do

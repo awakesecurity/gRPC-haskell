@@ -109,7 +109,7 @@ destroyClient Client{..} = do
   grpcDebug "destroyClient: calling grpc_channel_destroy()"
   C.grpcChannelDestroy clientChannel
   grpcDebug "destroyClient: shutting down CQ."
-  shutdownResult <- shutdownCompletionQueue clientCQ
+  shutdownResult <- shutdownCompletionQueueForPluck clientCQ
   case shutdownResult of
     Left x -> do putStrLn $ "Failed to stop client CQ: " ++ show x
                  putStrLn $ "Trying to shut down anyway."

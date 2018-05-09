@@ -40,7 +40,7 @@ import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
                                                         serverRegisterCompletionQueue,
                                                         serverRequestCall,
                                                         serverShutdownAndNotify,
-                                                        shutdownCompletionQueue)
+                                                        shutdownCompletionQueueForPluck)
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
 import qualified Network.GRPC.Unsafe                   as C
@@ -203,7 +203,7 @@ stopServer Server{ unsafeServer = s, .. } = do
   shutdownCQ serverCallCQ
 
   where shutdownCQ scq = do
-          shutdownResult <- shutdownCompletionQueue scq
+          shutdownResult <- shutdownCompletionQueueForPluck scq
           case shutdownResult of
             Left _ -> do putStrLn "Warning: completion queue didn't shut down."
                          putStrLn "Trying to stop server anyway."
