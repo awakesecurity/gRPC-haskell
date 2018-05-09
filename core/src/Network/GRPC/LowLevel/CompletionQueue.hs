@@ -57,12 +57,12 @@ import           System.Clock                                   (Clock (..),
 import           System.Info                                    (os)
 
 withCompletionQueue :: GRPC -> (CompletionQueue -> IO a) -> IO a
-withCompletionQueue grpc = bracket (createCompletionQueue grpc)
+withCompletionQueue grpc = bracket (createCompletionQueueForPluck grpc)
                                    shutdownCompletionQueue
 
-createCompletionQueue :: GRPC -> IO CompletionQueue
-createCompletionQueue _ = do
-  unsafeCQ <- C.grpcCompletionQueueCreate C.reserved
+createCompletionQueueForPluck :: GRPC -> IO CompletionQueue
+createCompletionQueueForPluck _ = do
+  unsafeCQ <- C.grpcCompletionQueueCreateForPluck C.reserved
   currentPluckers <- newTVarIO 0
   currentPushers <- newTVarIO 0
   shuttingDown <- newTVarIO False
