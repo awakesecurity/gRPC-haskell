@@ -20,6 +20,8 @@ packages:
 extra-deps: [ aeson-1.1.1.0
             , managed-1.0.5
             , swagger2-2.1.6
+            , c2hs-0.28.3
+            , language-c-0.7.2
             ]
 
 # Override default flag values for local packages and extra-deps
