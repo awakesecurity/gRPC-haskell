@@ -225,7 +225,7 @@ castPeek p = do
 {#fun grpc_call_cancel_with_status as ^
   {`Call', `StatusCode', `String',unReserved `Reserved'} -> `()'#}
 
-{#fun grpc_call_destroy as ^ {`Call'} -> `()'#}
+{#fun grpc_call_unref as ^ {`Call'} -> `()'#}
 
 -- | Gets the peer of the current call as a string.
 {#fun grpc_call_get_peer as ^ {`Call'} -> `String' getPeerPeek* #}
