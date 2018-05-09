@@ -148,6 +148,12 @@ castPeek p = do
 
 {#fun grpc_version_string as ^ {} -> `String' #}
 
+{#fun grpc_completion_queue_create_for_pluck as ^
+  {unReserved `Reserved'} -> `CompletionQueue'#}
+
+{#fun grpc_completion_queue_create_for_next as ^
+  {unReserved `Reserved'} -> `CompletionQueue'#}
+
 -- | Create a new 'CompletionQueue'. See the docs for
 -- 'grpcCompletionQueueShutdown' for instructions on how to clean up afterwards.
 {#fun grpc_completion_queue_create as ^
