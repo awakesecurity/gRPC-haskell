@@ -184,7 +184,7 @@ serverRequestAsyncCall rm s scq ccq =
     runExceptT $ case ce of
       C.CallOk -> do
         ExceptT $ do
-          r <- next' scq tag Nothing
+          r <- next' scq Nothing
           dbug $ "pluck' finished:" ++ show r
           return r
         lift $
