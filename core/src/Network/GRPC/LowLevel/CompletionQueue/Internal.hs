@@ -172,9 +172,11 @@ shutdownCompletionQueueForPluck scq@CompletionQueue{..} = do
   grpcDebug $ "Got CQ loop shutdown result of: " ++ show loopRes
   case loopRes of
     Nothing -> return $ Left GRPCIOShutdownFailure
-    Just () -> C.grpcCompletionQueueDestroy unsafeCQ >> return (Right ())
+    Just (Left GRPCIOTimeout) -> return (Left GRPCIOTimeout)
+    Just (Right ()) -> C.grpcCompletionQueueDestroy unsafeCQ >> return (Right ())
+    _ -> fail "error"
 
-  where drainLoop :: IO ()
+  where drainLoop :: IO (Either GRPCIOError ())
         drainLoop = do
           grpcDebug "drainLoop: before pluck() call"
           tag <- newTag scq
@@ -182,8 +184,8 @@ shutdownCompletionQueueForPluck scq@CompletionQueue{..} = do
                   C.grpcCompletionQueuePluck unsafeCQ tag deadline C.reserved
           grpcDebug $ "drainLoop: pluck() call got " ++ show ev
           case C.eventCompletionType ev of
-            C.QueueShutdown -> return ()
-            C.QueueTimeout -> drainLoop
+            C.QueueShutdown -> return (Right ())
+            C.QueueTimeout -> return (Left GRPCIOTimeout)
             C.OpComplete -> drainLoop
 
 shutdownCompletionQueueForNext :: CompletionQueue -> IO (Either GRPCIOError ())
