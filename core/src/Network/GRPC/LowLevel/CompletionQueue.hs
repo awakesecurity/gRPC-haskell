@@ -47,6 +47,7 @@ import           Control.Monad.Trans.Except
 import           Data.IORef                                     (newIORef)
 import           Data.List                                      (intersperse)
 import           Foreign.Ptr                                    (nullPtr)
+import qualified Foreign.Marshal.Utils as F
 import           Foreign.Storable                               (peek)
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue.Internal
@@ -178,14 +179,14 @@ serverRequestAsyncCall rm s scq ccq =
   with allocs $ \(dead, call, pay, meta) -> do
     md  <- peek meta
     tag <- newTag scq
-    dbug $ "got pluck permission, registering call for tag=" ++ show tag
+    dbug $ "got next permission, registering call for tag=" ++ show tag
     ce <- C.grpcServerRequestRegisteredCall s (methodHandle rm) call dead md
             pay (unsafeCQ ccq) (unsafeCQ scq) tag
     runExceptT $ case ce of
       C.CallOk -> do
         ExceptT $ do
           r <- next' scq Nothing
-          dbug $ "pluck' finished:" ++ show r
+          dbug $ "next' finished:" ++ show r
           return r
         lift $
           ServerCall
@@ -203,7 +204,7 @@ serverRequestAsyncCall rm s scq ccq =
       <*> mgdPtr
       <*> mgdPayload (methodType rm)
       <*> managed C.withMetadataArrayPtr
-    dbug = grpcDebug . ("serverRequestCall(R): " ++)
+    dbug = grpcDebug . ("serverRequestAsyncCall(R): " ++)
     -- On OS X, gRPC gives us a deadline that is just a delta, so we convert
     -- it to an actual deadline.
     convertDeadline (fmap C.timeSpec . peek -> d)
