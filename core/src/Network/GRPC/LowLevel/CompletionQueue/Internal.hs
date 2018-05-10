@@ -176,11 +176,11 @@ shutdownCompletionQueueForPluck scq@CompletionQueue{..} = do
 
   where drainLoop :: IO ()
         drainLoop = do
-          grpcDebug "drainLoop: before next() call"
+          grpcDebug "drainLoop: before pluck() call"
           tag <- newTag scq
           ev <- C.withDeadlineSeconds 1 $ \deadline ->
                   C.grpcCompletionQueuePluck unsafeCQ tag deadline C.reserved
-          grpcDebug $ "drainLoop: next() call got " ++ show ev
+          grpcDebug $ "drainLoop: pluck() call got " ++ show ev
           case C.eventCompletionType ev of
             C.QueueShutdown -> return ()
             C.QueueTimeout -> drainLoop
