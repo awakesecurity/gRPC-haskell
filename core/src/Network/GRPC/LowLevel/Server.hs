@@ -171,6 +171,11 @@ startServer grpc conf@ServerConfig{..} =
       error $ "Unable to bind port: " ++ show port
     cq <- createCompletionQueueForPluck grpc
     serverRegisterCompletionQueue server cq
+    ccq <- createCompletionQueueForPluck grpc
+    asyncQueue <- createCompletionQueueForNext grpc
+    serverRegisterCompletionQueue server asyncQueue
+    asyncCallQueue <- createCompletionQueueForNext grpc
+
     grpcDebug $ "startServer: server CQ: " ++ show cq
 
     -- Register methods according to their GRPCMethodType kind. It's a bit ugly
@@ -188,10 +193,6 @@ startServer grpc conf@ServerConfig{..} =
     C.grpcServerStart server
     forks <- newTVarIO S.empty
     shutdown <- newTVarIO False
-    ccq <- createCompletionQueueForPluck grpc
-    asyncQueue <- createCompletionQueueForNext grpc
-    -- serverRegisterCompletionQueue server asyncQueue
-    asyncCallQueue <- createCompletionQueueForPluck grpc
     return $ Server grpc server (Port actualPort) asyncQueue asyncCallQueue cq ccq ns ss cs bs conf forks
       shutdown
 
