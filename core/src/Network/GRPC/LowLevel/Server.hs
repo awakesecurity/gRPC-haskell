@@ -360,7 +360,7 @@ serverCreateAsyncCall :: Server
                  -> RegisteredMethod mt
                  -> IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
 serverCreateAsyncCall Server{..} rm =
-  serverRequestAsyncCall rm unsafeServer serverAsyncCQ serverAsyncCallCQ
+  serverRequestAsyncCall rm unsafeServer serverAsyncCQ serverCallCQ
 
 withServerCall :: Server
                -> RegisteredMethod mt
