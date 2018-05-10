@@ -134,7 +134,7 @@ next' CompletionQueue{..} mwait =
 -- | Translate 'C.Event' to an error. The caller is responsible for ensuring
 -- that the event actually corresponds to an error condition; a successful event
 -- will be translated to a 'GRPCIOUnknownError'.
-eventToError :: C.Event -> (Either GRPCIOError a)
+eventToError :: C.Event -> Either GRPCIOError a
 eventToError (C.Event C.QueueShutdown _ _) = Left GRPCIOShutdown
 eventToError (C.Event C.QueueTimeout _ _) = Left GRPCIOTimeout
 eventToError (C.Event C.OpComplete False _) = Left GRPCIOTimeout
