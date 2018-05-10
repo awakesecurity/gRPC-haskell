@@ -42,7 +42,8 @@ import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
                                                         serverRequestCall,
                                                         serverRequestAsyncCall,
                                                         serverShutdownAndNotify,
-                                                        shutdownCompletionQueueForPluck)
+                                                        shutdownCompletionQueueForPluck,
+                                                        shutdownCompletionQueueForNext)
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
 import qualified Network.GRPC.Unsafe                   as C
@@ -168,8 +169,8 @@ startServer grpc conf@ServerConfig{..} =
     when (unPort port > 0 && actualPort /= unPort port) $
       error $ "Unable to bind port: " ++ show port
     cq <- createCompletionQueueForPluck grpc
-    grpcDebug $ "startServer: server CQ: " ++ show cq
     serverRegisterCompletionQueue server cq
+    grpcDebug $ "startServer: server CQ: " ++ show cq
 
     -- Register methods according to their GRPCMethodType kind. It's a bit ugly
     -- to partition them this way, but we get very convenient phantom typing
@@ -188,26 +189,28 @@ startServer grpc conf@ServerConfig{..} =
     shutdown <- newTVarIO False
     ccq <- createCompletionQueueForPluck grpc
     asyncQueue <- createCompletionQueueForNext grpc
-    serverRegisterCompletionQueue server asyncQueue
-    asyncCallQueue <- createCompletionQueueForNext grpc
+    -- serverRegisterCompletionQueue server asyncQueue
+    asyncCallQueue <- createCompletionQueueForPluck grpc
     return $ Server grpc server (Port actualPort) asyncQueue asyncCallQueue cq ccq ns ss cs bs conf forks
       shutdown
-
-
 
 stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?
 stopServer Server{ unsafeServer = s, .. } = do
-  grpcDebug "stopServer: calling shutdownNotify."
-  shutdownNotify serverCQ
+  grpcDebug "stopServer: calling shutdownNotify on sync queue."
+  shutdownNotify serverCallCQ
+  -- grpcDebug "stopServer: calling shutdownNotify on async queue."
+  -- shutdownNotify serverAsyncCQ
   grpcDebug "stopServer: cancelling all calls."
   C.grpcServerCancelAllCalls s
   cleanupForks
   grpcDebug "stopServer: call grpc_server_destroy."
   C.grpcServerDestroy s
   grpcDebug "stopServer: shutting down CQ."
-  shutdownCQ serverCQ
+
+  -- shutdownAsyncCQ serverAsyncCQ
   shutdownCQ serverCallCQ
+
 
   where shutdownCQ scq = do
           shutdownResult <- shutdownCompletionQueueForPluck scq
@@ -215,6 +218,12 @@ stopServer Server{ unsafeServer = s, .. } = do
             Left _ -> do putStrLn "Warning: completion queue didn't shut down."
                          putStrLn "Trying to stop server anyway."
             Right _ -> return ()
+        shutdownAsyncCQ scq = do
+                  shutdownResult <- shutdownCompletionQueueForNext scq
+                  case shutdownResult of
+                    Left _ -> do putStrLn "Warning: completion queue didn't shut down."
+                                 putStrLn "Trying to stop server anyway."
+                    Right _ -> return ()
         shutdownNotify scq = do
           let shutdownTag = C.tag 0
           serverShutdownAndNotify s scq shutdownTag
