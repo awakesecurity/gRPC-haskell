@@ -122,14 +122,13 @@ pluck' CompletionQueue{..} tag mwait =
 
 -- Variant of pluck' which assumes pluck permission has been granted.
 next' :: CompletionQueue
-       -> C.Tag
        -> Maybe TimeoutSeconds
        -> IO (Either GRPCIOError ())
-next' CompletionQueue{..} tag mwait =
+next' CompletionQueue{..} mwait =
   maybe C.withInfiniteDeadline C.withDeadlineSeconds mwait $ \dead -> do
-    grpcDebug $ "pluck: blocking on grpc_completion_queue_pluck for tag=" ++ show tag
+    grpcDebug "next: blocking on grpc_completion_queue_next"
     ev <- C.grpcCompletionQueueNext unsafeCQ dead C.reserved
-    grpcDebug $ "pluck finished: " ++ show ev
+    grpcDebug $ "next finished: " ++ show ev
     return $ if isEventSuccessful ev then Right () else eventToError ev
 
 -- | Translate 'C.Event' to an error. The caller is responsible for ensuring
