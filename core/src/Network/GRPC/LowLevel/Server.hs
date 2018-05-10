@@ -217,6 +217,8 @@ stopServer Server{ unsafeServer = s, .. } = do
   where shutdownCQ scq = do
           shutdownResult <- shutdownCompletionQueueForPluck scq
           case shutdownResult of
+            Left GRPCIOTimeout -> do grpcDebug "stopServer: Could not stop cleanly. Cancelling all calls."
+                                     C.grpcServerCancelAllCalls s
             Left _ -> do putStrLn "Warning: completion queue didn't shut down."
                          putStrLn "Trying to stop server anyway."
             Right _ -> return ()
