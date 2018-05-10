@@ -199,19 +199,19 @@ startServer grpc conf@ServerConfig{..} =
 stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?
 stopServer Server{ unsafeServer = s, .. } = do
-  grpcDebug "stopServer: calling shutdownNotify on sync queue."
-  shutdownNotify serverCallCQ
-  -- grpcDebug "stopServer: calling shutdownNotify on async queue."
-  -- shutdownNotify serverAsyncCQ
-  grpcDebug "stopServer: cancelling all calls."
-  C.grpcServerCancelAllCalls s
+  grpcDebug "stopServer: calling shutdownNotify on shutdown queue."
+  shutdownQueue <- createCompletionQueueForPluck serverGRPC
+  shutdownNotify shutdownQueue
+  grpcDebug "stopServer: cleaning up forks."
   cleanupForks
+  grpcDebug "stopServer: shutting down CQ."
+  shutdownCQ serverCQ
+  shutdownCQ serverCallCQ
+  shutdownAsyncCQ serverAsyncCQ
+  shutdownAsyncCQ serverAsyncCallCQ
+  shutdownCQ shutdownQueue
   grpcDebug "stopServer: call grpc_server_destroy."
   C.grpcServerDestroy s
-  grpcDebug "stopServer: shutting down CQ."
-
-  -- shutdownAsyncCQ serverAsyncCQ
-  shutdownCQ serverCallCQ
 
 
   where shutdownCQ scq = do
