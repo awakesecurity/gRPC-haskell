@@ -1,5 +1,6 @@
 from concurrent import futures
 from simple_pb2_grpc import *
+from simple_pb2 import *
 from uuid import uuid4
 import random
 import Queue

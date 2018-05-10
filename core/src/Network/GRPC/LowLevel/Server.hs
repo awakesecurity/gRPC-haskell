@@ -36,9 +36,11 @@ import qualified Data.Set as S
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
                                                         createCompletionQueueForPluck,
+                                                        createCompletionQueueForNext,
                                                         pluck,
                                                         serverRegisterCompletionQueue,
                                                         serverRequestCall,
+                                                        serverRequestAsyncCall,
                                                         serverShutdownAndNotify,
                                                         shutdownCompletionQueueForPluck)
 import           Network.GRPC.LowLevel.GRPC
@@ -53,6 +55,8 @@ data Server = Server
   { serverGRPC           :: GRPC
   , unsafeServer         :: C.Server
   , listeningPort        :: Port
+  , serverAsyncCQ             :: CompletionQueue
+  , serverAsyncCallCQ         :: CompletionQueue
   , serverCQ             :: CompletionQueue
   -- ^ CQ used for receiving new calls.
   , serverCallCQ               :: CompletionQueue
@@ -183,7 +187,10 @@ startServer grpc conf@ServerConfig{..} =
     forks <- newTVarIO S.empty
     shutdown <- newTVarIO False
     ccq <- createCompletionQueueForPluck grpc
-    return $ Server grpc server (Port actualPort) cq ccq ns ss cs bs conf forks
+    asyncQueue <- createCompletionQueueForNext grpc
+    serverRegisterCompletionQueue server asyncQueue
+    asyncCallQueue <- createCompletionQueueForNext grpc
+    return $ Server grpc server (Port actualPort) asyncQueue asyncCallQueue cq ccq ns ss cs bs conf forks
       shutdown
 
 
@@ -338,12 +345,31 @@ serverCreateCall :: Server
 serverCreateCall Server{..} rm =
   serverRequestCall rm unsafeServer serverCQ serverCallCQ
 
+serverCreateAsyncCall :: Server
+                 -> RegisteredMethod mt
+                 -> IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
+serverCreateAsyncCall Server{..} rm =
+  serverRequestAsyncCall rm unsafeServer serverAsyncCQ serverAsyncCallCQ
+
 withServerCall :: Server
                -> RegisteredMethod mt
                -> (ServerCall (MethodPayload mt) -> IO (Either GRPCIOError a))
                -> IO (Either GRPCIOError a)
 withServerCall s rm f =
     serverCreateCall s rm >>= \case
+      Left e  -> return (Left e)
+      Right c -> do
+        debugServerCall c
+        f c `finally` do
+          grpcDebug "withServerCall(R): destroying."
+          destroyServerCall c
+
+withServerAsyncCall :: Server
+               -> RegisteredMethod mt
+               -> (ServerCall (MethodPayload mt) -> IO (Either GRPCIOError a))
+               -> IO (Either GRPCIOError a)
+withServerAsyncCall s rm f =
+    serverCreateAsyncCall s rm >>= \case
       Left e  -> return (Left e)
       Right c -> do
         debugServerCall c
@@ -365,7 +391,7 @@ serverReader :: Server
              -> ServerReaderHandlerLL
              -> IO (Either GRPCIOError ())
 serverReader s rm initMeta f =
-  withServerCall s rm (\sc -> serverReader' s sc initMeta f)
+  withServerAsyncCall s rm (\sc -> serverReader' s sc initMeta f)
 
 serverReader' :: Server
               -> ServerCall (MethodPayload 'ClientStreaming)
@@ -395,7 +421,7 @@ serverWriter :: Server
              -> ServerWriterHandlerLL
              -> IO (Either GRPCIOError ())
 serverWriter s rm initMeta f =
-  withServerCall s rm (\sc -> serverWriter' s sc initMeta f)
+  withServerAsyncCall s rm (\sc -> serverWriter' s sc initMeta f)
 
 serverWriter' :: Server
               -> ServerCall (MethodPayload 'ServerStreaming)
@@ -423,7 +449,7 @@ serverRW :: Server
          -> ServerRWHandlerLL
          -> IO (Either GRPCIOError ())
 serverRW s rm initMeta f =
-  withServerCall s rm (\sc -> serverRW' s sc initMeta f)
+  withServerAsyncCall s rm (\sc -> serverRW' s sc initMeta f)
 
 serverRW' :: Server
           -> ServerCall (MethodPayload 'BiDiStreaming)
