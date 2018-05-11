@@ -232,6 +232,41 @@ runOps' :: C.Call
         -> ExceptT GRPCIOError IO [OpRecvResult]
 runOps' c cq = ExceptT . runOps c cq
 
+runAsyncOps :: C.Call
+          -- ^ 'Call' that this batch is associated with. One call can be
+          -- associated with many batches.
+       -> CompletionQueue
+          -- ^ Queue on which our tag will be placed once our ops are done
+          -- running.
+       -> [Op]
+          -- ^ The list of 'Op's to execute.
+       -> IO (Either GRPCIOError [OpRecvResult])
+runAsyncOps call cq ops =
+  let l = length ops in
+    withOpArrayAndCtxts ops $ \(opArray, contexts) -> do
+      grpcDebug $ "runAsyncOps: allocated op contexts: " ++ show contexts
+      tag <- newTag cq
+      grpcDebug $ "runAsyncOps: tag: " ++ show tag
+      callError <- startBatch cq call opArray l tag
+      grpcDebug $ "runAsyncOps: called start_batch. callError: "
+                   ++ (show callError)
+      case callError of
+        Left x -> return $ Left x
+        Right () -> do
+          ev <- next' cq Nothing
+          grpcDebug $ "runAsyncOps: next returned " ++ show ev
+          case ev of
+            Right () -> do
+              grpcDebug "runOps: got good op; starting."
+              fmap (Right . catMaybes) $ mapM resultFromOpContext contexts
+            Left err -> return $ Left err
+
+runAsyncOps' :: C.Call
+        -> CompletionQueue
+        -> [Op]
+        -> ExceptT GRPCIOError IO [OpRecvResult]
+runAsyncOps' c cq = ExceptT . runAsyncOps c cq
+
 -- | If response status info is present in the given 'OpRecvResult's, returns
 -- a tuple of trailing metadata, status code, and status details.
 extractStatusInfo :: [OpRecvResult]
