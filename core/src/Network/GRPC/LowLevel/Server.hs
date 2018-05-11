@@ -197,13 +197,13 @@ stopServer :: Server -> IO ()
 stopServer Server{ unsafeServer = s, .. } = do
   grpcDebug "stopServer: calling shutdownNotify on shutdown queue."
   shutdownNotify serverCQ
+  shutdownCQ serverCallCQ
+  C.grpcServerCancelAllCalls s
   grpcDebug "stopServer: cleaning up forks."
   cleanupForks
-  C.grpcServerCancelAllCalls s
   grpcDebug "stopServer: call grpc_server_destroy."
   C.grpcServerDestroy s
   grpcDebug "stopServer: shutting down CQ."
-  shutdownCQ serverCallCQ
   shutdownCQ serverCQ
 
 
