@@ -299,9 +299,20 @@ sendSingle c cq op = void (runOps' c cq [op])
 sendInitialMetadata :: SendSingle MetadataMap
 sendInitialMetadata c cq = sendSingle c cq . OpSendInitialMetadata
 
+sendAsyncSingle :: SendSingle Op
+sendAsyncSingle c cq op = void (runAsyncOps' c cq [op])
+
+
+sendAsyncInitialMetadata :: SendSingle MetadataMap
+sendAsyncInitialMetadata c cq = sendAsyncSingle c cq . OpSendInitialMetadata
+
 sendStatusFromServer :: SendSingle (MetadataMap, C.StatusCode, StatusDetails)
 sendStatusFromServer c cq (md, st, ds) =
   sendSingle c cq (OpSendStatusFromServer md st ds)
+
+sendAsyncStatusFromServer :: SendSingle (MetadataMap, C.StatusCode, StatusDetails)
+sendAsyncStatusFromServer c cq (md, st, ds) =
+  sendAsyncSingle c cq (OpSendStatusFromServer md st ds)
 
 recvInitialMessage :: RecvSingle ByteString
 recvInitialMessage c cq = ExceptT (streamRecvPrim c cq ) >>= \case
