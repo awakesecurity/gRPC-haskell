@@ -405,7 +405,7 @@ serverReader :: Server
              -> ServerReaderHandlerLL
              -> IO (Either GRPCIOError ())
 serverReader s rm initMeta f =
-  withServerAsyncCall s rm (\sc -> serverReader' s sc initMeta f)
+  withServerCall s rm (\sc -> serverReader' s sc initMeta f)
 
 serverReader' :: Server
               -> ServerCall (MethodPayload 'ClientStreaming)
