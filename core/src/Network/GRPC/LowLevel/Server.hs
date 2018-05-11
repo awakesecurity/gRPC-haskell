@@ -435,7 +435,7 @@ serverWriter :: Server
              -> ServerWriterHandlerLL
              -> IO (Either GRPCIOError ())
 serverWriter s rm initMeta f =
-  withServerAsyncCall s rm (\sc -> serverWriter' s sc initMeta f)
+  withServerCall s rm (\sc -> serverWriter' s sc initMeta f)
 
 serverWriter' :: Server
               -> ServerCall (MethodPayload 'ServerStreaming)
@@ -463,7 +463,7 @@ serverRW :: Server
          -> ServerRWHandlerLL
          -> IO (Either GRPCIOError ())
 serverRW s rm initMeta f =
-  withServerAsyncCall s rm (\sc -> serverRW' s sc initMeta f)
+  withServerCall s rm (\sc -> serverRW' s sc initMeta f)
 
 serverRW' :: Server
           -> ServerCall (MethodPayload 'BiDiStreaming)

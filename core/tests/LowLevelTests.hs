@@ -39,7 +39,27 @@ import           Test.Tasty.HUnit                          as HU (Assertion,
 
 lowLevelTests :: TestTree
 lowLevelTests = testGroup "Unit tests of low-level Haskell library"
-  [ testClientStreaming
+  [ testGRPCBracket
+  , testCompletionQueueCreateDestroy
+  , testClientCreateDestroy
+  , testClientCall
+  , testClientTimeoutNoServer
+  , testServerCreateDestroy
+  , testMixRegisteredUnregistered
+  , testPayload
+  , testSSL
+  , testAuthMetadataTransfer
+  , testServerAuthProcessorCancel
+  , testPayloadUnregistered
+  , testServerCancel
+  , testGoaway
+  , testSlowServer
+  , testServerCallExpirationCheck
+  , testCustomUserAgent
+  , testClientCompression
+  , testClientServerCompression
+  , testClientMaxReceiveMessageLengthChannelArg
+  , testClientStreaming
   , testClientStreamingUnregistered
   , testServerStreaming
   , testServerStreamingUnregistered
