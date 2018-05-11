@@ -36,6 +36,7 @@ import qualified Data.Set as S
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
                                                         createCompletionQueueForPluck,
+                                                        createCompletionQueueForPluckNonPolling,
                                                         createCompletionQueueForNext,
                                                         pluck,
                                                         next',
@@ -200,15 +201,15 @@ stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?
 stopServer Server{ unsafeServer = s, .. } = do
   grpcDebug "stopServer: calling shutdownNotify on shutdown queue."
-  shutdownQueue <- createCompletionQueueForPluck serverGRPC
+  shutdownQueue <- createCompletionQueueForPluckNonPolling serverGRPC
   shutdownNotify shutdownQueue
   grpcDebug "stopServer: cleaning up forks."
   cleanupForks
   grpcDebug "stopServer: shutting down CQ."
-  shutdownCQ serverCQ
-  shutdownCQ serverCallCQ
   shutdownAsyncCQ serverAsyncCQ
   shutdownAsyncCQ serverAsyncCallCQ
+  shutdownCQ serverCQ
+  shutdownCQ serverCallCQ
   shutdownCQ shutdownQueue
   grpcDebug "stopServer: call grpc_server_destroy."
   C.grpcServerDestroy s

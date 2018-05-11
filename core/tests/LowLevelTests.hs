@@ -75,7 +75,7 @@ testCompletionQueueCreateDestroy :: TestTree
 testCompletionQueueCreateDestroy =
   testCase "Create/destroy CQ" $ runManaged $ do
     g <- mgdGRPC
-    liftIO (withCompletionQueue g nop)
+    liftIO (withCompletionQueueForPluck g nop)
 
 testClientCreateDestroy :: TestTree
 testClientCreateDestroy =
