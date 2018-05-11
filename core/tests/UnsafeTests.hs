@@ -26,27 +26,11 @@ import           Test.Tasty.QuickCheck as QC (Arbitrary, arbitrary, testProperty
 
 unsafeTests :: TestTree
 unsafeTests = testGroup "Unit tests for unsafe C bindings"
-  [ roundtripSliceUnit "\NULabc\NUL"
-  , roundtripSliceUnit largeByteString
-  , roundtripByteBufferUnit largeByteString
-  , roundtripTimeSpec (TimeSpec 123 123)
-  , testMetadata
-  , testNow
-  , testCreateDestroyMetadata
-  , testCreateDestroyMetadataKeyVals
-  , testCreateDestroyDeadline
-  , testCreateDestroyChannelArgs
-  , testCreateDestroyClientCreds
-  , testCreateDestroyServerCreds
-  ]
+  [  ]
 
 unsafeProperties :: TestTree
 unsafeProperties = testGroup "QuickCheck properties for unsafe C bindings"
-  [ roundtripSliceQC
-  , roundtripByteBufferQC
-  , roundtripMetadataQC
-  , metadataIsList
-  ]
+  [  ]
 
 instance Arbitrary B.ByteString where
   arbitrary = B.pack <$> arbitrary

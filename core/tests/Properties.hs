@@ -5,8 +5,4 @@ import           UnsafeTests
 
 main :: IO ()
 main = defaultMain $ testGroup "GRPC Unit Tests"
-  [ unsafeTests
-  , unsafeProperties
-  , lowLevelOpTests
-  , lowLevelTests
-  ]
+  [ lowLevelTests ]

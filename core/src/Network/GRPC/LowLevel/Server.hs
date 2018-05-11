@@ -203,16 +203,16 @@ stopServer Server{ unsafeServer = s, .. } = do
   grpcDebug "stopServer: calling shutdownNotify on shutdown queue."
   shutdownQueue <- createCompletionQueueForPluckNonPolling serverGRPC
   shutdownNotify shutdownQueue
+  shutdownCQ shutdownQueue
   grpcDebug "stopServer: cleaning up forks."
   cleanupForks
   grpcDebug "stopServer: shutting down CQ."
+  grpcDebug "stopServer: call grpc_server_destroy."
+  C.grpcServerDestroy s
   shutdownAsyncCQ serverAsyncCQ
   shutdownAsyncCQ serverAsyncCallCQ
   shutdownCQ serverCQ
   shutdownCQ serverCallCQ
-  shutdownCQ shutdownQueue
-  grpcDebug "stopServer: call grpc_server_destroy."
-  C.grpcServerDestroy s
 
 
   where shutdownCQ scq = do
@@ -363,7 +363,7 @@ serverCreateAsyncCall :: Server
                  -> RegisteredMethod mt
                  -> IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
 serverCreateAsyncCall Server{..} rm =
-  serverRequestAsyncCall rm unsafeServer serverAsyncCQ serverCallCQ
+  serverRequestAsyncCall rm unsafeServer serverAsyncCQ serverAsyncCallCQ
 
 withServerCall :: Server
                -> RegisteredMethod mt
