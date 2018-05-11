@@ -58,8 +58,6 @@ data Server = Server
   { serverGRPC           :: GRPC
   , unsafeServer         :: C.Server
   , listeningPort        :: Port
-  , serverAsyncCQ             :: CompletionQueue
-  , serverAsyncCallCQ         :: CompletionQueue
   , serverCQ             :: CompletionQueue
   -- ^ CQ used for receiving new calls.
   , serverCallCQ               :: CompletionQueue
@@ -173,9 +171,6 @@ startServer grpc conf@ServerConfig{..} =
     cq <- createCompletionQueueForPluck grpc
     serverRegisterCompletionQueue server cq
     ccq <- createCompletionQueueForPluck grpc
-    asyncQueue <- createCompletionQueueForNext grpc
-    serverRegisterCompletionQueue server asyncQueue
-    asyncCallQueue <- createCompletionQueueForNext grpc
 
     grpcDebug $ "startServer: server CQ: " ++ show cq
 
@@ -194,25 +189,22 @@ startServer grpc conf@ServerConfig{..} =
     C.grpcServerStart server
     forks <- newTVarIO S.empty
     shutdown <- newTVarIO False
-    return $ Server grpc server (Port actualPort) asyncQueue asyncCallQueue cq ccq ns ss cs bs conf forks
+    return $ Server grpc server (Port actualPort) cq ccq ns ss cs bs conf forks
       shutdown
 
 stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?
 stopServer Server{ unsafeServer = s, .. } = do
   grpcDebug "stopServer: calling shutdownNotify on shutdown queue."
-  shutdownQueue <- createCompletionQueueForPluckNonPolling serverGRPC
-  shutdownNotify shutdownQueue
-  shutdownCQ shutdownQueue
+  shutdownNotify serverCQ
   grpcDebug "stopServer: cleaning up forks."
   cleanupForks
-  grpcDebug "stopServer: shutting down CQ."
+  C.grpcServerCancelAllCalls s
   grpcDebug "stopServer: call grpc_server_destroy."
   C.grpcServerDestroy s
-  shutdownAsyncCQ serverAsyncCQ
-  shutdownAsyncCQ serverAsyncCallCQ
-  shutdownCQ serverCQ
+  grpcDebug "stopServer: shutting down CQ."
   shutdownCQ serverCallCQ
+  shutdownCQ serverCQ
 
 
   where shutdownCQ scq = do
@@ -363,7 +355,7 @@ serverCreateAsyncCall :: Server
                  -> RegisteredMethod mt
                  -> IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
 serverCreateAsyncCall Server{..} rm =
-  serverRequestAsyncCall rm unsafeServer serverAsyncCQ serverAsyncCallCQ
+  serverRequestAsyncCall rm unsafeServer serverCQ serverCallCQ
 
 withServerCall :: Server
                -> RegisteredMethod mt

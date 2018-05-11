@@ -86,7 +86,7 @@ testClientTimeoutNoServer =
   clientOnlyTest "request timeout when server DNE" $ \c -> do
     rm <- clientRegisterMethodNormal c "/foo"
     r  <- clientRequest c rm 1 "Hello" mempty
-    r @?= Left (GRPCIOBadStatusCode StatusDeadlineExceeded (StatusDetails "Deadline Exceeded"))
+    r @?= Left GRPCIOTimeout
 
 testServerCreateDestroy :: TestTree
 testServerCreateDestroy =
