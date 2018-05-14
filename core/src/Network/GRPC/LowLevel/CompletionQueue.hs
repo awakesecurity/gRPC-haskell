@@ -36,7 +36,6 @@ module Network.GRPC.LowLevel.CompletionQueue
   , serverRegisterCompletionQueue
   , serverShutdownAndNotify
   , serverRequestCall
-  , serverRequestAsyncCall
   , newTag
   )
 where
@@ -176,51 +175,6 @@ serverRequestCall rm s scq ccq =
       <*> mgdPayload (methodType rm)
       <*> managed C.withMetadataArrayPtr
     dbug = grpcDebug . ("serverRequestCall(R): " ++)
-    -- On OS X, gRPC gives us a deadline that is just a delta, so we convert
-    -- it to an actual deadline.
-    convertDeadline (fmap C.timeSpec . peek -> d)
-      | os == "darwin" = (+) <$> d <*> getTime Monotonic
-      | otherwise      = d
-
--- | Create the call object to handle a registered call.
-serverRequestAsyncCall :: RegisteredMethod mt
-                  -> C.Server
-                  -> CompletionQueue -- ^ server CQ
-                  -> CompletionQueue -- ^ call CQ
-                  -> IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
-serverRequestAsyncCall rm s scq ccq =
-  -- NB: The method type dictates whether or not a payload is present, according
-  -- to the payloadHandling function. We do not allocate a buffer for the
-  -- payload when it is not present.
-  with allocs $ \(dead, call, pay, meta) -> do
-    md  <- peek meta
-    tag <- newTag scq
-    dbug $ "got next permission, registering call for tag=" ++ show tag
-    ce <- C.grpcServerRequestRegisteredCall s (methodHandle rm) call dead md
-            pay (unsafeCQ ccq) (unsafeCQ scq) tag
-    runExceptT $ case ce of
-      C.CallOk -> do
-        ExceptT $ do
-          r <- next' scq Nothing
-          dbug $ "next' finished:" ++ show r
-          return r
-        lift $
-          ServerCall
-          <$> peek call
-          <*> return ccq
-          <*> C.getAllMetadataArray md
-          <*> extractPayload rm pay
-          <*> convertDeadline dead
-      _ -> do
-        lift $ dbug $ "Throwing callError: " ++ show ce
-        throwE (GRPCIOCallError ce)
-  where
-    allocs = (,,,)
-      <$> mgdPtr
-      <*> mgdPtr
-      <*> mgdPayload (methodType rm)
-      <*> managed C.withMetadataArrayPtr
-    dbug = grpcDebug . ("serverRequestAsyncCall(R): " ++)
     -- On OS X, gRPC gives us a deadline that is just a delta, so we convert
     -- it to an actual deadline.
     convertDeadline (fmap C.timeSpec . peek -> d)
