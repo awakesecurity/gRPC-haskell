@@ -28,7 +28,6 @@ module Network.GRPC.LowLevel.CompletionQueue
   , shutdownCompletionQueueForPluck
   , shutdownCompletionQueueForNext
   , pluck
-  , next'
   , startBatch
   , channelCreateCall
   , TimeoutSeconds

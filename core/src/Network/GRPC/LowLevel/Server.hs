@@ -36,13 +36,10 @@ import qualified Data.Set as S
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
                                                         createCompletionQueueForPluck,
-                                                        createCompletionQueueForPluckNonPolling,
                                                         createCompletionQueueForNext,
                                                         pluck,
-                                                        next',
                                                         serverRegisterCompletionQueue,
                                                         serverRequestCall,
-                                                        serverRequestAsyncCall,
                                                         serverShutdownAndNotify,
                                                         shutdownCompletionQueueForPluck,
                                                         shutdownCompletionQueueForNext)
@@ -351,31 +348,12 @@ serverCreateCall :: Server
 serverCreateCall Server{..} rm =
   serverRequestCall rm unsafeServer serverCQ serverCallCQ
 
-serverCreateAsyncCall :: Server
-                 -> RegisteredMethod mt
-                 -> IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
-serverCreateAsyncCall Server{..} rm =
-  serverRequestAsyncCall rm unsafeServer serverCQ serverCallCQ
-
 withServerCall :: Server
                -> RegisteredMethod mt
                -> (ServerCall (MethodPayload mt) -> IO (Either GRPCIOError a))
                -> IO (Either GRPCIOError a)
 withServerCall s rm f =
     serverCreateCall s rm >>= \case
-      Left e  -> return (Left e)
-      Right c -> do
-        debugServerCall c
-        f c `finally` do
-          grpcDebug "withServerCall(R): destroying."
-          destroyServerCall c
-
-withServerAsyncCall :: Server
-               -> RegisteredMethod mt
-               -> (ServerCall (MethodPayload mt) -> IO (Either GRPCIOError a))
-               -> IO (Either GRPCIOError a)
-withServerAsyncCall s rm f =
-    serverCreateAsyncCall s rm >>= \case
       Left e  -> return (Left e)
       Right c -> do
         debugServerCall c
