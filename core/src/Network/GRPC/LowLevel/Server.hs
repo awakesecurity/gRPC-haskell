@@ -212,12 +212,6 @@ stopServer Server{ unsafeServer = s, .. } = do
             Left _ -> do putStrLn "Warning: completion queue didn't shut down."
                          putStrLn "Trying to stop server anyway."
             Right _ -> return ()
-        shutdownAsyncCQ scq = do
-                  shutdownResult <- shutdownCompletionQueueForNext scq
-                  case shutdownResult of
-                    Left _ -> do putStrLn "Warning: completion queue didn't shut down."
-                                 putStrLn "Trying to stop server anyway."
-                    Right _ -> return ()
         shutdownNotify scq = do
           let shutdownTag = C.tag 0
           serverShutdownAndNotify s scq shutdownTag
