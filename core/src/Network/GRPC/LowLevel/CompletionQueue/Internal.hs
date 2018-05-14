@@ -120,17 +120,6 @@ pluck' CompletionQueue{..} tag mwait =
     grpcDebug $ "pluck finished: " ++ show ev
     return $ if isEventSuccessful ev then Right () else eventToError ev
 
--- Variant of pluck' which assumes pluck permission has been granted.
-next' :: CompletionQueue
-       -> Maybe TimeoutSeconds
-       -> IO (Either GRPCIOError ())
-next' CompletionQueue{..} mwait =
-  maybe C.withInfiniteDeadline C.withDeadlineSeconds mwait $ \dead -> do
-    grpcDebug "next: blocking on grpc_completion_queue_next"
-    ev <- C.grpcCompletionQueueNext unsafeCQ dead C.reserved
-    grpcDebug $ "next finished: " ++ show ev
-    return $ if isEventSuccessful ev then Right () else eventToError ev
-
 -- | Translate 'C.Event' to an error. The caller is responsible for ensuring
 -- that the event actually corresponds to an error condition; a successful event
 -- will be translated to a 'GRPCIOUnknownError'.
