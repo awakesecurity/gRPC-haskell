@@ -73,14 +73,12 @@ withCompletionQueueForPluck grpc = bracket (createCompletionQueueForPluck grpc)
 
 createCompletionQueueForNext :: GRPC -> IO CompletionQueue
 createCompletionQueueForNext _ = do
-  let attrs = C.QueueAttributes 1 C.CqNext C.CqNonListening
-  unsafeCQ <- F.with attrs $ \attrsPtr -> do
-    factory <- C.grpcCompletionQueueFactoryLookup attrsPtr
-    C.grpcCompletionQueueCreate factory attrsPtr C.reserved
+  unsafeCQ <- C.grpcCompletionQueueCreateForNext C.reserved
   currentPluckers <- newTVarIO 0
   currentPushers <- newTVarIO 0
   shuttingDown <- newTVarIO False
   nextTag <- newIORef minBound
+  -- TODO A next completion queue should have no need for plucker or pusher TVars.
   return CompletionQueue{..}
 
 createCompletionQueueForPluck :: GRPC -> IO CompletionQueue
