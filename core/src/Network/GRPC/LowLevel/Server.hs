@@ -200,6 +200,7 @@ stopServer Server{ unsafeServer = s, .. } = do
   grpcDebug "stopServer: call grpc_server_destroy."
   C.grpcServerDestroy s
   grpcDebug "stopServer: shutting down CQ."
+  -- Queues must be shut down after the server is destroyed.
   shutdownCQ serverCQ
   shutdownCQ serverCallCQ
 
