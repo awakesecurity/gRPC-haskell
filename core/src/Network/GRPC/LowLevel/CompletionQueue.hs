@@ -20,9 +20,12 @@
 
 module Network.GRPC.LowLevel.CompletionQueue
   ( CompletionQueue
-  , withCompletionQueue
-  , createCompletionQueue
-  , shutdownCompletionQueue
+  , withCompletionQueueForPluck
+  , withCompletionQueueForNext
+  , createCompletionQueueForPluck
+  , createCompletionQueueForNext
+  , shutdownCompletionQueueForPluck
+  , shutdownCompletionQueueForNext
   , pluck
   , startBatch
   , channelCreateCall
@@ -43,6 +46,7 @@ import           Control.Monad.Trans.Except
 import           Data.IORef                                     (newIORef)
 import           Data.List                                      (intersperse)
 import           Foreign.Ptr                                    (nullPtr)
+import qualified Foreign.Marshal.Utils as F
 import           Foreign.Storable                               (peek)
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue.Internal
@@ -56,13 +60,27 @@ import           System.Clock                                   (Clock (..),
                                                                  getTime)
 import           System.Info                                    (os)
 
-withCompletionQueue :: GRPC -> (CompletionQueue -> IO a) -> IO a
-withCompletionQueue grpc = bracket (createCompletionQueue grpc)
-                                   shutdownCompletionQueue
+withCompletionQueueForNext :: GRPC -> (CompletionQueue -> IO a) -> IO a
+withCompletionQueueForNext grpc = bracket (createCompletionQueueForNext grpc)
+                                   shutdownCompletionQueueForNext
 
-createCompletionQueue :: GRPC -> IO CompletionQueue
-createCompletionQueue _ = do
-  unsafeCQ <- C.grpcCompletionQueueCreate C.reserved
+withCompletionQueueForPluck :: GRPC -> (CompletionQueue -> IO a) -> IO a
+withCompletionQueueForPluck grpc = bracket (createCompletionQueueForPluck grpc)
+                                   shutdownCompletionQueueForPluck
+
+createCompletionQueueForNext :: GRPC -> IO CompletionQueue
+createCompletionQueueForNext _ = do
+  unsafeCQ <- C.grpcCompletionQueueCreateForNext C.reserved
+  currentPluckers <- newTVarIO 0
+  currentPushers <- newTVarIO 0
+  shuttingDown <- newTVarIO False
+  nextTag <- newIORef minBound
+  -- TODO A next completion queue should have no need for plucker or pusher TVars.
+  return CompletionQueue{..}
+
+createCompletionQueueForPluck :: GRPC -> IO CompletionQueue
+createCompletionQueueForPluck _ = do
+  unsafeCQ <- C.grpcCompletionQueueCreateForPluck C.reserved
   currentPluckers <- newTVarIO 0
   currentPushers <- newTVarIO 0
   shuttingDown <- newTVarIO False

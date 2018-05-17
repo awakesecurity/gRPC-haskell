@@ -32,6 +32,10 @@ import Network.GRPC.Unsafe.Constants
 newtype StatusDetails = StatusDetails {unStatusDetails :: ByteString}
   deriving (Eq, IsString, Monoid, Show)
 
+{#pointer *grpc_completion_queue_factory as CompletionQueueFactory newtype #}
+
+deriving instance Show CompletionQueueFactory
+
 {#pointer *grpc_completion_queue as CompletionQueue newtype #}
 
 deriving instance Show CompletionQueue
@@ -140,10 +144,39 @@ castPeek p = do
 
 {#fun grpc_version_string as ^ {} -> `String' #}
 
+{#fun grpc_completion_queue_create_for_pluck as ^
+  {unReserved `Reserved'} -> `CompletionQueue'#}
+
+{#fun grpc_completion_queue_create_for_next as ^
+  {unReserved `Reserved'} -> `CompletionQueue'#}
+
+{#enum grpc_cq_completion_type as CQCompletionType {underscoreToCase}
+  deriving (Show, Eq)#}
+
+{#enum grpc_cq_polling_type as CQPollingType {underscoreToCase}
+    deriving (Show, Eq)#}
+
+data QueueAttributes = QueueAttributes { version :: Int, completionType :: CQCompletionType, pollingType :: CQPollingType }
+  deriving (Show, Eq)
+{#pointer *grpc_completion_queue_attributes as QueueAttributesPtr -> QueueAttributes#}
+
+instance Storable QueueAttributes where
+  sizeOf _ = {#sizeof grpc_completion_queue_attributes#}
+  alignment _ = {#alignof grpc_completion_queue_attributes#}
+  peek p = QueueAttributes <$> liftM fromIntegral ({#get grpc_completion_queue_attributes->version#} p)
+                 <*> liftM (toEnum . fromIntegral) ({#get grpc_completion_queue_attributes->cq_completion_type#} p)
+                 <*> liftM (toEnum . fromIntegral) ({#get grpc_completion_queue_attributes->cq_polling_type#} p)
+  poke p (QueueAttributes v completionType pollingType) = do
+    {#set grpc_completion_queue_attributes.version#} p $ fromIntegral $ fromEnum v
+    {#set grpc_completion_queue_attributes.cq_completion_type#} p $ fromIntegral $ fromEnum completionType
+    {#set grpc_completion_queue_attributes.cq_polling_type#} p $ fromIntegral $ fromEnum pollingType
+
+{#fun grpc_completion_queue_factory_lookup as ^ {`QueueAttributesPtr'} -> `CompletionQueueFactory'#}
+
 -- | Create a new 'CompletionQueue'. See the docs for
 -- 'grpcCompletionQueueShutdown' for instructions on how to clean up afterwards.
 {#fun grpc_completion_queue_create as ^
-  {unReserved `Reserved'} -> `CompletionQueue'#}
+  {`CompletionQueueFactory', `QueueAttributesPtr', unReserved `Reserved'} -> `CompletionQueue'#}
 
 -- | Block until we get the next event off the given 'CompletionQueue',
 -- using the given 'CTimeSpecPtr' as a deadline specifying the max amount of
@@ -225,7 +258,7 @@ castPeek p = do
 {#fun grpc_call_cancel_with_status as ^
   {`Call', `StatusCode', `String',unReserved `Reserved'} -> `()'#}
 
-{#fun grpc_call_destroy as ^ {`Call'} -> `()'#}
+{#fun grpc_call_unref as ^ {`Call'} -> `()'#}
 
 -- | Gets the peer of the current call as a string.
 {#fun grpc_call_get_peer as ^ {`Call'} -> `String' getPeerPeek* #}

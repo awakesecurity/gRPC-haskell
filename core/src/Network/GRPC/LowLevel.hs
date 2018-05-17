@@ -16,7 +16,8 @@ GRPC
 
 -- * Completion queue utilities
 , CompletionQueue
-, withCompletionQueue
+, withCompletionQueueForPluck
+, withCompletionQueueForNext
 
 -- * Calls
 , GRPCMethodType(..)

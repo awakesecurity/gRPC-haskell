@@ -35,12 +35,14 @@ import qualified Data.ByteString                       as B
 import qualified Data.Set as S
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
-                                                        createCompletionQueue,
+                                                        createCompletionQueueForPluck,
+                                                        createCompletionQueueForNext,
                                                         pluck,
                                                         serverRegisterCompletionQueue,
                                                         serverRequestCall,
                                                         serverShutdownAndNotify,
-                                                        shutdownCompletionQueue)
+                                                        shutdownCompletionQueueForPluck,
+                                                        shutdownCompletionQueueForNext)
 import           Network.GRPC.LowLevel.GRPC
 import           Network.GRPC.LowLevel.Op
 import qualified Network.GRPC.Unsafe                   as C
@@ -163,9 +165,11 @@ startServer grpc conf@ServerConfig{..} =
     actualPort <- addPort server conf
     when (unPort port > 0 && actualPort /= unPort port) $
       error $ "Unable to bind port: " ++ show port
-    cq <- createCompletionQueue grpc
-    grpcDebug $ "startServer: server CQ: " ++ show cq
+    cq <- createCompletionQueueForPluck grpc
     serverRegisterCompletionQueue server cq
+    ccq <- createCompletionQueueForPluck grpc
+
+    grpcDebug $ "startServer: server CQ: " ++ show cq
 
     -- Register methods according to their GRPCMethodType kind. It's a bit ugly
     -- to partition them this way, but we get very convenient phantom typing
@@ -182,29 +186,30 @@ startServer grpc conf@ServerConfig{..} =
     C.grpcServerStart server
     forks <- newTVarIO S.empty
     shutdown <- newTVarIO False
-    ccq <- createCompletionQueue grpc
     return $ Server grpc server (Port actualPort) cq ccq ns ss cs bs conf forks
       shutdown
-
-
 
 stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?
 stopServer Server{ unsafeServer = s, .. } = do
-  grpcDebug "stopServer: calling shutdownNotify."
+  grpcDebug "stopServer: calling shutdownNotify on shutdown queue."
   shutdownNotify serverCQ
-  grpcDebug "stopServer: cancelling all calls."
   C.grpcServerCancelAllCalls s
+  grpcDebug "stopServer: cleaning up forks."
   cleanupForks
   grpcDebug "stopServer: call grpc_server_destroy."
   C.grpcServerDestroy s
   grpcDebug "stopServer: shutting down CQ."
+  -- Queues must be shut down after the server is destroyed.
   shutdownCQ serverCQ
   shutdownCQ serverCallCQ
 
+
   where shutdownCQ scq = do
-          shutdownResult <- shutdownCompletionQueue scq
+          shutdownResult <- shutdownCompletionQueueForPluck scq
           case shutdownResult of
+            Left GRPCIOTimeout -> do grpcDebug "stopServer: Could not stop cleanly. Cancelling all calls."
+                                     C.grpcServerCancelAllCalls s
             Left _ -> do putStrLn "Warning: completion queue didn't shut down."
                          putStrLn "Trying to stop server anyway."
             Right _ -> return ()

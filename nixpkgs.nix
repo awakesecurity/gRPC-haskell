@@ -7,6 +7,7 @@
 # The SHA256 will be printed as the last line of stdout.
 
 import ./fetch-nixpkgs.nix {
-   rev    = "74286ec9e76be7cd00c4247b9acb430c4bd9f1ce";
-   sha256 = "0njb3qd2wxj7gil8y61lwh7zacmvr6zklv67w5zmvifi1fvalvdg";
+  rev          = "74286ec9e76be7cd00c4247b9acb430c4bd9f1ce";
+  sha256       = "0njb3qd2wxj7gil8y61lwh7zacmvr6zklv67w5zmvifi1fvalvdg";
+  outputSha256 = "13ydgpzl5nix4gc358iy9zjd5nrrpbpwpxmfhis4aai2zmkja3ak";
 }

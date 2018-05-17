@@ -123,7 +123,7 @@ pluck' CompletionQueue{..} tag mwait =
 -- | Translate 'C.Event' to an error. The caller is responsible for ensuring
 -- that the event actually corresponds to an error condition; a successful event
 -- will be translated to a 'GRPCIOUnknownError'.
-eventToError :: C.Event -> (Either GRPCIOError a)
+eventToError :: C.Event -> Either GRPCIOError a
 eventToError (C.Event C.QueueShutdown _ _) = Left GRPCIOShutdown
 eventToError (C.Event C.QueueTimeout _ _) = Left GRPCIOTimeout
 eventToError (C.Event C.OpComplete False _) = Left GRPCIOTimeout
@@ -149,9 +149,38 @@ getLimit Pluck = C.maxCompletionQueuePluckers
 -- for the strategy we use to ensure that no one tries to use the
 -- queue after we begin the shutdown process. Errors with
 -- 'GRPCIOShutdownFailure' if the queue can't be shut down within 5 seconds.
-shutdownCompletionQueue :: CompletionQueue -> IO (Either GRPCIOError ())
-shutdownCompletionQueue CompletionQueue{..} = do
+shutdownCompletionQueueForPluck :: CompletionQueue -> IO (Either GRPCIOError ())
+shutdownCompletionQueueForPluck scq@CompletionQueue{..} = do
   atomically $ writeTVar shuttingDown True
+  atomically $ do
+    readTVar currentPushers  >>= check . (==0)
+    readTVar currentPluckers >>= check . (==0)
+  --drain the queue
+  C.grpcCompletionQueueShutdown unsafeCQ
+  loopRes <- timeout (5*10^(6::Int)) drainLoop
+  grpcDebug $ "Got CQ loop shutdown result of: " ++ show loopRes
+  case loopRes of
+    Nothing -> return $ Left GRPCIOShutdownFailure
+    Just (Left GRPCIOTimeout) -> return (Left GRPCIOTimeout)
+    Just (Right ()) -> C.grpcCompletionQueueDestroy unsafeCQ >> return (Right ())
+    _ -> fail "error"
+
+  where drainLoop :: IO (Either GRPCIOError ())
+        drainLoop = do
+          grpcDebug "drainLoop: before pluck() call"
+          tag <- newTag scq
+          ev <- C.withDeadlineSeconds 1 $ \deadline ->
+                  C.grpcCompletionQueuePluck unsafeCQ tag deadline C.reserved
+          grpcDebug $ "drainLoop: pluck() call got " ++ show ev
+          case C.eventCompletionType ev of
+            C.QueueShutdown -> return (Right ())
+            C.QueueTimeout -> return (Left GRPCIOTimeout)
+            C.OpComplete -> drainLoop
+
+shutdownCompletionQueueForNext :: CompletionQueue -> IO (Either GRPCIOError ())
+shutdownCompletionQueueForNext scq@CompletionQueue{..} = do
+  atomically $ writeTVar shuttingDown True
+  -- TODO: Probably don't need to check currentPushers and currentPluckers here.
   atomically $ do
     readTVar currentPushers  >>= check . (==0)
     readTVar currentPluckers >>= check . (==0)
