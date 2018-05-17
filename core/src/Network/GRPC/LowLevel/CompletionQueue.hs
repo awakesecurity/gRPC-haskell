@@ -23,7 +23,6 @@ module Network.GRPC.LowLevel.CompletionQueue
   , withCompletionQueueForPluck
   , withCompletionQueueForNext
   , createCompletionQueueForPluck
-  , createCompletionQueueForPluckNonPolling
   , createCompletionQueueForNext
   , shutdownCompletionQueueForPluck
   , shutdownCompletionQueueForNext
@@ -87,19 +86,6 @@ createCompletionQueueForPluck _ = do
   shuttingDown <- newTVarIO False
   nextTag <- newIORef minBound
   return CompletionQueue{..}
-
-createCompletionQueueForPluckNonPolling :: GRPC -> IO CompletionQueue
-createCompletionQueueForPluckNonPolling _ = do
-  let attrs = C.QueueAttributes 1 C.CqPluck C.CqNonPolling
-  unsafeCQ <- F.with attrs $ \attrsPtr -> do
-    factory <- C.grpcCompletionQueueFactoryLookup attrsPtr
-    C.grpcCompletionQueueCreate factory attrsPtr C.reserved
-  currentPluckers <- newTVarIO 0
-  currentPushers <- newTVarIO 0
-  shuttingDown <- newTVarIO False
-  nextTag <- newIORef minBound
-  return CompletionQueue{..}
-
 
 -- | Very simple wrapper around 'grpcCallStartBatch'. Throws 'GRPCIOShutdown'
 -- without calling 'grpcCallStartBatch' if the queue is shutting down.
