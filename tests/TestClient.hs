@@ -31,7 +31,7 @@ import Proto3.Suite
 import System.Random
 
 import Test.Tasty
-import Test.Tasty.HUnit ((@?=), assertString, testCase)
+import Test.Tasty.HUnit ((@?=), assertBool, testCase)
 
 testNormalCall client = testCase "Normal call" $
   do randoms <- fromList <$> replicateM 1000 (Fixed <$> randomRIO (1, 1000))
@@ -39,7 +39,7 @@ testNormalCall client = testCase "Normal call" $
      res <- simpleServiceNormalCall client
               (ClientNormalRequest req 10 mempty)
      case res of
-       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
+       ClientErrorResponse err -> assertBool ("ClientErrorResponse: " <> show err) False
        ClientNormalResponse res _ _ stsCode _ ->
          do stsCode @?= StatusOk
             simpleServiceResponseResponse res @?= "NormalRequest"
@@ -60,8 +60,8 @@ testClientStreamingCall client = testCase "Client-streaming call" $
 
      (finalName, totalSum) <- readMVar v
      case res of
-       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
-       ClientWriterResponse Nothing _ _ _ _ -> assertString "No response received"
+       ClientErrorResponse err -> assertBool ("ClientErrorResponse: " <> show err) False
+       ClientWriterResponse Nothing _ _ _ _ -> assertBool "No response received" False
        ClientWriterResponse (Just res) _ _ stsCode _ ->
          do stsCode @?= StatusOk
             simpleServiceResponseResponse res @?= finalName
@@ -74,14 +74,14 @@ testServerStreamingCall client = testCase "Server-streaming call" $
      let checkResults [] recv =
            do res <- recv
               case res of
-                Left err -> assertString ("recv error: " <> show err)
+                Left err -> assertBool ("recv error: " <> show err) False
                 Right Nothing -> pure ()
-                Right (Just _) -> assertString "recv: elements past end of stream"
+                Right (Just _) -> assertBool "recv: elements past end of stream" False
          checkResults (expNum:nums) recv =
            do res <- recv
               case res of
-                Left err -> assertString ("recv error: " <> show err)
-                Right Nothing -> assertString ("recv: stream ended earlier than expected")
+                Left err -> assertBool ("recv error: " <> show err) False
+                Right Nothing -> assertBool ("recv: stream ended earlier than expected") False
                 Right (Just (SimpleServiceResponse response num)) ->
                   do response @?= "Test"
                      num @?= expNum
@@ -90,7 +90,7 @@ testServerStreamingCall client = testCase "Server-streaming call" $
             ClientReaderRequest (SimpleServiceRequest "Test" (fromList nums)) 10 mempty
               (\_ -> checkResults nums)
      case res of
-       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
+       ClientErrorResponse err -> assertBool ("ClientErrorResponse: " <> show err) False
        ClientReaderResponse _ sts _ ->
          sts @?= StatusOk
 
@@ -104,7 +104,7 @@ testBiDiStreamingCall client = testCase "Bidi-streaming call" $
 
               res <- recv
               case res of
-                Left err -> assertString ("recv error: " <> show err)
+                Left err -> assertBool ("recv error: " <> show err) False
                 Right Nothing -> pure ()
                 Right (Just (SimpleServiceResponse name total)) ->
                   do name @?= testName
@@ -116,7 +116,7 @@ testBiDiStreamingCall client = testCase "Bidi-streaming call" $
      res <- simpleServiceBiDiStreamingCall client $
             ClientBiDiRequest 10 mempty (\_ -> handleRequests iterations)
      case res of
-       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
+       ClientErrorResponse err -> assertBool ("ClientErrorResponse: " <> show err) False
        ClientBiDiResponse _ sts _ ->
          sts @?= StatusOk
 

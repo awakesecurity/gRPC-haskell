@@ -1,16 +1,15 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module UnsafeTests (unsafeTests, unsafeProperties) where
 
-import           Control.Exception               (bracket_)
+import           Control.Exception (bracket_)
 import           Control.Monad
-import qualified Data.ByteString                 as B
+import qualified Data.ByteString as B
 import           Foreign.Marshal.Alloc
 import           Foreign.Storable
 import           GHC.Exts
-import           Network.GRPC.LowLevel.GRPC      (threadDelaySecs)
+import           Network.GRPC.LowLevel.GRPC (threadDelaySecs)
 import           Network.GRPC.Unsafe
 import           Network.GRPC.Unsafe.ByteBuffer
 import           Network.GRPC.Unsafe.ChannelArgs
@@ -19,11 +18,11 @@ import           Network.GRPC.Unsafe.Security
 import           Network.GRPC.Unsafe.Slice
 import           Network.GRPC.Unsafe.Time
 import           System.Clock
-import           Test.QuickCheck.Gen             as QC
-import           Test.QuickCheck.Property        as QC
+import            Test.QuickCheck.Gen as QC
+import  Test.QuickCheck.Property as QC hiding (testCase)
 import           Test.Tasty
-import           Test.Tasty.HUnit                as HU (testCase, (@?=))
-import           Test.Tasty.QuickCheck           as QC
+import           Test.Tasty.HUnit as HU (testCase, (@?=))
+import           Test.Tasty.QuickCheck as QC (Arbitrary, arbitrary, testProperty, vector)
 
 unsafeTests :: TestTree
 unsafeTests = testGroup "Unit tests for unsafe C bindings"

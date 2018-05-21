@@ -1,12 +1,14 @@
 from simple_pb2 import *
+from simple_pb2_grpc import *
 from uuid import uuid4
 import random
 import Queue
+import grpc
 
 print "Starting python client"
 
-channel = beta_implementations.insecure_channel('localhost', 50051)
-stub = beta_create_SimpleService_stub(channel)
+channel = grpc.insecure_channel('localhost:50051')
+stub = SimpleServiceStub(channel)
 
 def runTests():
     # Test normal call: return a sum of all numbers sent to it
