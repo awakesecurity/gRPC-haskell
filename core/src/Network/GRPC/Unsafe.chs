@@ -7,6 +7,7 @@ import Control.Exception (bracket)
 import Control.Monad
 
 import Data.ByteString (ByteString, useAsCString)
+import Data.Semigroup (Semigroup)
 
 import Foreign.C.String (CString, peekCString)
 import Foreign.Marshal.Alloc (free)
@@ -30,7 +31,7 @@ import Network.GRPC.Unsafe.Constants
 {#context prefix = "grpc" #}
 
 newtype StatusDetails = StatusDetails {unStatusDetails :: ByteString}
-  deriving (Eq, IsString, Monoid, Show)
+  deriving (Eq, IsString, Monoid, Semigroup, Show)
 
 {#pointer *grpc_completion_queue as CompletionQueue newtype #}
 
