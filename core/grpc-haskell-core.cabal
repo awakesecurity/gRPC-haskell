@@ -24,14 +24,7 @@ library
     , stm == 2.4.*
     , containers ==0.5.*
     , managed >= 1.0.0 && < 1.1
-    , pipes >=4.1 && <=4.4
     , transformers
-    , async ==2.1.*
-    , tasty >= 0.11 && <0.12
-    , tasty-hunit >= 0.9 && <0.10
-    , tasty-quickcheck >= 0.8.4 && < 0.9
-    , safe ==0.3.*
-    , vector
     , sorted-list >=0.1.6.1 && <=0.3
 
   c-sources:
@@ -87,7 +80,7 @@ test-suite tests
     , bytestring ==0.10.*
     , unix
     , time
-    , async
+    , async ==2.1.*
     , tasty >= 0.11 && <0.12
     , tasty-hunit >= 0.9 && <0.10
     , tasty-quickcheck >= 0.8.4 && < 0.9
