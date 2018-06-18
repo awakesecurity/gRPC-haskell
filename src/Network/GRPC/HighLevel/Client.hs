@@ -54,10 +54,10 @@ data ClientError
 data ClientRequest (streamType :: GRPCMethodType) request response where
   ClientNormalRequest :: request -> TimeoutSeconds -> MetadataMap -> ClientRequest 'Normal request response
   ClientWriterRequest :: TimeoutSeconds -> MetadataMap -> (StreamSend request -> IO ()) -> ClientRequest 'ClientStreaming request response
+  -- | The final field will be invoked once, and it should repeatedly
+  -- invoke its final argument (of type @(StreamRecv response)@)
+  -- in order to obtain the streaming response incrementally.
   ClientReaderRequest :: request -> TimeoutSeconds -> MetadataMap -> (MetadataMap -> StreamRecv response -> IO ()) -> ClientRequest 'ServerStreaming request response
-    -- ^ The final field will be invoked once, and it should repeatedly
-    -- invoke its final argument (of type @(StreamRecv response)@)
-    -- in order to obtain the streaming response incrementally.
   ClientBiDiRequest :: TimeoutSeconds -> MetadataMap -> (MetadataMap -> StreamRecv response -> StreamSend request -> WritesDone -> IO ()) -> ClientRequest 'BiDiStreaming request response
 
 data ClientResult (streamType :: GRPCMethodType) response where
