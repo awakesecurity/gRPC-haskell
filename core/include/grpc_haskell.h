@@ -156,6 +156,7 @@ enum supported_arg_key {
   user_agent_prefix_key,
   user_agent_suffix_key,
   max_receive_message_length_key,
+  max_metadata_size_key,
 };
 
 grpc_arg* create_arg_array(size_t n);
