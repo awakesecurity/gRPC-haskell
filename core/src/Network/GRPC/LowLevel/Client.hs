@@ -18,6 +18,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import qualified Data.ByteString                       as B
 import           Data.ByteString                       (ByteString)
+import           Data.Maybe
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.GRPC
@@ -61,11 +62,15 @@ data ClientConfig = ClientConfig {clientServerHost :: Host,
                                   -- channel on the client. Supplying an empty
                                   -- list will cause the channel to use gRPC's
                                   -- default options.
-                                  clientSSLConfig :: Maybe ClientSSLConfig
+                                  clientSSLConfig :: Maybe ClientSSLConfig,
                                   -- ^ If 'Nothing', the client will use an
                                   -- insecure connection to the server.
                                   -- Otherwise, will use the supplied config to
                                   -- connect using SSL.
+                                  clientAuthority :: Maybe ByteString
+                                  -- ^ If 'Nothing', the :authority pseudo-header will
+                                  -- be the endpoint host. Otherwise, the :authority
+                                  -- pseudo-header will be set to the supplied value.
                                  }
 
 clientEndpoint :: ClientConfig -> Endpoint
@@ -132,10 +137,10 @@ clientRegisterMethod :: Client
                      -> MethodName
                      -> IO (C.CallHandle)
 clientRegisterMethod Client{..} meth = do
-  let e = clientEndpoint clientConfig
+  let host = fromMaybe (unEndpoint (clientEndpoint clientConfig)) (clientAuthority clientConfig)
   C.grpcChannelRegisterCall clientChannel
                             (unMethodName meth)
-                            (unEndpoint e)
+                            host
                             C.reserved
 
 
