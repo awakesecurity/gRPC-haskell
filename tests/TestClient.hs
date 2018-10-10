@@ -124,7 +124,7 @@ main :: IO ()
 main = do
   threadDelay 10000000
   withGRPC $ \grpc ->
-   withClient grpc (ClientConfig "localhost" 50051 [] Nothing) $ \client ->
+   withClient grpc (ClientConfig "localhost" 50051 [] Nothing Nothing) $ \client ->
     do service <- simpleServiceClient client
 
        (defaultMain $ testGroup "Send gRPC requests"

@@ -62,7 +62,7 @@ serverConf :: ServerConfig
 serverConf = ServerConfig "localhost" 50051 [("/foo")] [] [] [] [] Nothing
 
 clientConf :: ClientConfig
-clientConf = ClientConfig "localhost" 50051 [] Nothing
+clientConf = ClientConfig "localhost" 50051 [] Nothing Nothing
 
 clientEmptySendOps :: [Op]
 clientEmptySendOps = [OpSendInitialMetadata mempty,
