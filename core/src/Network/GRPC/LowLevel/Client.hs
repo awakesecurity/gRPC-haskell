@@ -37,8 +37,9 @@ data Client = Client {clientChannel :: C.Channel,
                      }
 
 data ClientSSLKeyCertPair = ClientSSLKeyCertPair
-  {clientPrivateKey :: FilePath,
-   clientCert :: FilePath}
+  { clientPrivateKey :: FilePath,
+    clientCert       :: FilePath
+  } deriving Show
 
 -- | SSL configuration for the client. It's perfectly acceptable for both fields
 -- to be 'Nothing', in which case default fallbacks will be used for the server
