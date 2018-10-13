@@ -245,6 +245,10 @@ let
                     ]);
 
                   in rec {
+                    configureFlags = (oldDerivation.configureFlags or []) ++ [
+                      "--flags=with-examples"
+                    ];
+
                     buildDepends = [
                       pkgs.makeWrapper
                       # Give our nix-shell its own cabal so we don't pick up one
