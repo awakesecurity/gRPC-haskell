@@ -36,7 +36,7 @@ main = do
     cfg      = ClientConfig
                  (Host . fromMaybe "localhost" . unHelpful $ bind)
                  (Port . fromMaybe 50051       . unHelpful $ port)
-                 [] Nothing
+                 [] Nothing Nothing
   withGRPC $ \g -> withClient g cfg $ \c -> do
     Echo{..} <- echoClient c
     echoDoEcho (ClientNormalRequest rqt 5 mempty) >>= \case

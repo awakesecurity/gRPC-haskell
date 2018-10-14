@@ -110,7 +110,7 @@ doHelloBi c n = do
 
 highlevelMain :: IO ()
 highlevelMain = withGRPC $ \g ->
-  withClient g (ClientConfig "localhost" 50051 [] Nothing) $ \c -> do
+  withClient g (ClientConfig "localhost" 50051 [] Nothing Nothing) $ \c -> do
     let n = 100000
     putStrLn "-------------- HelloSS --------------"
     doHelloSS c n

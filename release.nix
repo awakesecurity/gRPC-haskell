@@ -213,7 +213,10 @@ let
               (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
 
           grpc-haskell-core =
-            usesGRPC (haskellPackagesNew.callPackage ./core { });
+            usesGRPC
+              (pkgs.haskell.lib.overrideCabal
+                (haskellPackagesNew.callPackage ./core { })
+                (_: { buildDepends = [ haskellPackagesNew.c2hs ]; }));
 
           grpc-haskell-no-tests =
             usesGRPC
@@ -242,11 +245,18 @@ let
                     ]);
 
                   in rec {
+                    configureFlags = (oldDerivation.configureFlags or []) ++ [
+                      "--flags=with-examples"
+                    ];
+
                     buildDepends = [
                       pkgs.makeWrapper
                       # Give our nix-shell its own cabal so we don't pick up one
                       # from the user's environment by accident.
                       haskellPackagesNew.cabal-install
+
+                      # And likewise for c2hs
+                      haskellPackagesNew.c2hs
                     ];
 
                     patches = [ tests/tests.patch ];
@@ -299,11 +309,18 @@ let
         pkgs = import nixpkgs { inherit config; };
 
 in
-  { grpc-haskell-linux    =  linuxPkgs.haskellPackages.grpc-haskell;
-    grpc-haskell-darwin   = darwinPkgs.haskellPackages.grpc-haskell;
-    grpc-haskell          =       pkgs.haskellPackages.grpc-haskell;
-    grpc-haskell-no-tests = pkgs.haskellPackages.grpc-haskell-no-tests;
-    grpc-linux            =  linuxPkgs.grpc;
-    grpc-darwin           = darwinPkgs.grpc;
-    grpc                  =       pkgs.grpc;
+  {
+    grpc-haskell-core-linux    =  linuxPkgs.haskellPackages.grpc-haskell-core;
+    grpc-haskell-core-darwin   = darwinPkgs.haskellPackages.grpc-haskell-core;
+    grpc-haskell-core          =       pkgs.haskellPackages.grpc-haskell-core;
+
+    grpc-haskell-linux         =  linuxPkgs.haskellPackages.grpc-haskell;
+    grpc-haskell-darwin        = darwinPkgs.haskellPackages.grpc-haskell;
+    grpc-haskell               =       pkgs.haskellPackages.grpc-haskell;
+    grpc-haskell-no-tests      =       pkgs.haskellPackages.grpc-haskell-no-tests;
+
+    grpc-linux                 =  linuxPkgs.grpc;
+    grpc-darwin                = darwinPkgs.grpc;
+
+    grpc                       =       pkgs.grpc;
   }
