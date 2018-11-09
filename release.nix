@@ -58,13 +58,24 @@
 # run:
 #
 #     $ cabal2nix path/to/dependency/repo > nix/${package-name}.nix
+
 let
-  nixpkgs = import ./nixpkgs.nix;
+  fetchNixpkgs = import ./nix/fetchNixpkgs.nix;
+
+  nixpkgs = fetchNixpkgs {
+   rev          = "a8ff2616603a6ff6bfb060368c12a973c8e007f6";
+   sha256       = "15l57ra62w9imqv3cfx9qp1fag3mqp95x0hdh81cqjb663qxihlg";
+   outputSha256 = "1nkpbwdx1jgr2pv5arllk6k56h3xc61jal7qi66g21qsx6daf0g3";
+  };
+
   config = {
     packageOverrides = pkgs: rec {
       protobuf3_2NoCheck =
         pkgs.stdenv.lib.overrideDerivation
-          pkgs.pythonPackages.protobuf3_2
+          (pkgs.pythonPackages.callPackage "${nixpkgs}/pkgs/development/python-modules/protobuf" {
+            disabled = false;
+            protobuf = pkgs.protobuf3_4;
+          })
           (oldAttrs : {doCheck = false; doInstallCheck = false;});
 
       cython = pkgs.pythonPackages.buildPythonPackage rec {
@@ -189,21 +200,15 @@ let
 
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: rec {
-          aeson =
-            pkgs.haskell.lib.dontCheck
-              (haskellPackagesNew.callPackage ./nix/aeson.nix {});
 
-          cabal-doctest =
-            haskellPackagesNew.callPackage ./nix/cabal-doctest.nix { };
+          base-compat-batteries =
+            haskellPackagesNew.callPackage ./nix/base-compat-batteries.nix { };
 
-          insert-ordered-containers =
-            haskellPackagesNew.callPackage ./nix/insert-ordered-containers.nix { };
+          base-compat =
+            haskellPackagesNew.callPackage ./nix/base-compat.nix { };
 
-          optparse-applicative =
-            haskellPackagesNew.callPackage ./nix/optparse-applicative.nix { };
-
-          optparse-generic =
-            haskellPackagesNew.callPackage ./nix/optparse-generic.nix { };
+          contravariant =
+            haskellPackagesNew.callPackage ./nix/contravariant.nix { };
 
           proto3-wire =
             haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
@@ -240,7 +245,6 @@ let
                       ]);
 
                     python = pkgs.python.withPackages (pkgs: [
-                      # pkgs.protobuf3_0
                       grpcio-tools
                     ]);
 
@@ -290,10 +294,6 @@ let
 
           swagger2 =
             pkgs.haskell.lib.dontCheck (pkgs.haskell.lib.dontHaddock (haskellPackagesNew.callPackage ./nix/swagger2.nix { }));
-
-          turtle =
-            haskellPackagesNew.callPackage ./nix/turtle.nix { };
-
         };
       };
     };
