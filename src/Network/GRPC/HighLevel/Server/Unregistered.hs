@@ -9,12 +9,15 @@
 module Network.GRPC.HighLevel.Server.Unregistered where
 
 import           Control.Arrow
-import           Control.Concurrent.Async                  (async, wait)
+import           Control.Concurrent.MVar                   (newEmptyMVar,
+                                                            putMVar,
+                                                            takeMVar)
 import qualified Control.Exception                         as CE
 import           Control.Monad
 import           Data.Foldable                             (find)
 import           Network.GRPC.HighLevel.Server
 import           Network.GRPC.LowLevel
+import           Network.GRPC.LowLevel.Server              (forkServer)
 import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
 import           Proto3.Suite.Class
@@ -66,19 +69,45 @@ dispatchLoop s logger md hN hC hS hB =
       where herr (e :: CE.SomeException) = GRPCIOHandlerException (show e)
 
 serverLoop :: ServerOptions -> IO ()
-serverLoop ServerOptions{..} = do
-  -- We run the loop in a new thread so that we can kill the serverLoop thread.
-  -- Without this fork, we block on a foreign call, which can't be interrupted.
-  tid <- async $ withGRPC $ \grpc ->
+serverLoop ServerOptions{..} =
+  -- In the GRPC library, "doc/core/epoll-polling-engine.md" seems
+  -- to indicate that the thread which actually awakens from sleep
+  -- on file descriptor events may differ from the one which seeks
+  -- to "pluck" the resulting event.
+  --
+  -- Thus it seems possible that "dispatchLoop" may be waiting on
+  -- a condition variable when the "serverLoop" thread is killed.
+  --
+  -- Note that "pthread_cond_timedwait" never returns EINTR; see:
+  -- <https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_cond_wait.html>
+  --
+  -- Therefore to awaken "dispatchLoop" we must initiate a GRPC
+  -- shutdown; it would not suffice to kill its Haskell thread.
+  -- (Presumably a GRPC shutdown broadcasts on relvant condition
+  -- variables; regardless, we do see it awaken "dispatchLoop".)
+  --
+  -- The "withServer" cleanup code will initiate a GRPC shutdown.
+  -- We arrange to trigger it by leaving the "serverLoop" thread
+  -- in an interruptible sleep ("takeMVar") while "dispatchLoop"
+  -- runs in its own thread.
+  withGRPC $ \grpc ->
     withServer grpc config $ \server -> do
-      dispatchLoop server
-                   optLogger
-                   optInitialMetadata
-                   optNormalHandlers
-                   optClientStreamHandlers
-                   optServerStreamHandlers
-                   optBiDiStreamHandlers
-  wait tid
+      -- Killing the "serverLoop" thread triggers the "withServer"
+      -- cleanup code, which initiates a shutdown, which in turn
+      -- kills the "dispatchLoop" thread and any other thread we
+      -- may have started with "forkServer".
+      done <- newEmptyMVar
+      launched <- forkServer server $
+        dispatchLoop server
+                     optLogger
+                     optInitialMetadata
+                     optNormalHandlers
+                     optClientStreamHandlers
+                     optServerStreamHandlers
+                     optBiDiStreamHandlers
+        `CE.finally` putMVar done ()
+      when launched $
+        takeMVar done
   where
     config = ServerConfig
       { host                             = optServerHost
