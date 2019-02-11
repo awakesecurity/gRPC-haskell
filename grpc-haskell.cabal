@@ -29,7 +29,7 @@ library
     , proto3-wire
     , grpc-haskell-core
 
-    , async ==2.1.*
+    , async >=2.1 && <2.3
     , managed >= 1.0.5
 
   exposed-modules:
