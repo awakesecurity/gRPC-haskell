@@ -21,8 +21,8 @@ library
       base >=4.8 && <5.0
     , clock >=0.6.0 && <0.8.0
     , bytestring ==0.10.*
-    , stm == 2.4.*
-    , containers ==0.5.*
+    , stm >=2.4 && <2.6
+    , containers >=0.5 && <0.7
     , managed >= 1.0.0 && < 1.1
     , transformers
     , sorted-list >=0.1.6.1 && <=0.3
@@ -84,7 +84,7 @@ test-suite tests
     , tasty >= 0.11 && <0.12
     , tasty-hunit >= 0.9 && <0.10
     , tasty-quickcheck >= 0.8.4 && < 0.9
-    , containers ==0.5.*
+    , containers >=0.5 && <0.7
     , managed >= 1.0.0 && < 1.1
     , pipes >=4.1 && <=4.4
     , proto3-suite
