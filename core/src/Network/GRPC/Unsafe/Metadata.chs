@@ -12,7 +12,7 @@ import Data.Function (on)
 import Data.ByteString (ByteString, useAsCString,
                         useAsCStringLen)
 import Data.List (sortBy, groupBy)
-import Data.Semigroup
+import Data.Semigroup ((<>))
 import qualified Data.SortedList as SL
 import qualified Data.Map.Strict as M
 import Data.Ord (comparing)
