@@ -64,7 +64,7 @@ let
     packageOverrides = pkgs: rec {
       protobuf3_2NoCheck =
         pkgs.stdenv.lib.overrideDerivation
-          pkgs.pythonPackages.protobuf3_2
+          pkgs.pythonPackages.protobuf
           (oldAttrs : {doCheck = false; doInstallCheck = false;});
 
       cython = pkgs.pythonPackages.buildPythonPackage rec {
@@ -103,6 +103,7 @@ let
       };
 
       grpc = pkgs.callPackage ./nix/grpc.nix { };
+      
 
       grpcio = pkgs.pythonPackages.buildPythonPackage rec {
         name = "grpc-${version}";
@@ -189,22 +190,7 @@ let
 
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: rec {
-          aeson =
-            pkgs.haskell.lib.dontCheck
-              (haskellPackagesNew.callPackage ./nix/aeson.nix {});
-
-          cabal-doctest =
-            haskellPackagesNew.callPackage ./nix/cabal-doctest.nix { };
-
-          insert-ordered-containers =
-            haskellPackagesNew.callPackage ./nix/insert-ordered-containers.nix { };
-
-          optparse-applicative =
-            haskellPackagesNew.callPackage ./nix/optparse-applicative.nix { };
-
-          optparse-generic =
-            haskellPackagesNew.callPackage ./nix/optparse-generic.nix { };
-
+          
           proto3-wire =
             haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
 
@@ -287,12 +273,6 @@ let
                     '';
                   })
               );
-
-          swagger2 =
-            pkgs.haskell.lib.dontCheck (pkgs.haskell.lib.dontHaddock (haskellPackagesNew.callPackage ./nix/swagger2.nix { }));
-
-          turtle =
-            haskellPackagesNew.callPackage ./nix/turtle.nix { };
 
         };
       };
