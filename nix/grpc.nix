@@ -1,4 +1,4 @@
-{ darwin, stdenv, lib, fetchgit, autoconf, automake, libtool, which, zlib
+{ darwin, stdenv, lib, fetchgit, fixDarwinDylibNames, autoconf, automake, libtool, which, zlib
 , openssl
 }:
 
@@ -11,6 +11,8 @@ stdenv.mkDerivation rec {
     url    = "https://github.com/grpc/grpc.git";
     sha256 = "19ldbjlnbc287hkaylsigm8w9fai2bjdbfxk6315kl75cq54iprr";
   };
+
+  NIX_CFLAGS_COMPILE = "-Wno-error";
 
   # `grpc`'s `Makefile` does some magic to detect the correct `ld` and `strip`
   # to use along with their flags, too.  If Nix supplies `$LD` and `$STRIP` then
@@ -30,7 +32,7 @@ stdenv.mkDerivation rec {
     which
     zlib
     openssl
-  ];
+  ] ++ stdenv.lib.optional stdenv.isDarwin fixDarwinDylibNames;
 
   # Some versions of `ar` (such as the one provided by OS X) require an explicit
   # `-r` flag, whereas other versions assume `-r` is the default if no mode is
