@@ -38,4 +38,4 @@ server = beta_create_SimpleService_server(SimpleServiceServer())
 server.add_insecure_port('[::]:50051')
 server.start()
 
-done_queue.get()
+done_queue.get(True, 10)

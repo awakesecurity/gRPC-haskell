@@ -13,6 +13,7 @@ mkDerivation {
     transformers vector
   ];
   librarySystemDepends = [ grpc ];
+  buildDepends = [ grpc ];
   libraryToolDepends = [ c2hs ];
   testHaskellDepends = [
     async base bytestring clock containers managed pipes proto3-suite

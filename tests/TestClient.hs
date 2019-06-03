@@ -34,7 +34,7 @@ import Test.Tasty
 import Test.Tasty.HUnit ((@?=), assertString, testCase)
 
 testNormalCall client = testCase "Normal call" $
-  do randoms <- fromList <$> replicateM 1000 (Fixed <$> randomRIO (1, 1000))
+  do randoms <- fromList <$> replicateM 1000 (randomRIO (1, 1000))
      let req = SimpleServiceRequest "NormalRequest" randoms
      res <- simpleServiceNormalCall client
               (ClientNormalRequest req 10 mempty)
@@ -52,7 +52,7 @@ testClientStreamingCall client = testCase "Client-streaming call" $
        do (finalName, totalSum) <-
              fmap ((mconcat *** (sum . mconcat)) . unzip) .
              replicateM iterationCount $
-             do randoms <- fromList <$> replicateM 1000 (Fixed <$> randomRIO (1, 1000))
+             do randoms <- fromList <$> replicateM 1000 (randomRIO (1, 1000))
                 name <- fromString <$> replicateM 10 (randomRIO ('a', 'z'))
                 send (SimpleServiceRequest name randoms)
                 pure (name, randoms)
@@ -69,7 +69,7 @@ testClientStreamingCall client = testCase "Client-streaming call" $
 
 testServerStreamingCall client = testCase "Server-streaming call" $
   do numCount <- randomRIO (50, 500)
-     nums <- replicateM numCount (Fixed <$> randomIO)
+     nums <- replicateM numCount (randomIO)
 
      let checkResults [] recv =
            do res <- recv
@@ -98,7 +98,7 @@ testBiDiStreamingCall client = testCase "Bidi-streaming call" $
   do let handleRequests (0 :: Int) _ _ done = done >> pure ()
          handleRequests n recv send done =
            do numCount <- randomRIO (10, 1000)
-              nums <- fromList <$> replicateM numCount (Fixed <$> randomRIO (1, 1000))
+              nums <- fromList <$> replicateM numCount (randomRIO (1, 1000))
               testName <- fromString <$> replicateM 10 (randomRIO ('a', 'z'))
               send (SimpleServiceRequest testName nums)
 
