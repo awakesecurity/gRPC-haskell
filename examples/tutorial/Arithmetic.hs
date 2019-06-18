@@ -32,7 +32,7 @@ import Network.GRPC.HighLevel.Client as HsGRPC
 import Network.GRPC.HighLevel.Server as HsGRPC hiding (serverLoop)
 import Network.GRPC.HighLevel.Server.Unregistered as HsGRPC
        (serverLoop)
- 
+
 data Arithmetic request response = Arithmetic{arithmeticAdd ::
                                               request 'HsGRPC.Normal Arithmetic.TwoInts
                                                 Arithmetic.OneInt
@@ -46,7 +46,7 @@ data Arithmetic request response = Arithmetic{arithmeticAdd ::
                                                   (response 'HsGRPC.ClientStreaming
                                                      Arithmetic.OneInt)}
                                  deriving Hs.Generic
- 
+
 arithmeticServer ::
                    Arithmetic HsGRPC.ServerRequest HsGRPC.ServerResponse ->
                      HsGRPC.ServiceOptions -> Hs.IO ()
@@ -72,7 +72,7 @@ arithmeticServer
                              optUserAgentSuffix = userAgentSuffix,
                              optInitialMetadata = initialMetadata, optSSLConfig = sslConfig,
                              optLogger = logger})
- 
+
 arithmeticClient ::
                    HsGRPC.Client ->
                      Hs.IO (Arithmetic HsGRPC.ClientRequest HsGRPC.ClientResult)
@@ -85,13 +85,13 @@ arithmeticClient client
       ((Hs.pure (HsGRPC.clientRequest client)) <*>
          (HsGRPC.clientRegisterMethod client
             (HsGRPC.MethodName "/arithmetic.Arithmetic/RunningSum")))
- 
+
 data TwoInts = TwoInts{twoIntsX :: Hs.Int32, twoIntsY :: Hs.Int32}
              deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
- 
+
 instance HsProtobuf.Named TwoInts where
         nameOf _ = (Hs.fromString "TwoInts")
- 
+
 instance HsProtobuf.Message TwoInts where
         encodeMessage _ TwoInts{twoIntsX = twoIntsX, twoIntsY = twoIntsY}
           = (Hs.mconcat
@@ -111,30 +111,30 @@ instance HsProtobuf.Message TwoInts where
                 (HsProtobuf.Prim HsProtobuf.Int32)
                 (HsProtobuf.Single "x")
                 []
-                Hs.Nothing),
+                ""),
              (HsProtobuf.DotProtoField (HsProtobuf.FieldNumber 2)
                 (HsProtobuf.Prim HsProtobuf.Int32)
                 (HsProtobuf.Single "y")
                 []
-                Hs.Nothing)]
- 
+                "")]
+
 instance HsJSONPB.ToJSONPB TwoInts where
         toJSONPB (TwoInts f1 f2) = (HsJSONPB.object ["x" .= f1, "y" .= f2])
         toEncodingPB (TwoInts f1 f2)
           = (HsJSONPB.pairs ["x" .= f1, "y" .= f2])
- 
+
 instance HsJSONPB.FromJSONPB TwoInts where
         parseJSONPB
           = (HsJSONPB.withObject "TwoInts"
                (\ obj -> (Hs.pure TwoInts) <*> obj .: "x" <*> obj .: "y"))
- 
+
 instance HsJSONPB.ToJSON TwoInts where
         toJSON = HsJSONPB.toAesonValue
         toEncoding = HsJSONPB.toAesonEncoding
- 
+
 instance HsJSONPB.FromJSON TwoInts where
         parseJSON = HsJSONPB.parseJSONPB
- 
+
 instance HsJSONPB.ToSchema TwoInts where
         declareNamedSchema _
           = do let declare_x = HsJSONPB.declareSchemaRef
@@ -153,13 +153,13 @@ instance HsJSONPB.ToSchema TwoInts where
                                                    HsJSONPB._schemaProperties =
                                                      HsJSONPB.insOrdFromList
                                                        [("x", twoIntsX), ("y", twoIntsY)]}})
- 
+
 data OneInt = OneInt{oneIntResult :: Hs.Int32}
             deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
- 
+
 instance HsProtobuf.Named OneInt where
         nameOf _ = (Hs.fromString "OneInt")
- 
+
 instance HsProtobuf.Message OneInt where
         encodeMessage _ OneInt{oneIntResult = oneIntResult}
           = (Hs.mconcat
@@ -174,24 +174,24 @@ instance HsProtobuf.Message OneInt where
                 (HsProtobuf.Prim HsProtobuf.Int32)
                 (HsProtobuf.Single "result")
                 []
-                Hs.Nothing)]
- 
+                "")]
+
 instance HsJSONPB.ToJSONPB OneInt where
         toJSONPB (OneInt f1) = (HsJSONPB.object ["result" .= f1])
         toEncodingPB (OneInt f1) = (HsJSONPB.pairs ["result" .= f1])
- 
+
 instance HsJSONPB.FromJSONPB OneInt where
         parseJSONPB
           = (HsJSONPB.withObject "OneInt"
                (\ obj -> (Hs.pure OneInt) <*> obj .: "result"))
- 
+
 instance HsJSONPB.ToJSON OneInt where
         toJSON = HsJSONPB.toAesonValue
         toEncoding = HsJSONPB.toAesonEncoding
- 
+
 instance HsJSONPB.FromJSON OneInt where
         parseJSON = HsJSONPB.parseJSONPB
- 
+
 instance HsJSONPB.ToSchema OneInt where
         declareNamedSchema _
           = do let declare_result = HsJSONPB.declareSchemaRef

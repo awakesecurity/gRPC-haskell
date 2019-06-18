@@ -14,7 +14,6 @@ import qualified Data.Text.Lazy                   as TL
 import           Echo
 import           GHC.Generics                     (Generic)
 import           Network.GRPC.HighLevel.Client
-import           Network.GRPC.HighLevel.Generated
 import           Network.GRPC.LowLevel
 import           Options.Generic
 import           Prelude                          hiding (FilePath)
