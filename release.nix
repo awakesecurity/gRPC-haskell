@@ -189,12 +189,21 @@ let
 
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: rec {
+          attoparsec =
+            pkgs.haskell.lib.dontCheck haskellPackagesOld.attoparsec;
+
           aeson =
             pkgs.haskell.lib.dontCheck
               (haskellPackagesNew.callPackage ./nix/aeson.nix {});
 
           cabal-doctest =
             haskellPackagesNew.callPackage ./nix/cabal-doctest.nix { };
+
+          edit-distance =
+            pkgs.haskell.lib.dontCheck haskellPackagesOld.edit-distance;
+
+          http-media =
+            pkgs.haskell.lib.dontCheck haskellPackagesOld.http-media;
 
           insert-ordered-containers =
             haskellPackagesNew.callPackage ./nix/insert-ordered-containers.nix { };
@@ -211,6 +220,12 @@ let
           proto3-suite =
             pkgs.haskell.lib.dontCheck
               (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
+
+          QuickCheck =
+            (haskellPackagesNew.callPackage ./nix/QuickCheck.nix {});
+
+          quickcheck-instances =
+            (haskellPackagesNew.callPackage ./nix/quickcheck-instances.nix {});
 
           grpc-haskell-core =
             usesGRPC

@@ -32,12 +32,12 @@ import Network.GRPC.HighLevel.Client as HsGRPC
 import Network.GRPC.HighLevel.Server as HsGRPC hiding (serverLoop)
 import Network.GRPC.HighLevel.Server.Unregistered as HsGRPC
        (serverLoop)
- 
+
 data Echo request response = Echo{echoDoEcho ::
                                   request 'HsGRPC.Normal Echo.EchoRequest Echo.EchoResponse ->
                                     Hs.IO (response 'HsGRPC.Normal Echo.EchoResponse)}
                            deriving Hs.Generic
- 
+
 echoServer ::
              Echo HsGRPC.ServerRequest HsGRPC.ServerResponse ->
                HsGRPC.ServiceOptions -> Hs.IO ()
@@ -56,7 +56,7 @@ echoServer Echo{echoDoEcho = echoDoEcho}
                              optUserAgentSuffix = userAgentSuffix,
                              optInitialMetadata = initialMetadata, optSSLConfig = sslConfig,
                              optLogger = logger})
- 
+
 echoClient ::
              HsGRPC.Client ->
                Hs.IO (Echo HsGRPC.ClientRequest HsGRPC.ClientResult)
@@ -65,13 +65,13 @@ echoClient client
       ((Hs.pure (HsGRPC.clientRequest client)) <*>
          (HsGRPC.clientRegisterMethod client
             (HsGRPC.MethodName "/echo.Echo/DoEcho")))
- 
+
 data EchoRequest = EchoRequest{echoRequestMessage :: Hs.Text}
                  deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
- 
+
 instance HsProtobuf.Named EchoRequest where
         nameOf _ = (Hs.fromString "EchoRequest")
- 
+
 instance HsProtobuf.Message EchoRequest where
         encodeMessage _
           EchoRequest{echoRequestMessage = echoRequestMessage}
@@ -87,24 +87,24 @@ instance HsProtobuf.Message EchoRequest where
                 (HsProtobuf.Prim HsProtobuf.String)
                 (HsProtobuf.Single "message")
                 []
-                Hs.Nothing)]
- 
+                "")]
+
 instance HsJSONPB.ToJSONPB EchoRequest where
         toJSONPB (EchoRequest f1) = (HsJSONPB.object ["message" .= f1])
         toEncodingPB (EchoRequest f1) = (HsJSONPB.pairs ["message" .= f1])
- 
+
 instance HsJSONPB.FromJSONPB EchoRequest where
         parseJSONPB
           = (HsJSONPB.withObject "EchoRequest"
                (\ obj -> (Hs.pure EchoRequest) <*> obj .: "message"))
- 
+
 instance HsJSONPB.ToJSON EchoRequest where
         toJSON = HsJSONPB.toAesonValue
         toEncoding = HsJSONPB.toAesonEncoding
- 
+
 instance HsJSONPB.FromJSON EchoRequest where
         parseJSON = HsJSONPB.parseJSONPB
- 
+
 instance HsJSONPB.ToSchema EchoRequest where
         declareNamedSchema _
           = do let declare_message = HsJSONPB.declareSchemaRef
@@ -120,13 +120,13 @@ instance HsJSONPB.ToSchema EchoRequest where
                                                    HsJSONPB._schemaProperties =
                                                      HsJSONPB.insOrdFromList
                                                        [("message", echoRequestMessage)]}})
- 
+
 data EchoResponse = EchoResponse{echoResponseMessage :: Hs.Text}
                   deriving (Hs.Show, Hs.Eq, Hs.Ord, Hs.Generic)
- 
+
 instance HsProtobuf.Named EchoResponse where
         nameOf _ = (Hs.fromString "EchoResponse")
- 
+
 instance HsProtobuf.Message EchoResponse where
         encodeMessage _
           EchoResponse{echoResponseMessage = echoResponseMessage}
@@ -142,24 +142,24 @@ instance HsProtobuf.Message EchoResponse where
                 (HsProtobuf.Prim HsProtobuf.String)
                 (HsProtobuf.Single "message")
                 []
-                Hs.Nothing)]
- 
+                "")]
+
 instance HsJSONPB.ToJSONPB EchoResponse where
         toJSONPB (EchoResponse f1) = (HsJSONPB.object ["message" .= f1])
         toEncodingPB (EchoResponse f1) = (HsJSONPB.pairs ["message" .= f1])
- 
+
 instance HsJSONPB.FromJSONPB EchoResponse where
         parseJSONPB
           = (HsJSONPB.withObject "EchoResponse"
                (\ obj -> (Hs.pure EchoResponse) <*> obj .: "message"))
- 
+
 instance HsJSONPB.ToJSON EchoResponse where
         toJSON = HsJSONPB.toAesonValue
         toEncoding = HsJSONPB.toAesonEncoding
- 
+
 instance HsJSONPB.FromJSON EchoResponse where
         parseJSON = HsJSONPB.parseJSONPB
- 
+
 instance HsJSONPB.ToSchema EchoResponse where
         declareNamedSchema _
           = do let declare_message = HsJSONPB.declareSchemaRef
