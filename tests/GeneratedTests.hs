@@ -21,7 +21,13 @@ testServerGeneration = testCase "server generation" $ do
   mktree hsTmpDir
   mktree pyTmpDir
 
-  compileDotProtoFileOrDie [] hsTmpDir ["tests"] "simple.proto"
+  let args = CompileArgs
+        { includeDir = ["tests"]
+        , extraInstanceFiles = []
+        , inputProto = "simple.proto"
+        , outputDir = hsTmpDir
+        }
+  compileDotProtoFileOrDie args
 
   do exitCode <- proc "tests/simple-server.sh" [hsTmpDir] empty
      exitCode @?= ExitSuccess
@@ -49,7 +55,13 @@ testClientGeneration = testCase "client generation" $ do
   mktree hsTmpDir
   mktree pyTmpDir
 
-  compileDotProtoFileOrDie [] hsTmpDir ["tests"] "simple.proto"
+  let args = CompileArgs
+        { includeDir = ["tests"]
+        , extraInstanceFiles = []
+        , inputProto = "simple.proto"
+        , outputDir = hsTmpDir
+        }
+  compileDotProtoFileOrDie args
 
   do exitCode <- proc "tests/simple-client.sh" [hsTmpDir] empty
      exitCode @?= ExitSuccess

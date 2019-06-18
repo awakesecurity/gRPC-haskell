@@ -1,8 +1,7 @@
-{ mkDerivation, async, base, bytestring, c2hs, clock, containers
+{ mkDerivation, async, base, bytestring, clock, containers
 , criterion, grpc-haskell-core, managed, pipes, proto3-suite
-, proto3-wire, QuickCheck, random, safe, sorted-list, stdenv, stm
-, tasty, tasty-hunit, tasty-quickcheck, text, time, transformers
-, turtle, unix, vector
+, proto3-wire, QuickCheck, random, safe, stdenv, tasty, tasty-hunit
+, tasty-quickcheck, text, time, transformers, turtle, unix
 }:
 mkDerivation {
   pname = "grpc-haskell";
@@ -11,11 +10,9 @@ mkDerivation {
   isLibrary = true;
   isExecutable = true;
   libraryHaskellDepends = [
-    async base bytestring clock containers grpc-haskell-core managed
-    pipes proto3-suite proto3-wire safe sorted-list stm tasty
-    tasty-hunit tasty-quickcheck transformers vector
+    async base bytestring grpc-haskell-core managed proto3-suite
+    proto3-wire
   ];
-  libraryToolDepends = [ c2hs ];
   testHaskellDepends = [
     async base bytestring clock containers managed pipes proto3-suite
     QuickCheck safe tasty tasty-hunit tasty-quickcheck text time

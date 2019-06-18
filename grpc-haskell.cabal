@@ -1,5 +1,5 @@
 name:                grpc-haskell
-version:             0.0.0.0
+version:             0.0.1.0
 synopsis:            Haskell implementation of gRPC layered on shared C library.
 homepage:            https://github.com/awakenetworks/gRPC-haskell
 license:             Apache-2.0
@@ -25,7 +25,7 @@ library
   build-depends:
       base >=4.8 && <5.0
     , bytestring ==0.10.*
-    , proto3-suite
+    , proto3-suite >=0.4.0.0
     , proto3-wire
     , grpc-haskell-core
 
@@ -201,7 +201,7 @@ test-suite tests
     , clock >=0.6.0 && <0.8.0
     , turtle >= 1.2.0
     , text
-    , QuickCheck >=2.8 && <3.0
+    , QuickCheck >=2.10 && <3.0
   other-modules:
     GeneratedTests
   default-language:     Haskell2010
