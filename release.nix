@@ -64,7 +64,7 @@ let
     packageOverrides = pkgs: rec {
       protobuf3_2NoCheck =
         pkgs.stdenv.lib.overrideDerivation
-          pkgs.pythonPackages.protobuf3_2
+          pkgs.pythonPackages.protobuf
           (oldAttrs : {doCheck = false; doInstallCheck = false;});
 
       cython = pkgs.pythonPackages.buildPythonPackage rec {
@@ -178,41 +178,23 @@ let
             preBuild = (oldAttributes.preBuild or "") +
               pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
                 export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+              '' +
+              pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+                export LD_LIBRARY_PATH=${grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
               '';
 
             shellHook = (oldAttributes.shellHook or "") +
               pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
                 export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+              '' +
+              pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+                export LD_LIBRARY_PATH=${grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
               '';
           }
         );
 
       haskellPackages = pkgs.haskellPackages.override {
         overrides = haskellPackagesNew: haskellPackagesOld: rec {
-          attoparsec =
-            pkgs.haskell.lib.dontCheck haskellPackagesOld.attoparsec;
-
-          aeson =
-            pkgs.haskell.lib.dontCheck
-              (haskellPackagesNew.callPackage ./nix/aeson.nix {});
-
-          cabal-doctest =
-            haskellPackagesNew.callPackage ./nix/cabal-doctest.nix { };
-
-          edit-distance =
-            pkgs.haskell.lib.dontCheck haskellPackagesOld.edit-distance;
-
-          http-media =
-            pkgs.haskell.lib.dontCheck haskellPackagesOld.http-media;
-
-          insert-ordered-containers =
-            haskellPackagesNew.callPackage ./nix/insert-ordered-containers.nix { };
-
-          optparse-applicative =
-            haskellPackagesNew.callPackage ./nix/optparse-applicative.nix { };
-
-          optparse-generic =
-            haskellPackagesNew.callPackage ./nix/optparse-generic.nix { };
 
           proto3-wire =
             haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
@@ -220,12 +202,6 @@ let
           proto3-suite =
             pkgs.haskell.lib.dontCheck
               (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
-
-          QuickCheck =
-            (haskellPackagesNew.callPackage ./nix/QuickCheck.nix {});
-
-          quickcheck-instances =
-            (haskellPackagesNew.callPackage ./nix/quickcheck-instances.nix {});
 
           grpc-haskell-core =
             usesGRPC
@@ -302,12 +278,6 @@ let
                     '';
                   })
               );
-
-          swagger2 =
-            pkgs.haskell.lib.dontCheck (pkgs.haskell.lib.dontHaddock (haskellPackagesNew.callPackage ./nix/swagger2.nix { }));
-
-          turtle =
-            haskellPackagesNew.callPackage ./nix/turtle.nix { };
 
         };
       };

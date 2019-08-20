@@ -4,7 +4,7 @@
 module GeneratedTests where
 
 import Test.Tasty
-import Test.Tasty.HUnit (testCase, (@?=))
+import Test.Tasty.HUnit (assertEqual, testCase, (@?=))
 
 import Data.String
 import Proto3.Suite.DotProto.Generate
@@ -78,8 +78,8 @@ testClientGeneration = testCase "client generation" $ do
       serverExitCode <- liftIO (wait serverExitCodeA)
       clientExitCode <- liftIO (wait clientExitCodeA)
 
-      serverExitCode @?= ExitSuccess
-      clientExitCode @?= ExitSuccess
+      assertEqual "Server exit code" serverExitCode ExitSuccess
+      assertEqual "Client exit code" clientExitCode ExitSuccess
 
   rmtree hsTmpDir
   rmtree pyTmpDir
