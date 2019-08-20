@@ -14,11 +14,10 @@ mkDerivation {
   version = "0.4.0.0";
   src = fetchgit {
     url = "https://github.com/awakesecurity/proto3-suite";
-    sha256 = "0wyw8601k6rm8wjz8mf6pl43ccm2nmikrd6ddr7h3qj0aj55qjyc";
-    rev = "f5ca2bee361d518de5c60b9d05d0f54c5d2f22af";
+    sha256 = "0g7j7axx9rkrzw32ky9xl08zj34rx4mqafd89lrpnsi8lcq2z06j";
+    rev = "3f6dd6f612cf2eba3c05798926ff924b0d5ab4fa";
     fetchSubmodules = true;
   };
-  jailbreak = true;
   isLibrary = true;
   isExecutable = true;
   enableSeparateDataOutput = true;

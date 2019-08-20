@@ -10,14 +10,12 @@ packages:
 - 'core'
 - location:
     git: git@github.com:awakesecurity/proto3-suite.git
-    commit: f5ca2bee361d518de5c60b9d05d0f54c5d2f22af
+    commit: 3f6dd6f612cf2eba3c05798926ff924b0d5ab4fa
   extra-dep: true
 - location:
     git: git@github.com:awakesecurity/proto3-wire.git
     commit: 4f355bbac895d577d8a28f567ab4380f042ccc24
   extra-dep: true
-
-allow-newer: true
 
 # Override default flag values for local packages and extra-deps
 flags: {}
