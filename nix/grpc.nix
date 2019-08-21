@@ -1,42 +1,45 @@
-{ darwin, stdenv, lib, fetchgit, fixDarwinDylibNames, autoconf, automake, libtool, which, zlib
-, openssl
-}:
+{ stdenv, fetchFromGitHub, cmake, zlib, c-ares, pkgconfig, openssl, protobuf, gflags }:
 
 stdenv.mkDerivation rec {
-  name    = "grpc-${version}";
-  version = "1.2.0-${lib.strings.substring 0 7 rev}";
-  rev     = "e2cfe9df79c4eda4e376222df064c4c65e616352";
-  src = fetchgit {
-    inherit rev;
-    url    = "https://github.com/grpc/grpc.git";
-    sha256 = "19ldbjlnbc287hkaylsigm8w9fai2bjdbfxk6315kl75cq54iprr";
+  version = "1.22.1";
+  name = "grpc-${version}";
+  src = fetchFromGitHub {
+    owner = "grpc";
+    repo = "grpc";
+    rev = "v${version}";
+    sha256 = "1ci3v8xrr8iy65ixx2j0aw1i7cmmrm6pll1dnnbvndmjq573qiyk";
   };
+  nativeBuildInputs = [ cmake pkgconfig ];
+  buildInputs = [ zlib c-ares c-ares.cmake-config openssl protobuf gflags ];
 
-  NIX_CFLAGS_COMPILE = "-Wno-error";
+  cmakeFlags =
+    [ "-DgRPC_ZLIB_PROVIDER=package"
+      "-DgRPC_CARES_PROVIDER=package"
+      "-DgRPC_SSL_PROVIDER=package"
+      "-DgRPC_PROTOBUF_PROVIDER=package"
+      "-DgRPC_GFLAGS_PROVIDER=package"
+      "-DBUILD_SHARED_LIBS=ON"
+      "-DCMAKE_SKIP_BUILD_RPATH=OFF"
+    ];
 
-  # `grpc`'s `Makefile` does some magic to detect the correct `ld` and `strip`
-  # to use along with their flags, too.  If Nix supplies `$LD` and `$STRIP` then
-  # this auto-detection fails and the build fails, which is why we unset the
-  # environment variables here and let the `Makefile` set them.
-  preBuild = ''
-    unset LD
-    unset STRIP
+  # CMake creates a build directory by default, this conflicts with the
+  # basel BUILD file on case-insensitive filesystems.
+  preConfigure = ''
+    rm -vf BUILD
   '';
 
-  preInstall = "export prefix";
+  preBuild = ''
+    export LD_LIBRARY_PATH=$(pwd):$LD_LIBRARY_PATH
+  '';
 
-  buildInputs = [
-    autoconf
-    automake
-    libtool
-    which
-    zlib
-    openssl
-  ] ++ stdenv.lib.optional stdenv.isDarwin fixDarwinDylibNames;
+  NIX_CFLAGS_COMPILE = stdenv.lib.optionalString stdenv.cc.isClang "-Wno-error=unknown-warning-option";
 
-  # Some versions of `ar` (such as the one provided by OS X) require an explicit
-  # `-r` flag, whereas other versions assume `-r` is the default if no mode is
-  # specified.  For example, OS X requires the `-r` flag, so as a precaution we
-  # always specify the flag.
-  AROPTS = "-r";
+  enableParallelBuilds = true;
+
+  meta = with stdenv.lib; {
+    description = "The C based gRPC (C++, Python, Ruby, Objective-C, PHP, C#)";
+    license = licenses.asl20;
+    maintainers = [ maintainers.lnl7 ];
+    homepage = https://grpc.io/;
+  };
 }

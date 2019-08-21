@@ -500,10 +500,10 @@ grpc_channel_credentials* grpc_ssl_credentials_create_internal(
   grpc_channel_credentials* creds;
   if(pem_key && pem_cert){
     grpc_ssl_pem_key_cert_pair pair = {pem_key, pem_cert};
-    creds = grpc_ssl_credentials_create(pem_root_certs, &pair, NULL);
+    creds = grpc_ssl_credentials_create(pem_root_certs, &pair, NULL, NULL);
   }
   else{
-    creds = grpc_ssl_credentials_create(pem_root_certs, NULL, NULL);
+    creds = grpc_ssl_credentials_create(pem_root_certs, NULL, NULL, NULL);
   }
   return creds;
 }
@@ -537,10 +537,16 @@ grpc_call_credentials* grpc_metadata_credentials_create_from_plugin_(
 //This callback is registered as the get_metadata callback for the call, and its
 //only job is to cast the void* state pointer to the correct function pointer
 //type and call the Haskell function with it.
-void metadata_dispatcher(void *state, grpc_auth_metadata_context context,
- grpc_credentials_plugin_metadata_cb cb, void *user_data){
-
+int metadata_dispatcher(void *state,
+ grpc_auth_metadata_context context,
+ grpc_credentials_plugin_metadata_cb cb,
+ void *user_data,
+ grpc_metadata creds_md[GRPC_METADATA_CREDENTIALS_PLUGIN_SYNC_MAX],
+ size_t *num_creds_md,
+ grpc_status_code *status,
+ const char ** error_details) {
   ((haskell_get_metadata*)state)(&context, cb, user_data);
+  return 0;
 }
 
 grpc_metadata_credentials_plugin* mk_metadata_client_plugin(

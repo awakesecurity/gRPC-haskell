@@ -78,6 +78,9 @@ newtype Tag = Tag {unTag :: Ptr ()} deriving (Show, Eq)
 tag :: Int -> Tag
 tag = Tag . plusPtr nullPtr
 
+noTag :: Tag
+noTag = Tag nullPtr
+
 instance Storable Tag where
   sizeOf (Tag p) = sizeOf p
   alignment (Tag p) = alignment p
@@ -139,11 +142,18 @@ castPeek p = do
 
 {#fun grpc_shutdown as ^ {} -> `()'#}
 
+{#fun grpc_shutdown_blocking as ^ {} -> `()'#}
+
 {#fun grpc_version_string as ^ {} -> `String' #}
 
--- | Create a new 'CompletionQueue'. See the docs for
+-- | Create a new 'CompletionQueue' for GRPC_CQ_NEXT. See the docs for
 -- 'grpcCompletionQueueShutdown' for instructions on how to clean up afterwards.
-{#fun grpc_completion_queue_create as ^
+{#fun grpc_completion_queue_create_for_next as ^
+  {unReserved `Reserved'} -> `CompletionQueue'#}
+
+-- | Create a new 'CompletionQueue' for GRPC_CQ_PLUCK. See the docs for
+-- 'grpcCompletionQueueShutdown' for instructions on how to clean up afterwards.
+{#fun grpc_completion_queue_create_for_pluck as ^
   {unReserved `Reserved'} -> `CompletionQueue'#}
 
 -- | Block until we get the next event off the given 'CompletionQueue',
@@ -226,7 +236,9 @@ castPeek p = do
 {#fun grpc_call_cancel_with_status as ^
   {`Call', `StatusCode', `String',unReserved `Reserved'} -> `()'#}
 
-{#fun grpc_call_destroy as ^ {`Call'} -> `()'#}
+{#fun grpc_call_ref as ^ {`Call'} -> `()'#}
+
+{#fun grpc_call_unref as ^ {`Call'} -> `()'#}
 
 -- | Gets the peer of the current call as a string.
 {#fun grpc_call_get_peer as ^ {`Call'} -> `String' getPeerPeek* #}

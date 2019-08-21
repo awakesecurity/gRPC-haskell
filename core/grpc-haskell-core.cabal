@@ -53,7 +53,8 @@ library
     Network.GRPC.LowLevel.Call.Unregistered
     Network.GRPC.LowLevel.Client
   extra-libraries:
-    grpc
+      grpc
+    , gpr
   includes:
       include/grpc_haskell.h
     , grpc/grpc.h
