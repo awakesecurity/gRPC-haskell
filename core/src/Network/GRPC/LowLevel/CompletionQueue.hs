@@ -52,9 +52,6 @@ import qualified Network.GRPC.Unsafe.Constants                  as C
 import qualified Network.GRPC.Unsafe.Metadata                   as C
 import qualified Network.GRPC.Unsafe.Op                         as C
 import qualified Network.GRPC.Unsafe.Time                       as C
-import           System.Clock                                   (Clock (..),
-                                                                 getTime)
-import           System.Info                                    (os)
 
 withCompletionQueue :: GRPC -> (CompletionQueue -> IO a) -> IO a
 withCompletionQueue grpc = bracket (createCompletionQueue grpc)
@@ -62,7 +59,7 @@ withCompletionQueue grpc = bracket (createCompletionQueue grpc)
 
 createCompletionQueue :: GRPC -> IO CompletionQueue
 createCompletionQueue _ = do
-  unsafeCQ <- C.grpcCompletionQueueCreate C.reserved
+  unsafeCQ <- C.grpcCompletionQueueCreateForPluck C.reserved
   currentPluckers <- newTVarIO 0
   currentPushers <- newTVarIO 0
   shuttingDown <- newTVarIO False
@@ -142,11 +139,7 @@ serverRequestCall rm s scq ccq =
       <*> mgdPayload (methodType rm)
       <*> managed C.withMetadataArrayPtr
     dbug = grpcDebug . ("serverRequestCall(R): " ++)
-    -- On OS X, gRPC gives us a deadline that is just a delta, so we convert
-    -- it to an actual deadline.
-    convertDeadline (fmap C.timeSpec . peek -> d)
-      | os == "darwin" = (+) <$> d <*> getTime Monotonic
-      | otherwise      = d
+    convertDeadline timeSpecPtr = C.timeSpec <$> peek timeSpecPtr
 
 -- | Register the server's completion queue. Must be done before the server is
 -- started.
