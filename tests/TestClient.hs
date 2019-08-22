@@ -88,7 +88,7 @@ testServerStreamingCall client = testCase "Server-streaming call" $
                      checkResults nums recv
      res <- simpleServiceServerStreamingCall client $
             ClientReaderRequest (SimpleServiceRequest "Test" (fromList nums)) 10 mempty
-              (\_ -> checkResults nums)
+              (\_ _ -> checkResults nums)
      case res of
        ClientErrorResponse err -> assertFailure ("ClientErrorResponse: " <> show err)
        ClientReaderResponse _ sts _ ->
@@ -114,7 +114,7 @@ testBiDiStreamingCall client = testCase "Bidi-streaming call" $
      iterations <- randomRIO (50, 500)
 
      res <- simpleServiceBiDiStreamingCall client $
-            ClientBiDiRequest 10 mempty (\_ -> handleRequests iterations)
+            ClientBiDiRequest 10 mempty (\_ _ -> handleRequests iterations)
      case res of
        ClientErrorResponse err -> assertFailure ("ClientErrorResponse: " <> show err)
        ClientBiDiResponse _ sts _ ->

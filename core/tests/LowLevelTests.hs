@@ -406,7 +406,7 @@ testServerStreaming =
 
     client c = do
       rm <- clientRegisterMethodServerStreaming c "/feed"
-      eea <- clientReader c rm 10 clientPay clientInitMD $ \initMD recv -> do
+      eea <- clientReader c rm 10 clientPay clientInitMD $ \_cc initMD recv -> do
         checkMD "Server initial metadata mismatch" serverInitMD initMD
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
@@ -436,7 +436,7 @@ testServerStreamingUnregistered =
 
     client c = do
       rm <- clientRegisterMethodServerStreaming c "/feed"
-      eea <- clientReader c rm 10 clientPay clientInitMD $ \initMD recv -> do
+      eea <- clientReader c rm 10 clientPay clientInitMD $ \_cc initMD recv -> do
         checkMD "Server initial metadata mismatch" serverInitMD initMD
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
@@ -517,7 +517,7 @@ testBiDiStreaming =
 
     client c = do
       rm  <- clientRegisterMethodBiDiStreaming c "/bidi"
-      eea <- clientRW c rm 10 clientInitMD $ \getMD recv send writesDone -> do
+      eea <- clientRW c rm 10 clientInitMD $ \_cc getMD recv send writesDone -> do
         either clientFail (checkMD "Server rsp metadata mismatch" serverInitMD) =<< getMD
         send "cw0" `is` Right ()
         recv       `is` Right (Just "sw0")
@@ -553,7 +553,7 @@ testBiDiStreamingUnregistered =
 
     client c = do
       rm  <- clientRegisterMethodBiDiStreaming c "/bidi"
-      eea <- clientRW c rm 10 clientInitMD $ \getMD recv send writesDone -> do
+      eea <- clientRW c rm 10 clientInitMD $ \_cc getMD recv send writesDone -> do
         either clientFail (checkMD "Server rsp metadata mismatch" serverInitMD) =<< getMD
         send "cw0" `is` Right ()
         recv       `is` Right (Just "sw0")
