@@ -116,7 +116,7 @@ instance HsJSONPB.ToSchema EchoRequest where
                                        HsJSONPB._namedSchemaSchema =
                                          Hs.mempty{HsJSONPB._schemaParamSchema =
                                                      Hs.mempty{HsJSONPB._paramSchemaType =
-                                                                 HsJSONPB.SwaggerObject},
+                                                                 Hs.Just HsJSONPB.SwaggerObject},
                                                    HsJSONPB._schemaProperties =
                                                      HsJSONPB.insOrdFromList
                                                        [("message", echoRequestMessage)]}})
@@ -171,7 +171,7 @@ instance HsJSONPB.ToSchema EchoResponse where
                                        HsJSONPB._namedSchemaSchema =
                                          Hs.mempty{HsJSONPB._schemaParamSchema =
                                                      Hs.mempty{HsJSONPB._paramSchemaType =
-                                                                 HsJSONPB.SwaggerObject},
+                                                                 Hs.Just HsJSONPB.SwaggerObject},
                                                    HsJSONPB._schemaProperties =
                                                      HsJSONPB.insOrdFromList
                                                        [("message", echoResponseMessage)]}})

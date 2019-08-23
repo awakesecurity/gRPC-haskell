@@ -204,21 +204,21 @@ let
               (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
 
           grpc-haskell-core =
-            usesGRPC
+            pkgs.haskell.lib.buildFromSdist (usesGRPC
               (pkgs.haskell.lib.overrideCabal
                 (haskellPackagesNew.callPackage ./core { })
-                (_: { buildDepends = [ haskellPackagesNew.c2hs ]; }));
+                (_: { buildDepends = [ haskellPackagesNew.c2hs ]; })));
 
           grpc-haskell-no-tests =
-            usesGRPC
+            pkgs.haskell.lib.buildFromSdist (usesGRPC
               (pkgs.haskell.lib.dontCheck
                 (haskellPackagesNew.callPackage ./default.nix { })
-              );
+              ));
 
           grpc-haskell =
             usesGRPC
               (pkgs.haskell.lib.overrideCabal
-                (haskellPackagesNew.callPackage ./default.nix { })
+                (pkgs.haskell.lib.buildFromSdist ((haskellPackagesNew.callPackage ./default.nix { })))
                 (oldDerivation:
                   let
                     ghc =
