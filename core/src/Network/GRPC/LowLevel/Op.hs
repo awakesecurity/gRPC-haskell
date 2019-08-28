@@ -108,8 +108,8 @@ freeOpContext (OpSendInitialMetadataContext m _) = C.metadataFree m
 freeOpContext (OpSendMessageContext (bb, s)) =
   C.grpcByteBufferDestroy bb >> C.freeSlice s
 freeOpContext OpSendCloseFromClientContext = return ()
-freeOpContext (OpSendStatusFromServerContext metadata _ _ _) =
-  C.metadataFree metadata
+freeOpContext (OpSendStatusFromServerContext metadata _ _ s) =
+  C.metadataFree metadata >> C.freeSlice s
 freeOpContext (OpRecvInitialMetadataContext metadata) =
   C.metadataArrayDestroy metadata
 freeOpContext (OpRecvMessageContext pbb) =
