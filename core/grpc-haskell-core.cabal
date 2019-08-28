@@ -10,6 +10,9 @@ copyright:           Copyright 2016 Awake Networks
 category:            Network
 build-type:          Simple
 cabal-version:       >=1.10
+extra-source-files:  include/grpc_haskell.h
+                     tests/ssl/localhost.crt
+                     tests/ssl/localhost.key
 
 Flag Debug
   Description: Adds debug logging.
