@@ -208,7 +208,14 @@ runOps :: C.Call
        -> IO (Either GRPCIOError [OpRecvResult])
 runOps call cq ops =
   let l = length ops in
-    withOpArrayAndCtxts ops $ \(opArray, contexts) -> do
+    -- It is crucial to mask exceptions here. If we don’t do this, we can
+    -- run into the following situation:
+    --
+    -- 1. We allocate an OpContext, e.g., OpRecvMessageContext and the corresponding ByteBuffer.
+    -- 2. We pass the buffer to gRPC in startBatch.
+    -- 3. If we now get an exception we will free the ByteBuffer.
+    -- 4. gRPC can now end up writing to the freed ByteBuffer and we get a heap corruption.
+    withOpArrayAndCtxts ops $ \(opArray, contexts) -> mask_ $ do
       grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
       tag <- newTag cq
       grpcDebug $ "runOps: tag: " ++ show tag
