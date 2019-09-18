@@ -8,20 +8,20 @@ resolver: lts-14.1
 packages:
 - '.'
 - 'core'
-- location:
-    git: git@github.com:awakesecurity/proto3-suite.git
-    commit: 3f6dd6f612cf2eba3c05798926ff924b0d5ab4fa
-  extra-dep: true
-- location:
-    git: git@github.com:awakesecurity/proto3-wire.git
-    commit: 4f355bbac895d577d8a28f567ab4380f042ccc24
-  extra-dep: true
+
 
 # Override default flag values for local packages and extra-deps
 flags: {}
 
 # Extra package databases containing global packages
 extra-package-dbs: []
+
+
+extra-deps:
+- git: git@github.com:awakesecurity/proto3-suite.git
+  commit: 3f6dd6f612cf2eba3c05798926ff924b0d5ab4fa
+- git: git@github.com:awakesecurity/proto3-wire.git
+  commit: 4f355bbac895d577d8a28f567ab4380f042ccc24
 
 # Control whether we use the GHC we find on the path
 #
