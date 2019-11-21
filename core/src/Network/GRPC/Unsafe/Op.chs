@@ -47,10 +47,6 @@ deriving instance Show OpArray
 -- | Destroys an 'OpArray' of the given size.
 {#fun unsafe op_array_destroy as ^ {`OpArray', `Int'} -> `()'#}
 
--- | brackets creating and destroying an 'OpArray' with the given size.
-withOpArray :: Int -> (OpArray -> IO a) -> IO a
-withOpArray n f = bracket (opArrayCreate n) (flip opArrayDestroy n) f
-
 -- | Creates an op of type GRPC_OP_SEND_INITIAL_METADATA at the specified
 -- index of the given 'OpArray', containing the given
 -- metadata. The metadata is copied and can be destroyed after calling this

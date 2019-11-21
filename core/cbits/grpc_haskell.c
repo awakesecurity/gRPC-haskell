@@ -210,33 +210,8 @@ void op_array_destroy(grpc_op* op_array, size_t n){
   #ifdef GRPC_HASKELL_DEBUG
   printf("C wrapper: entered op_array_destroy\n");
   #endif
-  for(int i = 0; i < n; i++){
-    grpc_op* op = op_array + i;
-    switch (op->op) {
-      case GRPC_OP_SEND_INITIAL_METADATA:
-      metadata_free(op->data.send_initial_metadata.metadata);
-      break;
-      case GRPC_OP_SEND_MESSAGE:
-      grpc_byte_buffer_destroy(op->data.send_message.send_message);
-      break;
-      case GRPC_OP_SEND_CLOSE_FROM_CLIENT:
-      break;
-      case GRPC_OP_SEND_STATUS_FROM_SERVER:
-      grpc_haskell_free("op_array_destroy: GRPC_OP_SEND_STATUS_FROM_SERVER",
-                        op->data.send_status_from_server.trailing_metadata);
-      grpc_haskell_free("op_array_destroy: GRPC_OP_SEND_STATUS_FROM_SERVER",
-                      (char*)(op->data.send_status_from_server.status_details));
-      break;
-      case GRPC_OP_RECV_INITIAL_METADATA:
-      break;
-      case GRPC_OP_RECV_MESSAGE:
-      break;
-      case GRPC_OP_RECV_STATUS_ON_CLIENT:
-      break;
-      case GRPC_OP_RECV_CLOSE_ON_SERVER:
-      break;
-    }
-  }
+  // This only destroys the array, the values in the array
+  // are freed in freeOpContext
   grpc_haskell_free("op_array_destroy", op_array);
 }
 
