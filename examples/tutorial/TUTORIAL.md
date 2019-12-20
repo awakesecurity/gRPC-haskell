@@ -41,7 +41,7 @@ The important things to notice in this generated file are:
 
 1. For each proto message type, an equivalent Haskell type with the same name has been generated.
 2. The `arithmeticServer` function takes a a record containing handlers for each RPC endpoint and some options, and starts a server. So, you just need to call this function to get a server running.
-3, The `arithmeticClient` function takes a `Client` (which is just a proof that the gRPC core has been started) and gives you a record of functions that can be used to run RPCs.
+3. The `arithmeticClient` function takes a `Client` (which is just a proof that the gRPC core has been started) and gives you a record of functions that can be used to run RPCs.
 
 ### The server
 
