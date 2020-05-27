@@ -48,7 +48,7 @@ withServerCallAsync :: Server
                     -> (ServerCall -> IO ())
                     -> IO ()
 withServerCallAsync s f = mask $ \unmask ->
-  serverCreateCall s >>= \case
+  unmask (serverCreateCall s) >>= \case
     Left e -> do grpcDebug $ "withServerCallAsync: call error: " ++ show e
                  return ()
     Right c -> do wasForkSuccess <- forkServer s handler
