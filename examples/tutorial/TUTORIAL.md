@@ -32,7 +32,7 @@ This library exposes quite a few modules, but you won't need to worry about most
 To start out, we need to generate code for our protocol buffers and RPCs. The `compile-proto-file` command is provided as part of `proto3-suite`. You can either use `stack install` in the `proto3-suite` repository to install the command globally, or use `stack exec` from within the `grpc-haskell` directory.
 
 ```
-$ stack exec -- compile-proto-file --proto examples/echo/echo.proto > examples/echo/echo-hs/Echo.hs
+$ stack exec -- compile-proto-file --includeDir examples/tutorial --proto arithmetic.proto --out examples/tutorial
 ```
 
 The `.proto` file compiler always names the generated module the same as the `.proto` file, capitalizing the first letter if it is not already. Since our proto file is `arithmetic.proto`, the generated code should be placed in `Arithmetic.hs`.
