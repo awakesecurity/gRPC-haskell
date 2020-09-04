@@ -60,238 +60,252 @@
 #     $ cabal2nix path/to/dependency/repo > nix/${package-name}.nix
 let
   nixpkgs = import ./nixpkgs.nix;
+
   config = {
-    packageOverrides = pkgs: rec {
-      protobuf3_2NoCheck =
-        pkgs.stdenv.lib.overrideDerivation
-          pkgs.pythonPackages.protobuf
-          (oldAttrs : {doCheck = false; doInstallCheck = false;});
+    allowUnfree = true;
+  };
 
-      cython = pkgs.pythonPackages.buildPythonPackage rec {
-        name = "Cython-${version}";
-        version = "0.24.1";
+  overlay = pkgsNew: pkgsOld: {
+    protobuf3_2NoCheck =
+      pkgsNew.stdenv.lib.overrideDerivation
+        pkgsNew.pythonPackages.protobuf
+        (oldAttrs : {doCheck = false; doInstallCheck = false;});
 
-        src = pkgs.fetchurl {
-          url = "mirror://pypi/C/Cython/${name}.tar.gz";
-          sha256 = "84808fda00508757928e1feadcf41c9f78e9a9b7167b6649ab0933b76f75e7b9";
-        };
+    cython = pkgsNew.pythonPackages.buildPythonPackage rec {
+      name = "Cython-${version}";
+      version = "0.24.1";
 
-        # This workaround was taken from https://github.com/NixOS/nixpkgs/issues/18729
-        # This was fixed in `nixpkgs-unstable` so we can get rid of this workaround
-        # when that fix is stabilized
-        NIX_CFLAGS_COMPILE =
-          pkgs.stdenv.lib.optionalString (pkgs.stdenv.cc.isClang or false)
-            "-I${pkgs.libcxx}/include/c++/v1";
-
-        buildInputs =
-              pkgs.stdenv.lib.optional (pkgs.stdenv.cc.isClang or false) pkgs.libcxx
-          ++  [ pkgs.pkgconfig pkgs.gdb ];
-
-        doCheck = false;
-
-        doHaddock = false;
-
-        doHoogle = false;
-
-        meta = {
-          description = "An optimising static compiler for both the Python programming language and the extended Cython programming language";
-          platforms = pkgs.stdenv.lib.platforms.all;
-          homepage = http://cython.org;
-          license = pkgs.stdenv.lib.licenses.asl20;
-          maintainers = with pkgs.stdenv.lib.maintainers; [ fridh ];
-        };
+      src = pkgsNew.fetchurl {
+        url = "mirror://pypi/C/Cython/${name}.tar.gz";
+        sha256 = "84808fda00508757928e1feadcf41c9f78e9a9b7167b6649ab0933b76f75e7b9";
       };
 
-      grpc = pkgs.callPackage ./nix/grpc.nix { };
+      # This workaround was taken from https://github.com/NixOS/nixpkgs/issues/18729
+      # This was fixed in `nixpkgs-unstable` so we can get rid of this workaround
+      # when that fix is stabilized
+      NIX_CFLAGS_COMPILE =
+        pkgsNew.stdenv.lib.optionalString (pkgsNew.stdenv.cc.isClang or false)
+          "-I${pkgsNew.libcxx}/include/c++/v1";
 
-      grpcio = pkgs.pythonPackages.buildPythonPackage rec {
-        name = "grpc-${version}";
+      buildInputs =
+            pkgsNew.stdenv.lib.optional (pkgsNew.stdenv.cc.isClang or false) pkgsNew.libcxx
+        ++  [ pkgsNew.pkgconfig pkgsNew.gdb ];
 
-        version = "1.0";
+      doCheck = false;
 
-        src = pkgs.fetchgit {
-          url    = "https://github.com/grpc/grpc.git";
-          rev    = "e2cfe9df79c4eda4e376222df064c4c65e616352";
-          sha256 = "19ldbjlnbc287hkaylsigm8w9fai2bjdbfxk6315kl75cq54iprr";
-        };
+      doHaddock = false;
 
-        preConfigure = ''
-          export GRPC_PYTHON_BUILD_WITH_CYTHON=1
-        '';
+      doHoogle = false;
 
-        # This workaround was taken from https://github.com/NixOS/nixpkgs/issues/18729
-        # This was fixed in `nixpkgs-unstable` so we can get rid of this workaround
-        # when that fix is stabilized
-        NIX_CFLAGS_COMPILE =
-          pkgs.stdenv.lib.optionalString (pkgs.stdenv.cc.isClang or false)
-            "-I${pkgs.libcxx}/include/c++/v1";
-
-        buildInputs =
-          pkgs.stdenv.lib.optional (pkgs.stdenv.cc.isClang or false) pkgs.libcxx;
-
-        propagatedBuildInputs = [
-          cython
-          pkgs.pythonPackages.futures
-          protobuf3_2NoCheck
-          pkgs.pythonPackages.enum34
-        ];
-      };
-
-      grpcio-tools = pkgs.pythonPackages.buildPythonPackage rec {
-        name = "grpc-${version}";
-
-        version = "1.0";
-
-        src = pkgs.fetchgit {
-          url    = "https://github.com/grpc/grpc.git";
-          rev    = "e2cfe9df79c4eda4e376222df064c4c65e616352";
-          sha256 = "19ldbjlnbc287hkaylsigm8w9fai2bjdbfxk6315kl75cq54iprr";
-        };
-
-        preConfigure = ''
-          export GRPC_PYTHON_BUILD_WITH_CYTHON=1
-          cd tools/distrib/python/grpcio_tools
-          python ../make_grpcio_tools.py
-        '';
-
-        # This workaround was taken from https://github.com/NixOS/nixpkgs/issues/18729
-        # This was fixed in `nixpkgs-unstable` so we can get rid of this workaround
-        # when that fix is stabilized
-        NIX_CFLAGS_COMPILE =
-          pkgs.stdenv.lib.optionalString (pkgs.stdenv.cc.isClang or false)
-            "-I${pkgs.libcxx}/include/c++/v1";
-
-        buildInputs =
-          pkgs.stdenv.lib.optional (pkgs.stdenv.cc.isClang or false) pkgs.libcxx;
-
-        propagatedBuildInputs = [
-          cython
-          pkgs.pythonPackages.futures
-          protobuf3_2NoCheck
-          pkgs.pythonPackages.enum34
-          grpcio
-        ];
-      };
-
-      usesGRPC = haskellPackage:
-        pkgs.haskell.lib.overrideCabal haskellPackage (oldAttributes: {
-            preBuild = (oldAttributes.preBuild or "") +
-              pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
-                export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-              '' +
-              pkgs.lib.optionalString pkgs.stdenv.isLinux ''
-                export LD_LIBRARY_PATH=${grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
-              '';
-
-            shellHook = (oldAttributes.shellHook or "") +
-              pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
-                export DYLD_LIBRARY_PATH=${grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-              '' +
-              pkgs.lib.optionalString pkgs.stdenv.isLinux ''
-                export LD_LIBRARY_PATH=${grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
-              '';
-          }
-        );
-
-      haskellPackages = pkgs.haskellPackages.override {
-        overrides = haskellPackagesNew: haskellPackagesOld: rec {
-
-          proto3-wire =
-            haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
-
-          proto3-suite =
-            pkgs.haskell.lib.dontCheck
-              (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
-
-          grpc-haskell-core =
-            pkgs.haskell.lib.buildFromSdist (usesGRPC
-              (pkgs.haskell.lib.overrideCabal
-                (haskellPackagesNew.callPackage ./core { })
-                (_: { buildDepends = [ haskellPackagesNew.c2hs ]; })));
-
-          grpc-haskell-no-tests =
-            pkgs.haskell.lib.buildFromSdist (usesGRPC
-              (pkgs.haskell.lib.dontCheck
-                (haskellPackagesNew.callPackage ./default.nix { })
-              ));
-
-          grpc-haskell =
-            usesGRPC
-              (pkgs.haskell.lib.overrideCabal
-                (pkgs.haskell.lib.buildFromSdist ((haskellPackagesNew.callPackage ./default.nix { })))
-                (oldDerivation:
-                  let
-                    ghc =
-                      haskellPackagesNew.ghcWithPackages (pkgs: [
-                        pkgs.grpc-haskell-no-tests
-                        # Include some additional packages in this custom ghc for
-                        # running tests in the nix-shell environment.
-                        pkgs.tasty-quickcheck
-                        pkgs.turtle
-                      ]);
-
-                    python = pkgs.python.withPackages (pkgs: [
-                      # pkgs.protobuf3_0
-                      grpcio-tools
-                    ]);
-
-                  in rec {
-                    configureFlags = (oldDerivation.configureFlags or []) ++ [
-                      "--flags=with-examples"
-                    ];
-
-                    buildDepends = [
-                      pkgs.makeWrapper
-                      # Give our nix-shell its own cabal so we don't pick up one
-                      # from the user's environment by accident.
-                      haskellPackagesNew.cabal-install
-
-                      # And likewise for c2hs
-                      haskellPackagesNew.c2hs
-                    ];
-
-                    patches = [ tests/tests.patch ];
-
-                    postPatch = ''
-                      patchShebangs tests
-                      substituteInPlace tests/simple-client.sh \
-                        --replace @makeWrapper@ ${pkgs.makeWrapper} \
-                        --replace @grpc@ ${grpc}
-                      substituteInPlace tests/simple-server.sh \
-                        --replace @makeWrapper@ ${pkgs.makeWrapper} \
-                        --replace @grpc@ ${grpc}
-                      wrapProgram tests/protoc.sh \
-                        --prefix PATH : ${python}/bin
-                      wrapProgram tests/test-client.sh \
-                        --prefix PATH : ${python}/bin
-                      wrapProgram tests/test-server.sh \
-                        --prefix PATH : ${python}/bin
-                      wrapProgram tests/simple-client.sh \
-                        --prefix PATH : ${ghc}/bin
-                      wrapProgram tests/simple-server.sh \
-                        --prefix PATH : ${ghc}/bin
-                    '';
-
-                    shellHook = (oldDerivation.shellHook or "") + ''
-                      # This lets us use our custom ghc and python environments in the shell.
-                      export PATH=${ghc}/bin:${python}/bin''${PATH:+:}$PATH
-                    '';
-                  })
-              );
-
-        };
+      meta = {
+        description = "An optimising static compiler for both the Python programming language and the extended Cython programming language";
+        platforms = pkgsNew.stdenv.lib.platforms.all;
+        homepage = http://cython.org;
+        license = pkgsNew.stdenv.lib.licenses.asl20;
+        maintainers = with pkgsNew.stdenv.lib.maintainers; [ fridh ];
       };
     };
 
-    allowUnfree = true;
+    grpc = pkgsNew.callPackage ./nix/grpc.nix { };
+
+    grpcio = pkgsNew.pythonPackages.buildPythonPackage rec {
+      name = "grpc-${version}";
+
+      version = "1.0";
+
+      src = pkgsNew.fetchgit {
+        url    = "https://github.com/grpc/grpc.git";
+        rev    = "e2cfe9df79c4eda4e376222df064c4c65e616352";
+        sha256 = "19ldbjlnbc287hkaylsigm8w9fai2bjdbfxk6315kl75cq54iprr";
+      };
+
+      preConfigure = ''
+        export GRPC_PYTHON_BUILD_WITH_CYTHON=1
+      '';
+
+      # This workaround was taken from https://github.com/NixOS/nixpkgs/issues/18729
+      # This was fixed in `nixpkgs-unstable` so we can get rid of this workaround
+      # when that fix is stabilized
+      NIX_CFLAGS_COMPILE =
+        pkgsNew.stdenv.lib.optionalString (pkgsNew.stdenv.cc.isClang or false)
+          "-I${pkgsNew.libcxx}/include/c++/v1";
+
+      buildInputs =
+        pkgsNew.stdenv.lib.optional (pkgsNew.stdenv.cc.isClang or false) pkgsNew.libcxx;
+
+      propagatedBuildInputs = [
+        pkgsNew.cython
+        pkgsNew.pythonPackages.futures
+        pkgsNew.protobuf3_2NoCheck
+        pkgsNew.pythonPackages.enum34
+      ];
+    };
+
+    grpcio-tools = pkgsNew.pythonPackages.buildPythonPackage rec {
+      name = "grpc-${version}";
+
+      version = "1.0";
+
+      src = pkgsNew.fetchgit {
+        url    = "https://github.com/grpc/grpc.git";
+        rev    = "e2cfe9df79c4eda4e376222df064c4c65e616352";
+        sha256 = "19ldbjlnbc287hkaylsigm8w9fai2bjdbfxk6315kl75cq54iprr";
+      };
+
+      preConfigure = ''
+        export GRPC_PYTHON_BUILD_WITH_CYTHON=1
+        cd tools/distrib/python/grpcio_tools
+        python ../make_grpcio_tools.py
+      '';
+
+      # This workaround was taken from https://github.com/NixOS/nixpkgs/issues/18729
+      # This was fixed in `nixpkgs-unstable` so we can get rid of this workaround
+      # when that fix is stabilized
+      NIX_CFLAGS_COMPILE =
+        pkgsNew.stdenv.lib.optionalString (pkgsNew.stdenv.cc.isClang or false)
+          "-I${pkgsNew.libcxx}/include/c++/v1";
+
+      buildInputs =
+        pkgsNew.stdenv.lib.optional (pkgsNew.stdenv.cc.isClang or false) pkgsNew.libcxx;
+
+      propagatedBuildInputs = [
+        pkgsNew.cython
+        pkgsNew.pythonPackages.futures
+        pkgsNew.protobuf3_2NoCheck
+        pkgsNew.pythonPackages.enum34
+        pkgsNew.grpcio
+      ];
+    };
+
+    usesGRPC = haskellPackage:
+      pkgsNew.haskell.lib.overrideCabal haskellPackage (oldAttributes: {
+          preBuild = (oldAttributes.preBuild or "") +
+            pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
+              export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+            '' +
+            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
+              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+            '';
+
+          shellHook = (oldAttributes.shellHook or "") +
+            pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
+              export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+            '' +
+            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
+              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+            '';
+        }
+      );
+
+    haskellPackages = pkgsOld.haskellPackages.override {
+      overrides = haskellPackagesNew: haskellPackagesOld: rec {
+
+        proto3-wire =
+          haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
+
+        proto3-suite =
+          pkgsNew.haskell.lib.dontCheck
+            (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
+
+        grpc-haskell-core =
+          pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
+            (pkgsNew.haskell.lib.overrideCabal
+              (haskellPackagesNew.callPackage ./core { })
+              (_: { buildDepends = [ haskellPackagesNew.c2hs ]; })));
+
+        grpc-haskell-no-tests =
+          pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
+            (pkgsNew.haskell.lib.dontCheck
+              (haskellPackagesNew.callPackage ./default.nix { })
+            ));
+
+        grpc-haskell =
+          pkgsNew.usesGRPC
+            (pkgsNew.haskell.lib.overrideCabal
+              (pkgsNew.haskell.lib.buildFromSdist ((haskellPackagesNew.callPackage ./default.nix { })))
+              (oldDerivation:
+                let
+                  ghc =
+                    haskellPackagesNew.ghcWithPackages (pkgs: [
+                      pkgs.grpc-haskell-no-tests
+                      # Include some additional packages in this custom ghc for
+                      # running tests in the nix-shell environment.
+                      pkgs.tasty-quickcheck
+                      pkgs.turtle
+                    ]);
+
+                  python = pkgsNew.python.withPackages (pkgs: [
+                    # pkgs.protobuf3_0
+                    pkgsNew.grpcio-tools
+                  ]);
+
+                in rec {
+                  configureFlags = (oldDerivation.configureFlags or []) ++ [
+                    "--flags=with-examples"
+                  ];
+
+                  buildDepends = [
+                    pkgsNew.makeWrapper
+                    # Give our nix-shell its own cabal so we don't pick up one
+                    # from the user's environment by accident.
+                    haskellPackagesNew.cabal-install
+
+                    # And likewise for c2hs
+                    haskellPackagesNew.c2hs
+                  ];
+
+                  patches = [ tests/tests.patch ];
+
+                  postPatch = ''
+                    patchShebangs tests
+                    substituteInPlace tests/simple-client.sh \
+                      --replace @makeWrapper@ ${pkgsNew.makeWrapper} \
+                      --replace @grpc@ ${pkgsNew.grpc}
+                    substituteInPlace tests/simple-server.sh \
+                      --replace @makeWrapper@ ${pkgsNew.makeWrapper} \
+                      --replace @grpc@ ${pkgsNew.grpc}
+                    wrapProgram tests/protoc.sh \
+                      --prefix PATH : ${python}/bin
+                    wrapProgram tests/test-client.sh \
+                      --prefix PATH : ${python}/bin
+                    wrapProgram tests/test-server.sh \
+                      --prefix PATH : ${python}/bin
+                    wrapProgram tests/simple-client.sh \
+                      --prefix PATH : ${ghc}/bin
+                    wrapProgram tests/simple-server.sh \
+                      --prefix PATH : ${ghc}/bin
+                  '';
+
+                  shellHook = (oldDerivation.shellHook or "") + ''
+                    # This lets us use our custom ghc and python environments in the shell.
+                    export PATH=${ghc}/bin:${python}/bin''${PATH:+:}$PATH
+                  '';
+                })
+            );
+
+      };
+    };
+
+    test-grpc-haskell =
+      pkgsNew.mkShell {
+        nativeBuildInputs = [
+          (pkgsNew.haskellPackages.ghcWithPackages (pkgs: [
+                pkgs.grpc-haskell
+              ]
+            )
+          )
+        ];
+      };
   };
+
+  overlays = [ overlay ];
 
 in
 
 let
-   linuxPkgs = import nixpkgs { inherit config; system = "x86_64-linux" ; };
-  darwinPkgs = import nixpkgs { inherit config; system = "x86_64-darwin"; };
-        pkgs = import nixpkgs { inherit config; };
+   linuxPkgs = import nixpkgs { inherit config overlays; system = "x86_64-linux" ; };
+  darwinPkgs = import nixpkgs { inherit config overlays; system = "x86_64-darwin"; };
+        pkgs = import nixpkgs { inherit config overlays; };
 
 in
   {
@@ -308,4 +322,6 @@ in
     grpc-darwin                = darwinPkgs.grpc;
 
     grpc                       =       pkgs.grpc;
+
+    inherit (pkgs) test-grpc-haskell;
   }
