@@ -13,6 +13,7 @@ import           Control.Monad
 import           Data.ByteString                           (ByteString)
 import qualified Data.ByteString.Lazy                      as BL
 import           Network.GRPC.LowLevel
+import           Numeric.Natural
 import           Proto3.Suite.Class
 import           System.IO
 
@@ -225,6 +226,7 @@ data ServerOptions = ServerOptions
     -- ^ Security configuration.
   , optLogger               :: String -> IO ()
     -- ^ Logging function to use to log errors in handling calls.
+  , optMaxReceiveMessageLength :: Maybe Natural
   }
 
 defaultOptions :: ServerOptions
@@ -241,6 +243,7 @@ defaultOptions = ServerOptions
   , optInitialMetadata      = mempty
   , optSSLConfig            = Nothing
   , optLogger               = hPutStrLn stderr
+  , optMaxReceiveMessageLength = Nothing
   }
 
 serverLoop :: ServerOptions -> IO ()
