@@ -122,5 +122,7 @@ serverLoop ServerOptions{..} =
           [ UserAgentPrefix optUserAgentPrefix
           , UserAgentSuffix optUserAgentSuffix
           ]
+          ++
+          foldMap (pure . MaxReceiveMessageLength) optMaxReceiveMessageLength
       , sslConfig = optSSLConfig
       }
