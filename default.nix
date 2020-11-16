@@ -5,7 +5,7 @@
 }:
 mkDerivation {
   pname = "grpc-haskell";
-  version = "0.0.0.0";
+  version = "0.0.2.0";
   src = ./.;
   isLibrary = true;
   isExecutable = true;

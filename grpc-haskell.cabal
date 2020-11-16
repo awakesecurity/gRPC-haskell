@@ -1,5 +1,5 @@
 name:                grpc-haskell
-version:             0.0.1.0
+version:             0.0.2.0
 synopsis:            Haskell implementation of gRPC layered on shared C library.
 homepage:            https://github.com/awakenetworks/gRPC-haskell
 license:             Apache-2.0
