@@ -42,7 +42,6 @@ import           Network.GRPC.HighLevel.Server
 import           Network.GRPC.HighLevel.Client
 import           Network.GRPC.LowLevel
 import           Network.GRPC.LowLevel.Call
-import qualified Network.GRPC.Unsafe.ChannelArgs as C
 import           Numeric.Natural
 import           System.IO (hPutStrLn, stderr)
 
