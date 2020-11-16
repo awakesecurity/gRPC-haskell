@@ -1,0 +1,44 @@
+diff --git a/test/Parameterized/Control/Monad/Trans/Reader/ReaderSpec.hs b/test/Parameterized/Control/Monad/Trans/Reader/ReaderSpec.hs
+index a39d181..1999e57 100644
+--- a/test/Parameterized/Control/Monad/Trans/Reader/ReaderSpec.hs
++++ b/test/Parameterized/Control/Monad/Trans/Reader/ReaderSpec.hs
+@@ -91,7 +91,7 @@ whichIntBoolStringReader = do
+ manyIntMaybeReader :: ReaderT (Many '[Int]) Maybe String
+ manyIntMaybeReader = do
+     a <- ask
+-    let r = fetch @Int a
++    let r = grab @Int a
+     case r of
+         0 -> empty
+         r' -> pure $ show r'
+@@ -99,7 +99,7 @@ manyIntMaybeReader = do
+ manyBoolMaybeReader :: ReaderT (Many '[Bool]) Maybe String
+ manyBoolMaybeReader = do
+     a <- ask
+-    let r = fetch @Bool a
++    let r = grab @Bool a
+     case r of
+         False -> empty
+         r' -> pure $ show r'
+diff --git a/test/Parameterized/Control/Monad/Trans/State/Strict/StateSpec.hs b/test/Parameterized/Control/Monad/Trans/State/Strict/StateSpec.hs
+index 7dfd46c..4777c13 100644
+--- a/test/Parameterized/Control/Monad/Trans/State/Strict/StateSpec.hs
++++ b/test/Parameterized/Control/Monad/Trans/State/Strict/StateSpec.hs
+@@ -26,7 +26,7 @@ main = hspec spec
+ manyIntMaybeState :: StateT (Many '[Int]) Maybe String
+ manyIntMaybeState= do
+     s <- get
+-    let r = fetch @Int s
++    let r = grab @Int s
+     case r of
+         0 -> empty
+         r' -> do
+@@ -36,7 +36,7 @@ manyIntMaybeState= do
+ manyBoolMaybeState :: StateT (Many '[Bool]) Maybe String
+ manyBoolMaybeState = do
+     s <- get
+-    let r = fetch @Bool s
++    let r = grab @Bool s
+     case r of
+         False -> empty
+         r' -> do
