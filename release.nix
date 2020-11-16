@@ -63,6 +63,9 @@ let
 
   config = {
     allowUnfree = true;
+    # For parameterized-0.5.0.0, which we patch for compatbility with
+    # proto3-wire-1.2.0 (which also uses the same patch)
+    allowBroken = true;
   };
 
   overlay = pkgsNew: pkgsOld: {
@@ -258,6 +261,8 @@ let
                   '';
                 })
             );
+
+        parameterized = pkgsNew.haskell.lib.appendPatch haskellPackagesOld.parameterized ./nix/parameterized.patch;
 
       };
     };
