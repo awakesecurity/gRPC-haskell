@@ -66,10 +66,6 @@ let
   };
 
   overlay = pkgsNew: pkgsOld: {
-    protobuf3_2NoCheck =
-      pkgsNew.stdenv.lib.overrideDerivation
-        pkgsNew.pythonPackages.protobuf
-        (oldAttrs : {doCheck = false; doInstallCheck = false;});
 
     cython = pkgsNew.pythonPackages.buildPythonPackage rec {
       name = "Cython-${version}";
@@ -177,26 +173,6 @@ let
       ];
     };
 
-    usesGRPC = haskellPackage:
-      pkgsNew.haskell.lib.overrideCabal haskellPackage (oldAttributes: {
-          preBuild = (oldAttributes.preBuild or "") +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
-              export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-            '' +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
-              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
-            '';
-
-          shellHook = (oldAttributes.shellHook or "") +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
-              export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-            '' +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
-              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
-            '';
-        }
-      );
-
     haskellPackages = pkgsOld.haskellPackages.override {
       overrides = haskellPackagesNew: haskellPackagesOld: rec {
 
@@ -286,6 +262,11 @@ let
       };
     };
 
+    protobuf3_2NoCheck =
+      pkgsNew.stdenv.lib.overrideDerivation
+        pkgsNew.pythonPackages.protobuf
+        (oldAttrs : {doCheck = false; doInstallCheck = false;});
+
     test-grpc-haskell =
       pkgsNew.mkShell {
         nativeBuildInputs = [
@@ -296,6 +277,26 @@ let
           )
         ];
       };
+
+    usesGRPC = haskellPackage:
+      pkgsNew.haskell.lib.overrideCabal haskellPackage (oldAttributes: {
+          preBuild = (oldAttributes.preBuild or "") +
+            pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
+              export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+            '' +
+            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
+              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+            '';
+
+          shellHook = (oldAttributes.shellHook or "") +
+            pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
+              export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+            '' +
+            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
+              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+            '';
+        }
+      );
   };
 
   overlays = [ overlay ];
