@@ -1,6 +1,6 @@
 ## Introduction to gRPC-Haskell
 
-*This tutorial assumes that you already have a basic understanding of gRPC as well as Haskell.* For an intoduction to the concepts of gRPC, see the [official tutorials](http://www.grpc.io/docs/tutorials/).
+*This tutorial assumes that you already have a basic understanding of gRPC as well as Haskell.* For an introduction to the concepts of gRPC, see the [official tutorials](http://www.grpc.io/docs/tutorials/).
 
 This will go through a basic example of using the library, with the `arithmetic` example in the `examples/arithmetic` directory. After cloning this repository, it would be a good idea to run `stack haddock` from within the repository directory to generate the documentation so you can read more about the functions and types we're using as we go. Also remember that [typed holes](https://wiki.haskell.org/GHC/Typed_holes) can be very handy.
 
