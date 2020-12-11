@@ -2,7 +2,7 @@ Attribution
 -----------
 
 This library is a fork of https://github.com/aloiscochard/grpc-haskell that we
-have extended and released under the same [`LICENSE`](./LICENSE)
+have extended and released under the same [`LICENSE`](./LICENSE). Please use with caution in production.
 
 Installation
 ------------
@@ -117,6 +117,27 @@ There are basically two methods to accomplish this:
   ```
   url "https://github.com/grpc/grpc/archive/v1.0.1.tar.gz"
   sha256 "efad782944da13d362aab9b81f001b7b8b1458794751de818e9848c47acd4b32"
+  ```
+
+Installing GRPC on Unix
+-----------------------
+1. Clone the repo
+  ```
+  git clone https://github.com/grpc/grpc
+  cd grpc
+  ```
+2. Checkout version 1.2
+  ```
+  git checkout tags/v1.2.0
+  ```
+3. Install sub modules
+  ```
+  git submodule update --init
+  ```
+3. Make and Install
+  ```
+  make
+  sudo make install
   ```
 
 Using the Library
