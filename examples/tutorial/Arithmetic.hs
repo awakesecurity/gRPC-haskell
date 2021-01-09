@@ -62,7 +62,8 @@ arithmeticServer
   Arithmetic{arithmeticAdd = arithmeticAdd,
              arithmeticRunningSum = arithmeticRunningSum}
   (ServiceOptions serverHost serverPort useCompression
-     userAgentPrefix userAgentSuffix initialMetadata sslConfig logger)
+     userAgentPrefix userAgentSuffix initialMetadata sslConfig logger
+     serverMaxReceiveMessageLength)
   = (HsGRPC.serverLoop
        HsGRPC.defaultOptions{HsGRPC.optNormalHandlers =
                                [(HsGRPC.UnaryHandler
@@ -79,7 +80,8 @@ arithmeticServer
                              optUserAgentPrefix = userAgentPrefix,
                              optUserAgentSuffix = userAgentSuffix,
                              optInitialMetadata = initialMetadata, optSSLConfig = sslConfig,
-                             optLogger = logger})
+                             optLogger = logger,
+                             optMaxReceiveMessageLength = serverMaxReceiveMessageLength})
  
 arithmeticClient ::
                    HsGRPC.Client ->
