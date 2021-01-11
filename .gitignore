@@ -7,4 +7,8 @@ examples/echo/echo-cpp/echo-client
 examples/echo/echo-cpp/echo-server
 benchmarks.html
 result
-
+*~
+cabal.project.local
+dist-newstyle/
+tests/py-tmp
+tests/tmp

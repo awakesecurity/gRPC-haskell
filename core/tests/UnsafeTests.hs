@@ -19,8 +19,8 @@ import           Network.GRPC.Unsafe.Security
 import           Network.GRPC.Unsafe.Slice
 import           Network.GRPC.Unsafe.Time
 import           System.Clock
-import           Test.QuickCheck.Gen             as QC
-import           Test.QuickCheck.Property        as QC
+import           Test.QuickCheck.Gen
+import qualified Test.QuickCheck.Property        as QC
 import           Test.Tasty
 import           Test.Tasty.HUnit                as HU (testCase, (@?=))
 import           Test.Tasty.QuickCheck           as QC
@@ -197,7 +197,7 @@ assertCqEventComplete e = do
   eventSuccess e HU.@?= True
 
 grpc :: IO a -> IO ()
-grpc = bracket_ grpcInit grpcShutdown . void
+grpc = bracket_ grpcInit grpcShutdownBlocking . void
 
 _nowarnUnused :: a
 _nowarnUnused = assertCqEventComplete `undefined` threadDelaySecs

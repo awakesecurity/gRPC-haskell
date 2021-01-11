@@ -42,7 +42,7 @@ doHelloSS c n = do
   let pay        = SSRqt "server streaming mode" (fromIntegral n)
       enc        = BL.toStrict . toLazyByteString $ pay
       err desc e = fail $ "doHelloSS: " ++ desc ++ " error: " ++ show e
-  eea <- clientReader c rm n enc mempty $ \_md recv -> do
+  eea <- clientReader c rm n enc mempty $ \_cc _md recv -> do
     n' <- flip fix (0::Int) $ \go i -> recv >>= \case
       Left e          -> err "recv" e
       Right Nothing   -> return i
@@ -84,7 +84,7 @@ doHelloBi c n = do
   let pay        = BiRqtRpy "bidi payload"
       enc        = BL.toStrict . toLazyByteString $ pay
       err desc e = fail $ "doHelloBi: " ++ desc ++ " error: " ++ show e
-  eea <- clientRW c rm n mempty $ \_getMD recv send writesDone -> do
+  eea <- clientRW c rm n mempty $ \_cc _getMD recv send writesDone -> do
     -- perform n writes on a worker thread
     thd <- async $ do
       replicateM_ n $ send enc >>= \case
@@ -110,7 +110,7 @@ doHelloBi c n = do
 
 highlevelMain :: IO ()
 highlevelMain = withGRPC $ \g ->
-  withClient g (ClientConfig "localhost" 50051 [] Nothing) $ \c -> do
+  withClient g (ClientConfig "localhost" 50051 [] Nothing Nothing) $ \c -> do
     let n = 100000
     putStrLn "-------------- HelloSS --------------"
     doHelloSS c n

@@ -11,13 +11,14 @@
 -- `Network.GRPC.LowLevel.Client.Unregistered`.
 module Network.GRPC.LowLevel.Client where
 
-import           Control.Exception                     (bracket, finally)
+import           Control.Exception                     (bracket)
 import           Control.Concurrent.MVar
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import qualified Data.ByteString                       as B
 import           Data.ByteString                       (ByteString)
+import           Data.Maybe
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.GRPC
@@ -36,8 +37,9 @@ data Client = Client {clientChannel :: C.Channel,
                      }
 
 data ClientSSLKeyCertPair = ClientSSLKeyCertPair
-  {clientPrivateKey :: FilePath,
-   clientCert :: FilePath}
+  { clientPrivateKey :: FilePath,
+    clientCert       :: FilePath
+  } deriving Show
 
 -- | SSL configuration for the client. It's perfectly acceptable for both fields
 -- to be 'Nothing', in which case default fallbacks will be used for the server
@@ -61,11 +63,15 @@ data ClientConfig = ClientConfig {clientServerHost :: Host,
                                   -- channel on the client. Supplying an empty
                                   -- list will cause the channel to use gRPC's
                                   -- default options.
-                                  clientSSLConfig :: Maybe ClientSSLConfig
+                                  clientSSLConfig :: Maybe ClientSSLConfig,
                                   -- ^ If 'Nothing', the client will use an
                                   -- insecure connection to the server.
                                   -- Otherwise, will use the supplied config to
                                   -- connect using SSL.
+                                  clientAuthority :: Maybe ByteString
+                                  -- ^ If 'Nothing', the :authority pseudo-header will
+                                  -- be the endpoint host. Otherwise, the :authority
+                                  -- pseudo-header will be set to the supplied value.
                                  }
 
 clientEndpoint :: ClientConfig -> Endpoint
@@ -132,10 +138,10 @@ clientRegisterMethod :: Client
                      -> MethodName
                      -> IO (C.CallHandle)
 clientRegisterMethod Client{..} meth = do
-  let e = clientEndpoint clientConfig
+  let host = fromMaybe (unEndpoint (clientEndpoint clientConfig)) (clientAuthority clientConfig)
   C.grpcChannelRegisterCall clientChannel
                             (unMethodName meth)
-                            (unEndpoint e)
+                            host
                             C.reserved
 
 
@@ -216,9 +222,12 @@ withClientCallParent :: Client
                      -> (ClientCall -> IO (Either GRPCIOError a))
                      -> IO (Either GRPCIOError a)
 withClientCallParent cl rm tm parent f =
-  clientCreateCallParent cl rm tm parent >>= \case
+  bracket (clientCreateCallParent cl rm tm parent) cleanup $ \case
     Left e  -> return (Left e)
-    Right c -> f c `finally` do
+    Right c -> f c
+  where
+    cleanup (Left _) = pure ()
+    cleanup (Right c) = do
       debugClientCall c
       grpcDebug "withClientCall(R): destroying."
       destroyClientCall c
@@ -250,7 +259,7 @@ compileNormalRequestResults x =
 -- clientReader (client side of server streaming mode)
 
 -- | First parameter is initial server metadata.
-type ClientReaderHandler = MetadataMap -> StreamRecv ByteString -> IO ()
+type ClientReaderHandler = ClientCall -> MetadataMap -> StreamRecv ByteString -> IO ()
 type ClientReaderResult  = (MetadataMap, C.StatusCode, StatusDetails)
 
 clientReader :: Client
@@ -263,13 +272,13 @@ clientReader :: Client
 clientReader cl@Client{ clientCQ = cq } rm tm body initMeta f =
   withClientCall cl rm tm go
   where
-    go (unsafeCC -> c) = runExceptT $ do
+    go cc@(unsafeCC -> c) = runExceptT $ do
       void $ runOps' c cq [ OpSendInitialMetadata initMeta
                           , OpSendMessage body
                           , OpSendCloseFromClient
                           ]
       srvMD <- recvInitialMetadata c cq
-      liftIO $ f srvMD (streamRecvPrim c cq)
+      liftIO $ f cc srvMD (streamRecvPrim c cq)
       recvStatusOnClient c cq
 
 --------------------------------------------------------------------------------
@@ -320,7 +329,8 @@ pattern CWRFinal mmsg initMD trailMD st ds
 -- clientRW (client side of bidirectional streaming mode)
 
 type ClientRWHandler
-  =  IO (Either GRPCIOError MetadataMap)
+  =  ClientCall
+  -> IO (Either GRPCIOError MetadataMap)
   -> StreamRecv ByteString
   -> StreamSend ByteString
   -> WritesDone
@@ -346,7 +356,7 @@ clientRW' :: Client
           -> MetadataMap
           -> ClientRWHandler
           -> IO (Either GRPCIOError ClientRWResult)
-clientRW' (clientCQ -> cq) (unsafeCC -> c) initMeta f = runExceptT $ do
+clientRW' (clientCQ -> cq) cc@(unsafeCC -> c) initMeta f = runExceptT $ do
   sendInitialMetadata c cq initMeta
 
   -- 'mdmv' is used to synchronize between callers of 'getMD' and 'recv'
@@ -406,7 +416,7 @@ clientRW' (clientCQ -> cq) (unsafeCC -> c) initMeta f = runExceptT $ do
     -- programmer.
     writesDone = writesDonePrim c cq
 
-  liftIO (f getMD recv send writesDone)
+  liftIO (f cc getMD recv send writesDone)
   recvStatusOnClient c cq -- Finish()
 
 --------------------------------------------------------------------------------

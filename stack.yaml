@@ -2,31 +2,26 @@
 # For more information, see: http://docs.haskellstack.org/en/stable/yaml_configuration/
 
 # Specifies the GHC version and set of packages available (e.g., lts-3.5, nightly-2015-09-21, ghc-7.10.2)
-resolver: lts-8.23
+resolver: lts-14.1
 
 # Local packages, usually specified by relative directory name
 packages:
 - '.'
 - 'core'
-- location:
-    git: git@github.com:awakenetworks/proto3-suite.git
-    commit: bb66853dcaa7372ef061cf83f39e4ba5193898de
-  extra-dep: true
-- location:
-    git: git@github.com:awakenetworks/proto3-wire.git
-    commit: a938330bf794cf3fa05591d03906915df98d157c
-  extra-dep: true
-# Packages to be pulled from upstream that are not in the resolver (e.g., acme-missiles-0.3)
-extra-deps: [ aeson-1.1.1.0
-            , managed-1.0.5
-            , swagger2-2.1.6
-            ]
+
 
 # Override default flag values for local packages and extra-deps
 flags: {}
 
 # Extra package databases containing global packages
 extra-package-dbs: []
+
+
+extra-deps:
+- git: git@github.com:awakesecurity/proto3-suite.git
+  commit: 3f6dd6f612cf2eba3c05798926ff924b0d5ab4fa
+- git: git@github.com:awakesecurity/proto3-wire.git
+  commit: 4f355bbac895d577d8a28f567ab4380f042ccc24
 
 # Control whether we use the GHC we find on the path
 #

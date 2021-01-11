@@ -11,6 +11,7 @@ clientConfig = ClientConfig { clientServerHost = "localhost"
                             , clientServerPort = 50051
                             , clientArgs = []
                             , clientSSLConfig = Nothing
+                            , clientAuthority = Nothing
                             }
 
 main :: IO ()

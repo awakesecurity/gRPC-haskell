@@ -406,7 +406,7 @@ testServerStreaming =
 
     client c = do
       rm <- clientRegisterMethodServerStreaming c "/feed"
-      eea <- clientReader c rm 10 clientPay clientInitMD $ \initMD recv -> do
+      eea <- clientReader c rm 10 clientPay clientInitMD $ \_cc initMD recv -> do
         checkMD "Server initial metadata mismatch" serverInitMD initMD
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
@@ -436,7 +436,7 @@ testServerStreamingUnregistered =
 
     client c = do
       rm <- clientRegisterMethodServerStreaming c "/feed"
-      eea <- clientReader c rm 10 clientPay clientInitMD $ \initMD recv -> do
+      eea <- clientReader c rm 10 clientPay clientInitMD $ \_cc initMD recv -> do
         checkMD "Server initial metadata mismatch" serverInitMD initMD
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
@@ -517,7 +517,7 @@ testBiDiStreaming =
 
     client c = do
       rm  <- clientRegisterMethodBiDiStreaming c "/bidi"
-      eea <- clientRW c rm 10 clientInitMD $ \getMD recv send writesDone -> do
+      eea <- clientRW c rm 10 clientInitMD $ \_cc getMD recv send writesDone -> do
         either clientFail (checkMD "Server rsp metadata mismatch" serverInitMD) =<< getMD
         send "cw0" `is` Right ()
         recv       `is` Right (Just "sw0")
@@ -553,7 +553,7 @@ testBiDiStreamingUnregistered =
 
     client c = do
       rm  <- clientRegisterMethodBiDiStreaming c "/bidi"
-      eea <- clientRW c rm 10 clientInitMD $ \getMD recv send writesDone -> do
+      eea <- clientRW c rm 10 clientInitMD $ \_cc getMD recv send writesDone -> do
         either clientFail (checkMD "Server rsp metadata mismatch" serverInitMD) =<< getMD
         send "cw0" `is` Right ()
         recv       `is` Right (Just "sw0")
@@ -674,7 +674,7 @@ testCustomUserAgent =
   where
     clientArgs = [UserAgentPrefix "prefix!", UserAgentSuffix "suffix!"]
     client =
-      TestClient (ClientConfig "localhost" 50051 clientArgs Nothing) $
+      TestClient (ClientConfig "localhost" 50051 clientArgs Nothing Nothing) $
         \c -> do rm <- clientRegisterMethodNormal c "/foo"
                  void $ clientRequest c rm 4 "" mempty
     server = TestServer (serverConf (["/foo"],[],[],[])) $ \s -> do
@@ -698,6 +698,7 @@ testClientCompression =
                    "localhost"
                    50051
                    [CompressionAlgArg GrpcCompressDeflate]
+                   Nothing
                    Nothing) $ \c -> do
         rm <- clientRegisterMethodNormal c "/foo"
         void $ clientRequest c rm 1 "hello" mempty
@@ -715,6 +716,7 @@ testClientServerCompression =
     cconf = ClientConfig "localhost"
                          50051
                          [CompressionAlgArg GrpcCompressDeflate]
+                         Nothing
                          Nothing
     client = TestClient cconf $ \c -> do
       rm <- clientRegisterMethodNormal c "/foo"
@@ -745,6 +747,7 @@ testClientServerCompressionLvl =
     cconf = ClientConfig "localhost"
                          50051
                          [CompressionLevelArg GrpcCompressLevelHigh]
+                         Nothing
                          Nothing
     client = TestClient cconf $ \c -> do
       rm <- clientRegisterMethodNormal c "/foo"
@@ -787,7 +790,7 @@ testClientMaxReceiveMessageLengthChannelArg = do
       rm <- clientRegisterMethodNormal c "/foo"
       clientRequest c rm 1 pay mempty >>= k
       where
-        conf = ClientConfig "localhost" 50051 [MaxReceiveMessageLength n] Nothing
+        conf = ClientConfig "localhost" 50051 [MaxReceiveMessageLength n] Nothing Nothing
 
     -- Expect success when the max recv payload size is set to 4 bytes, and we
     -- are sent 4.
@@ -799,7 +802,7 @@ testClientMaxReceiveMessageLengthChannelArg = do
     -- Expect failure when the max recv payload size is set to 3 bytes, and we
     -- are sent 4.
     shouldFail = clientMax 3 $ \case
-        Left (GRPCIOBadStatusCode StatusInvalidArgument _)
+        Left (GRPCIOBadStatusCode StatusResourceExhausted _)
           -> pure ()
         rsp
           -> clientFail ("Expected failure response, but got: " ++ show rsp)
@@ -885,7 +888,7 @@ stdTestClient :: (Client -> IO ()) -> TestClient
 stdTestClient = TestClient stdClientConf
 
 stdClientConf :: ClientConfig
-stdClientConf = ClientConfig "localhost" 50051 [] Nothing
+stdClientConf = ClientConfig "localhost" 50051 [] Nothing Nothing
 
 data TestServer = TestServer ServerConfig (Server -> IO ())
 

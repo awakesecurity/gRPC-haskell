@@ -52,6 +52,7 @@ data Arg = CompressionAlgArg CompressionAlgorithm
          | UserAgentPrefix String
          | UserAgentSuffix String
          | MaxReceiveMessageLength Natural
+         | MaxMetadataSize Natural
   deriving (Show, Eq)
 
 {#fun create_string_arg as ^ {`GrpcArg', `Int', `ArgKey', `String'} -> `()'#}
@@ -71,6 +72,9 @@ createArg array (UserAgentSuffix suffix) i =
   createStringArg array i UserAgentSuffixKey suffix
 createArg array (MaxReceiveMessageLength n) i =
   createIntArg array i MaxReceiveMessageLengthKey $
+    fromIntegral (min n (fromIntegral (maxBound :: Int)))
+createArg array (MaxMetadataSize n) i =
+  createIntArg array i MaxMetadataSizeKey $
     fromIntegral (min n (fromIntegral (maxBound :: Int)))
 
 createChannelArgs :: [Arg] -> IO GrpcChannelArgs

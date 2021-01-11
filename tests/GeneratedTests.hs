@@ -4,7 +4,7 @@
 module GeneratedTests where
 
 import Test.Tasty
-import Test.Tasty.HUnit (testCase, (@?=))
+import Test.Tasty.HUnit (assertEqual, testCase, (@?=))
 
 import Data.String
 import Proto3.Suite.DotProto.Generate
@@ -21,7 +21,13 @@ testServerGeneration = testCase "server generation" $ do
   mktree hsTmpDir
   mktree pyTmpDir
 
-  compileDotProtoFileOrDie [] hsTmpDir ["tests"] "simple.proto"
+  let args = CompileArgs
+        { includeDir = ["tests"]
+        , extraInstanceFiles = []
+        , inputProto = "simple.proto"
+        , outputDir = hsTmpDir
+        }
+  compileDotProtoFileOrDie args
 
   do exitCode <- proc "tests/simple-server.sh" [hsTmpDir] empty
      exitCode @?= ExitSuccess
@@ -49,7 +55,13 @@ testClientGeneration = testCase "client generation" $ do
   mktree hsTmpDir
   mktree pyTmpDir
 
-  compileDotProtoFileOrDie [] hsTmpDir ["tests"] "simple.proto"
+  let args = CompileArgs
+        { includeDir = ["tests"]
+        , extraInstanceFiles = []
+        , inputProto = "simple.proto"
+        , outputDir = hsTmpDir
+        }
+  compileDotProtoFileOrDie args
 
   do exitCode <- proc "tests/simple-client.sh" [hsTmpDir] empty
      exitCode @?= ExitSuccess
@@ -66,8 +78,8 @@ testClientGeneration = testCase "client generation" $ do
       serverExitCode <- liftIO (wait serverExitCodeA)
       clientExitCode <- liftIO (wait clientExitCodeA)
 
-      serverExitCode @?= ExitSuccess
-      clientExitCode @?= ExitSuccess
+      assertEqual "Server exit code" serverExitCode ExitSuccess
+      assertEqual "Client exit code" clientExitCode ExitSuccess
 
   rmtree hsTmpDir
   rmtree pyTmpDir

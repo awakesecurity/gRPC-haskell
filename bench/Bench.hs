@@ -97,7 +97,7 @@ serverOpts =
 
 main :: IO ()
 main = bracket startServer stopServer $ const $ withGRPC $ \grpc ->
-  withClient grpc (ClientConfig "localhost" 50051 [] Nothing) $ \c -> do
+  withClient grpc (ClientConfig "localhost" 50051 [] Nothing Nothing) $ \c -> do
     rmAdd <- clientRegisterMethodNormal c addMethod
     rmClientStream <- clientRegisterMethodClientStreaming c addClientStreamMethod
     rmServerStream <- clientRegisterMethodServerStreaming c addServerStreamMethod

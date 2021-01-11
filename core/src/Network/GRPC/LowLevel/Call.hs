@@ -20,7 +20,6 @@ import           Control.Exception                              (bracket)
 import           Data.ByteString                                (ByteString)
 import           Data.ByteString.Char8                          (pack)
 import           Data.List                                      (intersperse)
-import           Data.Monoid
 import           Data.String                                    (IsString)
 import           Foreign.Marshal.Alloc                          (free, malloc)
 import           Foreign.Ptr                                    (Ptr, nullPtr)
@@ -31,6 +30,7 @@ import           Network.GRPC.LowLevel.GRPC                     (MetadataMap,
 import qualified Network.GRPC.Unsafe                            as C
 import qualified Network.GRPC.Unsafe.ByteBuffer                 as C
 import qualified Network.GRPC.Unsafe.Op                         as C
+import qualified Network.GRPC.Unsafe.Time                       as C
 import           System.Clock
 
 -- | Models the four types of RPC call supported by gRPC (and correspond to
@@ -181,7 +181,7 @@ mgdPtr = managed (bracket malloc free)
 
 serverCallIsExpired :: ServerCall a -> IO Bool
 serverCallIsExpired sc = do
-  currTime <- getTime Monotonic
+  C.CTimeSpec currTime <- bracket (C.gprNow C.GprClockMonotonic) C.timespecDestroy peek
   return $ currTime > (callDeadline sc)
 
 debugClientCall :: ClientCall -> IO ()
@@ -209,11 +209,11 @@ debugServerCall = const $ return ()
 destroyClientCall :: ClientCall -> IO ()
 destroyClientCall cc = do
   grpcDebug "Destroying client-side call object."
-  C.grpcCallDestroy (unsafeCC cc)
+  C.grpcCallUnref (unsafeCC cc)
 
 destroyServerCall :: ServerCall a -> IO ()
 destroyServerCall sc@ServerCall{ unsafeSC = c, .. } = do
   grpcDebug "destroyServerCall(R): entered."
   debugServerCall sc
   grpcDebug $ "Destroying server-side call object: " ++ show c
-  C.grpcCallDestroy c
+  C.grpcCallUnref c

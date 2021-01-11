@@ -210,33 +210,8 @@ void op_array_destroy(grpc_op* op_array, size_t n){
   #ifdef GRPC_HASKELL_DEBUG
   printf("C wrapper: entered op_array_destroy\n");
   #endif
-  for(int i = 0; i < n; i++){
-    grpc_op* op = op_array + i;
-    switch (op->op) {
-      case GRPC_OP_SEND_INITIAL_METADATA:
-      metadata_free(op->data.send_initial_metadata.metadata);
-      break;
-      case GRPC_OP_SEND_MESSAGE:
-      grpc_byte_buffer_destroy(op->data.send_message.send_message);
-      break;
-      case GRPC_OP_SEND_CLOSE_FROM_CLIENT:
-      break;
-      case GRPC_OP_SEND_STATUS_FROM_SERVER:
-      grpc_haskell_free("op_array_destroy: GRPC_OP_SEND_STATUS_FROM_SERVER",
-                        op->data.send_status_from_server.trailing_metadata);
-      grpc_haskell_free("op_array_destroy: GRPC_OP_SEND_STATUS_FROM_SERVER",
-                      (char*)(op->data.send_status_from_server.status_details));
-      break;
-      case GRPC_OP_RECV_INITIAL_METADATA:
-      break;
-      case GRPC_OP_RECV_MESSAGE:
-      break;
-      case GRPC_OP_RECV_STATUS_ON_CLIENT:
-      break;
-      case GRPC_OP_RECV_CLOSE_ON_SERVER:
-      break;
-    }
-  }
+  // This only destroys the array, the values in the array
+  // are freed in freeOpContext
   grpc_haskell_free("op_array_destroy", op_array);
 }
 
@@ -440,6 +415,8 @@ char* translate_arg_key(enum supported_arg_key key){
       return GRPC_ARG_SECONDARY_USER_AGENT_STRING;
     case max_receive_message_length_key:
       return GRPC_ARG_MAX_RECEIVE_MESSAGE_LENGTH;
+    case max_metadata_size_key:
+      return GRPC_ARG_MAX_METADATA_SIZE;
     default:
       return "unknown_arg_key";
   }
@@ -498,10 +475,10 @@ grpc_channel_credentials* grpc_ssl_credentials_create_internal(
   grpc_channel_credentials* creds;
   if(pem_key && pem_cert){
     grpc_ssl_pem_key_cert_pair pair = {pem_key, pem_cert};
-    creds = grpc_ssl_credentials_create(pem_root_certs, &pair, NULL);
+    creds = grpc_ssl_credentials_create(pem_root_certs, &pair, NULL, NULL);
   }
   else{
-    creds = grpc_ssl_credentials_create(pem_root_certs, NULL, NULL);
+    creds = grpc_ssl_credentials_create(pem_root_certs, NULL, NULL, NULL);
   }
   return creds;
 }
@@ -535,10 +512,16 @@ grpc_call_credentials* grpc_metadata_credentials_create_from_plugin_(
 //This callback is registered as the get_metadata callback for the call, and its
 //only job is to cast the void* state pointer to the correct function pointer
 //type and call the Haskell function with it.
-void metadata_dispatcher(void *state, grpc_auth_metadata_context context,
- grpc_credentials_plugin_metadata_cb cb, void *user_data){
-
+int metadata_dispatcher(void *state,
+ grpc_auth_metadata_context context,
+ grpc_credentials_plugin_metadata_cb cb,
+ void *user_data,
+ grpc_metadata creds_md[GRPC_METADATA_CREDENTIALS_PLUGIN_SYNC_MAX],
+ size_t *num_creds_md,
+ grpc_status_code *status,
+ const char ** error_details) {
   ((haskell_get_metadata*)state)(&context, cb, user_data);
+  return 0;
 }
 
 grpc_metadata_credentials_plugin* mk_metadata_client_plugin(

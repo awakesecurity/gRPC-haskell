@@ -31,15 +31,15 @@ import Proto3.Suite
 import System.Random
 
 import Test.Tasty
-import Test.Tasty.HUnit ((@?=), assertString, testCase)
+import Test.Tasty.HUnit ((@?=), assertFailure, testCase)
 
 testNormalCall client = testCase "Normal call" $
-  do randoms <- fromList <$> replicateM 1000 (Fixed <$> randomRIO (1, 1000))
+  do randoms <- fromList <$> replicateM 1000 (randomRIO (1, 1000))
      let req = SimpleServiceRequest "NormalRequest" randoms
      res <- simpleServiceNormalCall client
               (ClientNormalRequest req 10 mempty)
      case res of
-       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
+       ClientErrorResponse err -> assertFailure ("ClientErrorResponse: " <> show err)
        ClientNormalResponse res _ _ stsCode _ ->
          do stsCode @?= StatusOk
             simpleServiceResponseResponse res @?= "NormalRequest"
@@ -52,7 +52,7 @@ testClientStreamingCall client = testCase "Client-streaming call" $
        do (finalName, totalSum) <-
              fmap ((mconcat *** (sum . mconcat)) . unzip) .
              replicateM iterationCount $
-             do randoms <- fromList <$> replicateM 1000 (Fixed <$> randomRIO (1, 1000))
+             do randoms <- fromList <$> replicateM 1000 (randomRIO (1, 1000))
                 name <- fromString <$> replicateM 10 (randomRIO ('a', 'z'))
                 send (SimpleServiceRequest name randoms)
                 pure (name, randoms)
@@ -60,8 +60,8 @@ testClientStreamingCall client = testCase "Client-streaming call" $
 
      (finalName, totalSum) <- readMVar v
      case res of
-       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
-       ClientWriterResponse Nothing _ _ _ _ -> assertString "No response received"
+       ClientErrorResponse err -> assertFailure ("ClientErrorResponse: " <> show err)
+       ClientWriterResponse Nothing _ _ _ _ -> assertFailure "No response received"
        ClientWriterResponse (Just res) _ _ stsCode _ ->
          do stsCode @?= StatusOk
             simpleServiceResponseResponse res @?= finalName
@@ -69,28 +69,28 @@ testClientStreamingCall client = testCase "Client-streaming call" $
 
 testServerStreamingCall client = testCase "Server-streaming call" $
   do numCount <- randomRIO (50, 500)
-     nums <- replicateM numCount (Fixed <$> randomIO)
+     nums <- replicateM numCount randomIO
 
      let checkResults [] recv =
            do res <- recv
               case res of
-                Left err -> assertString ("recv error: " <> show err)
+                Left err -> assertFailure ("recv error: " <> show err)
                 Right Nothing -> pure ()
-                Right (Just _) -> assertString "recv: elements past end of stream"
+                Right (Just _) -> assertFailure "recv: elements past end of stream"
          checkResults (expNum:nums) recv =
            do res <- recv
               case res of
-                Left err -> assertString ("recv error: " <> show err)
-                Right Nothing -> assertString ("recv: stream ended earlier than expected")
+                Left err -> assertFailure ("recv error: " <> show err)
+                Right Nothing -> assertFailure ("recv: stream ended earlier than expected")
                 Right (Just (SimpleServiceResponse response num)) ->
                   do response @?= "Test"
                      num @?= expNum
                      checkResults nums recv
      res <- simpleServiceServerStreamingCall client $
             ClientReaderRequest (SimpleServiceRequest "Test" (fromList nums)) 10 mempty
-              (\_ -> checkResults nums)
+              (\_ _ -> checkResults nums)
      case res of
-       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
+       ClientErrorResponse err -> assertFailure ("ClientErrorResponse: " <> show err)
        ClientReaderResponse _ sts _ ->
          sts @?= StatusOk
 
@@ -98,13 +98,13 @@ testBiDiStreamingCall client = testCase "Bidi-streaming call" $
   do let handleRequests (0 :: Int) _ _ done = done >> pure ()
          handleRequests n recv send done =
            do numCount <- randomRIO (10, 1000)
-              nums <- fromList <$> replicateM numCount (Fixed <$> randomRIO (1, 1000))
+              nums <- fromList <$> replicateM numCount (randomRIO (1, 1000))
               testName <- fromString <$> replicateM 10 (randomRIO ('a', 'z'))
               send (SimpleServiceRequest testName nums)
 
               res <- recv
               case res of
-                Left err -> assertString ("recv error: " <> show err)
+                Left err -> assertFailure ("recv error: " <> show err)
                 Right Nothing -> pure ()
                 Right (Just (SimpleServiceResponse name total)) ->
                   do name @?= testName
@@ -114,9 +114,9 @@ testBiDiStreamingCall client = testCase "Bidi-streaming call" $
      iterations <- randomRIO (50, 500)
 
      res <- simpleServiceBiDiStreamingCall client $
-            ClientBiDiRequest 10 mempty (\_ -> handleRequests iterations)
+            ClientBiDiRequest 10 mempty (\_ _ -> handleRequests iterations)
      case res of
-       ClientErrorResponse err -> assertString ("ClientErrorResponse: " <> show err)
+       ClientErrorResponse err -> assertFailure ("ClientErrorResponse: " <> show err)
        ClientBiDiResponse _ sts _ ->
          sts @?= StatusOk
 
@@ -124,7 +124,7 @@ main :: IO ()
 main = do
   threadDelay 10000000
   withGRPC $ \grpc ->
-   withClient grpc (ClientConfig "localhost" 50051 [] Nothing) $ \client ->
+   withClient grpc (ClientConfig "localhost" 50051 [] Nothing Nothing) $ \client ->
     do service <- simpleServiceClient client
 
        (defaultMain $ testGroup "Send gRPC requests"

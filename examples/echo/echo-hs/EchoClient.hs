@@ -14,7 +14,6 @@ import qualified Data.Text.Lazy                   as TL
 import           Echo
 import           GHC.Generics                     (Generic)
 import           Network.GRPC.HighLevel.Client
-import           Network.GRPC.HighLevel.Generated
 import           Network.GRPC.LowLevel
 import           Options.Generic
 import           Prelude                          hiding (FilePath)
@@ -36,7 +35,7 @@ main = do
     cfg      = ClientConfig
                  (Host . fromMaybe "localhost" . unHelpful $ bind)
                  (Port . fromMaybe 50051       . unHelpful $ port)
-                 [] Nothing
+                 [] Nothing Nothing
   withGRPC $ \g -> withClient g cfg $ \c -> do
     Echo{..} <- echoClient c
     echoDoEcho (ClientNormalRequest rqt 5 mempty) >>= \case

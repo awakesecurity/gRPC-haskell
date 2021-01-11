@@ -167,7 +167,7 @@ shutdownCompletionQueue CompletionQueue{..} = do
         drainLoop = do
           grpcDebug "drainLoop: before next() call"
           ev <- C.withDeadlineSeconds 1 $ \deadline ->
-                  C.grpcCompletionQueueNext unsafeCQ deadline C.reserved
+                  C.grpcCompletionQueuePluck unsafeCQ C.noTag deadline C.reserved
           grpcDebug $ "drainLoop: next() call got " ++ show ev
           case C.eventCompletionType ev of
             C.QueueShutdown -> return ()

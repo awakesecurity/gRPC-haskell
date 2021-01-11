@@ -1,5 +1,7 @@
 from simple_pb2 import *
+import simple_pb2_grpc
 from uuid import uuid4
+from concurrent import futures
 import random
 import Queue
 import grpc
@@ -8,7 +10,7 @@ print "Starting python server"
 
 done_queue = Queue.Queue()
 
-class SimpleServiceServer(BetaSimpleServiceServicer):
+class SimpleServiceServer(simple_pb2_grpc.SimpleServiceServicer):
     def done(self, request, context):
         global server
         done_queue.put_nowait(())
@@ -34,7 +36,8 @@ class SimpleServiceServer(BetaSimpleServiceServicer):
         for request in requests:
             yield SimpleServiceResponse(response = request.request, num = sum(request.num))
 
-server = beta_create_SimpleService_server(SimpleServiceServer())
+server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+simple_pb2_grpc.add_SimpleServiceServicer_to_server(SimpleServiceServer(), server)
 server.add_insecure_port('[::]:50051')
 server.start()
 

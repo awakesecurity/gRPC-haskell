@@ -42,6 +42,7 @@ import           Network.GRPC.HighLevel.Server
 import           Network.GRPC.HighLevel.Client
 import           Network.GRPC.LowLevel
 import           Network.GRPC.LowLevel.Call
+import           Numeric.Natural
 import           System.IO (hPutStrLn, stderr)
 
 -- | Used at the kind level as a parameter to service definitions
@@ -78,6 +79,8 @@ data ServiceOptions = ServiceOptions
     -- ^ Security configuration.
   , logger               :: String -> IO ()
     -- ^ Logging function to use to log errors in handling calls.
+  , serverMaxReceiveMessageLength :: Maybe Natural
+    -- ^ Maximum length (in bytes) that the service may receive in a single message
   }
 
 defaultServiceOptions :: ServiceOptions
@@ -91,6 +94,7 @@ defaultServiceOptions = ServiceOptions
   , Network.GRPC.HighLevel.Generated.initialMetadata = mempty
   , Network.GRPC.HighLevel.Generated.sslConfig       = Nothing
   , Network.GRPC.HighLevel.Generated.logger          = hPutStrLn stderr
+  , Network.GRPC.HighLevel.Generated.serverMaxReceiveMessageLength = Nothing
   }
 
 withGRPCClient :: ClientConfig -> (Client -> IO a) -> IO a

@@ -51,4 +51,4 @@ destroyServerCall call@ServerCall{..} = do
   grpcDebug "destroyServerCall(U): entered."
   debugServerCall call
   grpcDebug $ "Destroying server-side call object: " ++ show unsafeSC
-  C.grpcCallDestroy unsafeSC
+  C.grpcCallUnref unsafeSC

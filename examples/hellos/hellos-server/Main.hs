@@ -10,7 +10,6 @@
 
 import           Control.Monad
 import           Data.Function                              (fix)
-import           Data.Monoid
 import qualified Data.Text                                  as T
 import           Data.Word
 import           GHC.Generics                               (Generic)

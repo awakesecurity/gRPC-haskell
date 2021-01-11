@@ -1,6 +1,6 @@
 ## Introduction to gRPC-Haskell
 
-*This tutorial assumes that you already have a basic understanding of gRPC as well as Haskell.* For an intoduction to the concepts of gRPC, see the [official tutorials](http://www.grpc.io/docs/tutorials/).
+*This tutorial assumes that you already have a basic understanding of gRPC as well as Haskell.* For an introduction to the concepts of gRPC, see the [official tutorials](http://www.grpc.io/docs/tutorials/).
 
 This will go through a basic example of using the library, with the `arithmetic` example in the `examples/arithmetic` directory. After cloning this repository, it would be a good idea to run `stack haddock` from within the repository directory to generate the documentation so you can read more about the functions and types we're using as we go. Also remember that [typed holes](https://wiki.haskell.org/GHC/Typed_holes) can be very handy.
 
@@ -32,7 +32,7 @@ This library exposes quite a few modules, but you won't need to worry about most
 To start out, we need to generate code for our protocol buffers and RPCs. The `compile-proto-file` command is provided as part of `proto3-suite`. You can either use `stack install` in the `proto3-suite` repository to install the command globally, or use `stack exec` from within the `grpc-haskell` directory.
 
 ```
-$ stack exec -- compile-proto-file --proto examples/echo/echo.proto > examples/echo/echo-hs/Echo.hs
+$ stack exec -- compile-proto-file --includeDir examples/tutorial --proto arithmetic.proto --out examples/tutorial
 ```
 
 The `.proto` file compiler always names the generated module the same as the `.proto` file, capitalizing the first letter if it is not already. Since our proto file is `arithmetic.proto`, the generated code should be placed in `Arithmetic.hs`.
@@ -41,7 +41,7 @@ The important things to notice in this generated file are:
 
 1. For each proto message type, an equivalent Haskell type with the same name has been generated.
 2. The `arithmeticServer` function takes a a record containing handlers for each RPC endpoint and some options, and starts a server. So, you just need to call this function to get a server running.
-3, The `arithmeticClient` function takes a `Client` (which is just a proof that the gRPC core has been started) and gives you a record of functions that can be used to run RPCs.
+3. The `arithmeticClient` function takes a `Client` (which is just a proof that the gRPC core has been started) and gives you a record of functions that can be used to run RPCs.
 
 ### The server
 
@@ -159,6 +159,7 @@ clientConfig = ClientConfig { clientServerHost = "localhost"
                             , clientServerPort = 50051
                             , clientArgs = []
                             , clientSSLConfig = Nothing
+                            , clientAuthority = Nothing
                             }
 
 main :: IO ()
