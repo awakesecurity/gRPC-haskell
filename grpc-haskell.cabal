@@ -97,6 +97,7 @@ executable echo-server
       , async
       , bytestring == 0.10.*
       , containers >=0.5 && <0.7
+      , deepseq
       , grpc-haskell
       , grpc-haskell-core
       , optparse-generic
@@ -169,6 +170,7 @@ executable echo-client
       , async
       , bytestring == 0.10.*
       , containers >=0.5 && <0.7
+      , deepseq
       , grpc-haskell
       , grpc-haskell-core
       , optparse-generic

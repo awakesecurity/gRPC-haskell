@@ -1,9 +1,7 @@
 # If you would like to test and build changes quickly using `cabal`, run:
 #
-#     $ # Consider adding the following command to your `~/.profile`
-#     $ NIX_PATH="${NIX_PATH}:ssh-config-file=${HOME}/.ssh/config:ssh-auth-sock=${SSH_AUTH_SOCK}"
-#     $ nix-shell -A grpc-haskell.env release.nix
-#     [nix-shell]$ cabal configure --enable-tests && cabal build && cabal test
+#     $ nix-shell
+#     [nix-shell]$ cabal configure --enable-tests && cabal test
 #
 # This will open up a Nix shell where all of your Haskell tools will work like
 # normal, except that all dependencies (including C libraries) are managed by
