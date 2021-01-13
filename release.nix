@@ -16,7 +16,7 @@
 # If you want to build and test this repository using `nix`, you can run the
 # following command:
 #
-#     $ nix-build -A grpc-haskell release.nix
+#     $ nix-build --attr grpc-haskell release.nix
 #
 # ... but this is not recommended for normal development because this will
 # rebuild the repository from scratch every time, which is extremely slow.  Only
