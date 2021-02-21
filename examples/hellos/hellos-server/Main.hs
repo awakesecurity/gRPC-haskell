@@ -32,7 +32,7 @@ instance Message CSRpy
 data BiRqtRpy = BiRqtRpy { biMessage :: T.Text } deriving (Show, Eq, Ord, Generic)
 instance Message BiRqtRpy
 
-expect :: (Eq a, Monad m, Show a) => String -> a -> a -> m ()
+expect :: (Eq a, MonadFail m, Show a) => String -> a -> a -> m ()
 expect ctx ex got
   | ex /= got = fail $ ctx ++ " error: expected " ++ show ex ++ ", got " ++ show got
   | otherwise = return ()
