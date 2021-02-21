@@ -206,6 +206,7 @@ let
 in
 
 let
+   nixpkgs = ./nixpkgs.nix;
    linuxPkgs = import nixpkgs { inherit config overlays; system = "x86_64-linux" ; };
   darwinPkgs = import nixpkgs { inherit config overlays; system = "x86_64-darwin"; };
         pkgs = import nixpkgs { inherit config overlays; };
