@@ -71,10 +71,6 @@ withClientServerUnaryCall grpc f = do
               takeMVar finished
               pure (Right ())
         let srm = head (normalMethods s)
-        -- NOTE: We need to send client ops here or else `withServerCall` hangs,
-        -- because registered methods try to do recv ops immediately when
-        -- created. If later we want to send payloads or metadata, we'll need
-        -- to tweak this.
         cc <- takeMVar ccVar
         withServerCall s srm $ \sc ->
           f (c, s, cc, sc)
