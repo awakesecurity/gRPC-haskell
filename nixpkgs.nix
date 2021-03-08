@@ -6,8 +6,7 @@
 #
 # The SHA256 will be printed as the last line of stdout.
 
-import ./fetch-nixpkgs.nix {
-    rev          = "fa12335f425808f53121713f501f3335878e6901";
-    sha256       = "1fjyvjxvymz8yd65ahgm798jp9vdcfy7s58zb5ns2iq2ak0h9j8p";
-    outputSha256 = "1qkihrm8xfrh93c7wh1d1x01p7mgv82b2ycpmn9jm5l7976g31vr";
-}
+import (builtins.fetchTarball {
+    url    = "https://github.com/NixOS/nixpkgs/archive/dd9f73e7d34486b09b966738ace161e621a0480b.tar.gz";
+    sha256 = "0s674386v5b24a9fia26439gw9wsyhif85k2nzpxkp61293v3n3h";
+  })

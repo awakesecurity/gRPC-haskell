@@ -68,114 +68,13 @@ let
 
   overlay = pkgsNew: pkgsOld: {
 
-    cython = pkgsNew.pythonPackages.buildPythonPackage rec {
-      name = "Cython-${version}";
-      version = "0.24.1";
-
-      src = pkgsNew.fetchurl {
-        url = "mirror://pypi/C/Cython/${name}.tar.gz";
-        sha256 = "84808fda00508757928e1feadcf41c9f78e9a9b7167b6649ab0933b76f75e7b9";
-      };
-
-      # This workaround was taken from https://github.com/NixOS/nixpkgs/issues/18729
-      # This was fixed in `nixpkgs-unstable` so we can get rid of this workaround
-      # when that fix is stabilized
-      NIX_CFLAGS_COMPILE =
-        pkgsNew.stdenv.lib.optionalString (pkgsNew.stdenv.cc.isClang or false)
-          "-I${pkgsNew.libcxx}/include/c++/v1";
-
-      buildInputs =
-            pkgsNew.stdenv.lib.optional (pkgsNew.stdenv.cc.isClang or false) pkgsNew.libcxx
-        ++  [ pkgsNew.pkgconfig pkgsNew.gdb ];
-
-      doCheck = false;
-
-      doHaddock = false;
-
-      doHoogle = false;
-
-      meta = {
-        description = "An optimising static compiler for both the Python programming language and the extended Cython programming language";
-        platforms = pkgsNew.stdenv.lib.platforms.all;
-        homepage = http://cython.org;
-        license = pkgsNew.stdenv.lib.licenses.asl20;
-        maintainers = with pkgsNew.stdenv.lib.maintainers; [ fridh ];
-      };
-    };
-
     grpc = pkgsNew.callPackage ./nix/grpc.nix { };
-
-    grpcio = pkgsNew.pythonPackages.buildPythonPackage rec {
-      name = "grpc-${version}";
-
-      version = "1.0";
-
-      src = pkgsNew.fetchgit {
-        url    = "https://github.com/grpc/grpc.git";
-        rev    = "e2cfe9df79c4eda4e376222df064c4c65e616352";
-        sha256 = "19ldbjlnbc287hkaylsigm8w9fai2bjdbfxk6315kl75cq54iprr";
-      };
-
-      preConfigure = ''
-        export GRPC_PYTHON_BUILD_WITH_CYTHON=1
-      '';
-
-      # This workaround was taken from https://github.com/NixOS/nixpkgs/issues/18729
-      # This was fixed in `nixpkgs-unstable` so we can get rid of this workaround
-      # when that fix is stabilized
-      NIX_CFLAGS_COMPILE =
-        pkgsNew.stdenv.lib.optionalString (pkgsNew.stdenv.cc.isClang or false)
-          "-I${pkgsNew.libcxx}/include/c++/v1";
-
-      buildInputs =
-        pkgsNew.stdenv.lib.optional (pkgsNew.stdenv.cc.isClang or false) pkgsNew.libcxx;
-
-      propagatedBuildInputs = [
-        pkgsNew.cython
-        pkgsNew.pythonPackages.futures
-        pkgsNew.protobuf3_2NoCheck
-        pkgsNew.pythonPackages.enum34
-      ];
-    };
-
-    grpcio-tools = pkgsNew.pythonPackages.buildPythonPackage rec {
-      name = "grpc-${version}";
-
-      version = "1.0";
-
-      src = pkgsNew.fetchgit {
-        url    = "https://github.com/grpc/grpc.git";
-        rev    = "e2cfe9df79c4eda4e376222df064c4c65e616352";
-        sha256 = "19ldbjlnbc287hkaylsigm8w9fai2bjdbfxk6315kl75cq54iprr";
-      };
-
-      preConfigure = ''
-        export GRPC_PYTHON_BUILD_WITH_CYTHON=1
-        cd tools/distrib/python/grpcio_tools
-        python ../make_grpcio_tools.py
-      '';
-
-      # This workaround was taken from https://github.com/NixOS/nixpkgs/issues/18729
-      # This was fixed in `nixpkgs-unstable` so we can get rid of this workaround
-      # when that fix is stabilized
-      NIX_CFLAGS_COMPILE =
-        pkgsNew.stdenv.lib.optionalString (pkgsNew.stdenv.cc.isClang or false)
-          "-I${pkgsNew.libcxx}/include/c++/v1";
-
-      buildInputs =
-        pkgsNew.stdenv.lib.optional (pkgsNew.stdenv.cc.isClang or false) pkgsNew.libcxx;
-
-      propagatedBuildInputs = [
-        pkgsNew.cython
-        pkgsNew.pythonPackages.futures
-        pkgsNew.protobuf3_2NoCheck
-        pkgsNew.pythonPackages.enum34
-        pkgsNew.grpcio
-      ];
-    };
 
     haskellPackages = pkgsOld.haskellPackages.override {
       overrides = haskellPackagesNew: haskellPackagesOld: rec {
+
+        haskell-src =
+          haskellPackagesNew.callHackage "haskell-src" "1.0.3.1" {};
 
         proto3-wire =
           haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
@@ -213,7 +112,7 @@ let
 
                   python = pkgsNew.python.withPackages (pkgs: [
                     # pkgs.protobuf3_0
-                    pkgsNew.grpcio-tools
+                    pkgs.grpcio-tools
                   ]);
 
                 in rec {
@@ -307,9 +206,10 @@ let
 in
 
 let
-   linuxPkgs = import nixpkgs { inherit config overlays; system = "x86_64-linux" ; };
-  darwinPkgs = import nixpkgs { inherit config overlays; system = "x86_64-darwin"; };
-        pkgs = import nixpkgs { inherit config overlays; };
+   nixpkgs = import ./nixpkgs.nix;
+   linuxPkgs = nixpkgs { inherit config overlays; system = "x86_64-linux" ; };
+  darwinPkgs = nixpkgs { inherit config overlays; system = "x86_64-darwin"; };
+        pkgs = nixpkgs { inherit config overlays; };
 
 in
   {

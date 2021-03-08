@@ -505,7 +505,7 @@ grpc_auth_metadata_processor* mk_auth_metadata_processor(
 grpc_call_credentials* grpc_metadata_credentials_create_from_plugin_(
   grpc_metadata_credentials_plugin* plugin){
 
-  return grpc_metadata_credentials_create_from_plugin(*plugin, NULL);
+  return grpc_metadata_credentials_create_from_plugin(*plugin, GRPC_PRIVACY_AND_INTEGRITY, NULL);
 }
 
 //This is a hack to work around GHC being unable to deal with raw struct params.

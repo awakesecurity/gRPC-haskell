@@ -219,9 +219,6 @@ castPeek p = do
     unTag `Tag'}
   -> `()'#}
 
-{#fun grpc_channel_ping as ^
-  {`Channel', `CompletionQueue', unTag `Tag',unReserved `Reserved'} -> `()' #}
-
 {#fun grpc_channel_destroy as ^ {`Channel'} -> `()'#}
 
 -- | Starts executing a batch of ops in the given 'OpArray'. Does not block.
