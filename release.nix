@@ -52,10 +52,25 @@
 # Note that `cabal2nix` also takes an optional `--revision` flag if you want to
 # pick a revision other than the latest to depend on.
 #
-# Finally, if you want to test a local source checkout of a dependency, then
-# run:
+# If you want to test a local source checkout of a dependency, then run:
 #
 #     $ cabal2nix path/to/dependency/repo > nix/${package-name}.nix
+#
+# Finally, if you want to add grpc-haskell to your own package set, you can
+# setup the overlay with:
+#
+#     grpc-nixpkgs = import path/to/gRPC-haskell/nixpkgs.nix;
+#     grpc-overlay = (import path/to/gRPC-haskell/release.nix).overlay;
+#     # optionally use the same nixpkgs source
+#     pkgs = grpc-nixpkgs { overlays = [ grpc-overlay ]; };
+#
+# ... and use the extend function to setup haskell package override:
+#
+#     # see https://github.com/NixOS/nixpkgs/issues/25887
+#     haskellPackages = pkgs.haskellPackages.extend (self: super: {
+#       your-package = self.callCabal2nix "your-package" ./. { };
+#     };);
+
 let
   nixpkgs = import ./nixpkgs.nix;
 
@@ -227,5 +242,6 @@ in
 
     grpc                       =       pkgs.grpc;
 
+    overlay                    = overlay;
     inherit (pkgs) test-grpc-haskell;
   }
