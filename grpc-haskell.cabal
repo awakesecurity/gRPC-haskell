@@ -29,7 +29,7 @@ library
   build-depends:
       base >=4.8 && <5.0
     , bytestring ==0.10.*
-    , proto3-suite >=0.4.2.0
+    , proto3-suite >=0.4.1
     , proto3-wire >=1.2.0
     , grpc-haskell-core
     , async >=2.1 && <2.3
