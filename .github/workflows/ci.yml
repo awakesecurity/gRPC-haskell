@@ -1,0 +1,25 @@
+name: ci
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+jobs:
+  build:
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-10.15
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v2.3.4
+        name: Checkout
+      - uses: cachix/install-nix-action@v13
+        name: Install Nix
+      - uses: cachix/cachix-action@v10
+        name: Set up Cachix
+        with:
+          name: awakesecurity
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+      - run: nix-build --attr grpc-haskell
