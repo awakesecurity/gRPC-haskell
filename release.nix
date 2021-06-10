@@ -22,12 +22,6 @@
 # rebuild the repository from scratch every time, which is extremely slow.  Only
 # do this if you want to exactly reproduce our continuous integration build.
 #
-# If you update the `grpc-haskell.cabal` file (such as changing dependencies or
-# adding new library/executable/test/benchmark sections), then update the
-# `grpc-haskell.nix` expression by running:
-#
-#     $ cabal2nix . > grpc-haskell.nix
-#
 # By default, Nix will pick a version for each one of your Haskell dependencies.
 # If you would like to select a different version then, run:
 #
@@ -107,13 +101,13 @@ let
         grpc-haskell-no-tests =
           pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
             (pkgsNew.haskell.lib.dontCheck
-              (haskellPackagesNew.callPackage ./grpc-haskell.nix { })
+              (haskellPackagesNew.callCabal2nix "grpc-haskell" ./. { })
             ));
 
         grpc-haskell =
           pkgsNew.usesGRPC
             (pkgsNew.haskell.lib.overrideCabal
-              (pkgsNew.haskell.lib.buildFromSdist ((haskellPackagesNew.callPackage ./grpc-haskell.nix { })))
+              (pkgsNew.haskell.lib.buildFromSdist (haskellPackagesNew.callCabal2nix "grpc-haskell" ./. { }))
               (oldDerivation:
                 let
                   ghc =
