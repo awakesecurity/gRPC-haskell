@@ -427,7 +427,7 @@ void create_string_arg(grpc_arg* args, size_t i,
   grpc_arg* arg = args+i;
   arg->type = GRPC_ARG_STRING;
   arg->key = translate_arg_key(key);
-  char* storeValue = malloc(sizeof(char)*strlen(value));
+  char* storeValue = malloc(sizeof(char)*(strlen(value)+1));
   arg->value.string = strcpy(storeValue, value);
 }
 
