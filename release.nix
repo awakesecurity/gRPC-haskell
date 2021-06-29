@@ -115,16 +115,9 @@ let
                   ghc =
                     haskellPackagesNew.ghcWithPackages (pkgs: [
                       pkgs.grpc-haskell-no-tests
-                      # Include some additional packages in this custom ghc for
-                      # running tests in the nix-shell environment.
-                      pkgs.tasty-quickcheck
-                      pkgs.turtle
                     ]);
-
-                  python = pkgsNew.python.withPackages (pkgs: [
-                    # pkgs.protobuf3_0
-                    pkgs.grpcio-tools
-                  ]);
+                  python =
+                    pkgsNew.python.withPackages (pkgs: [ pkgs.grpcio-tools ]);
 
                 in rec {
                   configureFlags = (oldDerivation.configureFlags or []) ++ [
@@ -167,7 +160,8 @@ let
                     # This lets us use our custom ghc and python environments in the shell.
                     export PATH=${ghc}/bin:${python}/bin''${PATH:+:}$PATH
                   '';
-                })
+                }
+            )
             );
 
         parameterized = pkgsNew.haskell.lib.appendPatch haskellPackagesOld.parameterized ./nix/parameterized.patch;
