@@ -20,7 +20,6 @@ import           Network.GRPC.Unsafe.Slice
 import           Network.GRPC.Unsafe.Time
 import           System.Clock
 import           Test.QuickCheck.Gen
-import qualified Test.QuickCheck.Property        as QC
 import           Test.Tasty
 import           Test.Tasty.HUnit                as HU (testCase, (@?=))
 import           Test.Tasty.QuickCheck           as QC

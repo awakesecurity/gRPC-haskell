@@ -5,7 +5,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures             #-}
 {-# LANGUAGE OverloadedStrings          #-}
-{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE ScopedTypeVariables        #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 {-# LANGUAGE TypeFamilies               #-}
@@ -212,8 +212,8 @@ destroyClientCall cc = do
   C.grpcCallUnref (unsafeCC cc)
 
 destroyServerCall :: ServerCall a -> IO ()
-destroyServerCall sc@ServerCall{ unsafeSC = c, .. } = do
+destroyServerCall sc@ServerCall{ unsafeSC } = do
   grpcDebug "destroyServerCall(R): entered."
   debugServerCall sc
-  grpcDebug $ "Destroying server-side call object: " ++ show c
-  C.grpcCallUnref c
+  grpcDebug $ "Destroying server-side call object: " ++ show unsafeSC
+  C.grpcCallUnref unsafeSC

@@ -104,7 +104,7 @@ withPermission op cq act = bracket acquire release $ \gotResource ->
 -- 'serverRequestCall', this will block forever unless a timeout is given.
 pluck :: CompletionQueue -> C.Tag -> Maybe TimeoutSeconds
          -> IO (Either GRPCIOError ())
-pluck cq@CompletionQueue{..} tag mwait = do
+pluck cq tag mwait = do
   grpcDebug $ "pluck: called with tag=" ++ show tag ++ ",mwait=" ++ show mwait
   withPermission Pluck cq $ pluck' cq tag mwait
 

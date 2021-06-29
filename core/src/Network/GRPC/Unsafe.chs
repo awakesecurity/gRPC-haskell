@@ -7,7 +7,6 @@ import Control.Exception (bracket)
 import Control.Monad
 
 import Data.ByteString (ByteString, useAsCString)
-import Data.Semigroup (Semigroup)
 
 import Foreign.C.String (CString, peekCString)
 import Foreign.Marshal.Alloc (free)
