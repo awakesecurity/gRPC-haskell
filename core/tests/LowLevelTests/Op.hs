@@ -27,7 +27,7 @@ testCancelFromServer =
   testCase "Client/Server - client receives server cancellation" $
     runSerialTest $ \grpc ->
       withClientServerUnaryCall grpc $
-        \(Client {..}, Server {..}, ClientCall {..}, sc@ServerCall {..}) -> do
+        \(Client {..}, Server {}, ClientCall {..}, sc@ServerCall {}) -> do
           serverCallCancel sc StatusPermissionDenied "TestStatus"
           clientRes <- runOps unsafeCC clientCQ clientRecvOps
           case clientRes of
