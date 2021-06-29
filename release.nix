@@ -94,9 +94,11 @@ let
 
         grpc-haskell-core =
           pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
-            (pkgsNew.haskell.lib.overrideCabal
-              (haskellPackagesNew.callPackage ./core { })
-              (_: { buildDepends = [ haskellPackagesNew.c2hs ]; })));
+            (haskellPackagesNew.callCabal2nix "grpc-haskell-core" ./core {
+                 gpr = pkgsNew.grpc;
+               }
+            )
+          );
 
         grpc-haskell-no-tests =
           pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
