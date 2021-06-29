@@ -126,12 +126,6 @@ let
 
                   buildDepends = [
                     pkgsNew.makeWrapper
-                    # Give our nix-shell its own cabal so we don't pick up one
-                    # from the user's environment by accident.
-                    haskellPackagesNew.cabal-install
-
-                    # And likewise for c2hs
-                    haskellPackagesNew.c2hs
                   ];
 
                   patches = [ tests/tests.patch ];
@@ -186,7 +180,6 @@ let
         nativeBuildInputs = [
           (with pkgsNew.haskellPackages; [
              cabal-install
-             c2hs
              (ghcWithPackages (pkgs: with pkgs; [
                 grpc-haskell-core
                 # No need to guard nix-shell entry on passing package tests
