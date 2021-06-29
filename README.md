@@ -7,7 +7,7 @@ have extended and released under the same [`LICENSE`](./LICENSE)
 Installation
 ------------
 
-**The current version of this library requires gRPC version 1.2.0. Newer versions may work but have not been tested.**
+**The current version of this library requires gRPC version 1.34.1. Newer versions may work, but have not been tested.**
 
 Usage
 -----
@@ -24,8 +24,14 @@ testing:
 
 ```bash
 $ nix-shell
-[nix-shell]$ cabal configure --enable-tests && cabal build && cabal test
+...
+Running: cabal configure --extra-include-dirs ... --extra-lib-dirs ... --enable-tests
+...
+[nix-shell]$ cabal build && cabal test
 ```
+
+Note that `cabal configure` is run automatically upon `nix-shell` entry so that
+the build can reference include and library paths for the `grpc` library.
 
 Using the Library
 -----------------
