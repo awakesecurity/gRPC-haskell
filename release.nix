@@ -190,12 +190,26 @@ let
     test-grpc-haskell =
       pkgsNew.mkShell {
         nativeBuildInputs = [
-          (pkgsNew.haskellPackages.ghcWithPackages (pkgs: [
-                pkgs.grpc-haskell
-              ]
-            )
-          )
+          (with pkgsNew.haskellPackages; [
+             cabal-install
+             c2hs
+             (ghcWithPackages (pkgs: with pkgs; [
+                grpc-haskell-core
+                # No need to guard nix-shell entry on passing package tests
+                (pkgsNew.haskell.lib.dontCheck grpc-haskell)
+                language-c
+                # Additional packages we need to have available for building
+                # and running tests in the nix-shell environment
+                mmorph pipes tasty tasty-hunit tasty-quickcheck
+              ]))
+           ])
+          (pkgsNew.python.withPackages (pkgs: [ pkgs.grpcio-tools ]))
         ];
+        shellHook = ''
+          ${shell-hook-common}
+          echo Running: cabal configure --extra-include-dirs ${pkgsNew.grpc}/include --extra-lib-dirs ${pkgsNew.grpc}/lib --enable-tests
+          cabal configure --extra-include-dirs ${pkgsNew.grpc}/include --extra-lib-dirs ${pkgsNew.grpc}/lib --enable-tests
+        '';
       };
 
     usesGRPC = haskellPackage:
