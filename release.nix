@@ -75,7 +75,7 @@ let
     allowBroken = true;
   };
 
-  overlay = pkgsNew: pkgsOld: {
+  overlay = pkgsNew: pkgsOld: rec {
 
     grpc = pkgsNew.callPackage ./nix/grpc.nix { };
 
@@ -171,7 +171,6 @@ let
             );
 
         parameterized = pkgsNew.haskell.lib.appendPatch haskellPackagesOld.parameterized ./nix/parameterized.patch;
-
       };
     };
 
@@ -179,6 +178,14 @@ let
       pkgsNew.stdenv.lib.overrideDerivation
         pkgsNew.pythonPackages.protobuf
         (oldAttrs : {doCheck = false; doInstallCheck = false;});
+
+    shell-hook-common =
+      pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
+        export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+      '' +
+      pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
+        export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+      '';
 
     test-grpc-haskell =
       pkgsNew.mkShell {
@@ -201,13 +208,9 @@ let
               export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
             '';
 
-          shellHook = (oldAttributes.shellHook or "") +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
-              export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-            '' +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
-              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
-            '';
+          shellHook = (oldAttributes.shellHook or "") + ''
+            ${shell-hook-common}
+          '';
         }
       );
   };
