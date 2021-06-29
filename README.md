@@ -31,7 +31,8 @@ Running: cabal configure --extra-include-dirs ... --extra-lib-dirs ... --enable-
 ```
 
 Note that `cabal configure` is run automatically upon `nix-shell` entry so that
-the build can reference include and library paths for the `grpc` library.
+the build can reference include and library paths for the `grpc` and `gpr`
+libraries.
 
 Using the Library
 -----------------
