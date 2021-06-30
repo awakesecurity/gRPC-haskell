@@ -192,21 +192,15 @@ let
       };
 
     usesGRPC = haskellPackage:
+      # TODO: Try using pkgsNew.fixDarwinDylibNames (see PR#129).
       pkgsNew.haskell.lib.overrideCabal haskellPackage (oldAttributes: {
           preBuild = (oldAttributes.preBuild or "") +
             pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
               export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-            '' +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
-              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
             '';
-
           shellHook = (oldAttributes.shellHook or "") +
             pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
               export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-            '' +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
-              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
             '';
         }
       );
