@@ -180,16 +180,19 @@ testMetadataOrderingProp = testCase "Metadata map ordering prop w/ trivial input
 
 checkMetadataOrdering :: MetadataMap -> Assertion
 checkMetadataOrdering md0 = do
-  let ikvps = (`zip` [0..]) . toList @MetadataMap $ md0
-  let n = length ikvps
-  m <- metadataAlloc n
-  let deref i = (,) <$> getMetadataKey m i <*> getMetadataVal m i
-  mapM_ (\((k, v), i) -> setMetadataKeyVal k v m i) ikvps
-  mapM_ (\(kvp, i) -> deref i >>= (@?= kvp)) ikvps
-  md1 <- getAllMetadata m n
-  unMap md1 @?= M.unionsWith (<>) [M.singleton k [v] | ((k, v), _i) <- ikvps]
-  md1 @?= md0
-  metadataFree m
+  let ikvps = toList md0 `zip` [0..]
+  let ok md = unMap md @?= M.unionsWith (<>) [M.singleton k [v] | ((k, v), _i) <- ikvps]
+  ok md0
+  md1 <- do
+    let n = length ikvps
+    withMetadataKeyValPtr n $ \m -> do
+      let deref i = (,) <$> getMetadataKey m i <*> getMetadataVal m i
+      mapM_ (\((k, v), i) -> setMetadataKeyVal k v m i) ikvps
+      mapM_ (\(kvp, i) -> deref i >>= (@?= kvp)) ikvps
+      getAllMetadata m n
+  ok md1
+  -- Check Eq instance
+  mapM_ (uncurry (@?=)) [(x, y) | x <- [md0, md1], y <- [md0, md1]]
 
 currTimeMillis :: ClockType -> IO Int
 currTimeMillis t = do
