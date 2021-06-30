@@ -1,1 +1,1 @@
-(import ./release.nix).test-grpc-haskell
+(import ./release.nix).grpc-haskell.env
