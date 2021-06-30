@@ -184,15 +184,26 @@ let
       };
 
     usesGRPC = haskellPackage:
-      # TODO: Try using pkgsNew.fixDarwinDylibNames (see PR#129).
+      # On Linux, LD_LIBRARY_PATH needs to be set for loading
+      # grpc-haskell{-,core} code into `ghci` from within `nix-shell`
+      # environments.
+      #
+      # TODO: We might try using pkgsNew.fixDarwinDylibNames (see PR#129)
+      # instead of setting DYLD_LIBRARY_PATH, but we might still need them
+      # around for `ghci` as on Linux.
+
       pkgsNew.haskell.lib.overrideCabal haskellPackage (oldAttributes: {
           preBuild = (oldAttributes.preBuild or "") +
             pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
               export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
             '';
+
           shellHook = (oldAttributes.shellHook or "") +
             pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
               export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+            '' +
+            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
+              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
             '';
         }
       );
