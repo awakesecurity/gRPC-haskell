@@ -49,6 +49,7 @@ library
     Network.GRPC.LowLevel.CompletionQueue.Internal
     Network.GRPC.LowLevel.CompletionQueue.Unregistered
     Network.GRPC.LowLevel.GRPC
+    Network.GRPC.LowLevel.GRPC.MetadataMap
     Network.GRPC.LowLevel.Op
     Network.GRPC.LowLevel.Server
     Network.GRPC.LowLevel.Call

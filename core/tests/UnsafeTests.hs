@@ -12,7 +12,7 @@ import qualified Data.Map                        as M
 import           Foreign.Marshal.Alloc
 import           Foreign.Storable
 import           GHC.Exts
-import           Network.GRPC.LowLevel.GRPC      (threadDelaySecs)
+import           Network.GRPC.LowLevel.GRPC      (MetadataMap(..), threadDelaySecs)
 import           Network.GRPC.Unsafe
 import           Network.GRPC.Unsafe.ByteBuffer
 import           Network.GRPC.Unsafe.ChannelArgs
