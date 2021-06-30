@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -7,6 +8,7 @@ module UnsafeTests (unsafeTests, unsafeProperties) where
 import           Control.Exception               (bracket_)
 import           Control.Monad
 import qualified Data.ByteString                 as B
+import qualified Data.Map                        as M
 import           Foreign.Marshal.Alloc
 import           Foreign.Storable
 import           GHC.Exts
@@ -31,6 +33,7 @@ unsafeTests = testGroup "Unit tests for unsafe C bindings"
   , roundtripByteBufferUnit largeByteString
   , roundtripTimeSpec (TimeSpec 123 123)
   , testMetadata
+  , testMetadataOrdering
   , testNow
   , testCreateDestroyMetadata
   , testCreateDestroyMetadataKeyVals
@@ -146,6 +149,18 @@ testMetadata = testCase "Metadata setter/getter roundtrip" $ do
   k2 HU.@?= "Haskell"
   v2 HU.@?= "Curry"
   metadataFree m
+
+testMetadataOrdering :: TestTree
+testMetadataOrdering = testCase "Metadata map ordering (simple)" $ do
+  let m0 = fromList @MetadataMap [("foo", "bar"), ("fnord", "FNORD")]
+  let m1 = fromList @MetadataMap [("foo", "baz")]
+  let lr = m0 <> m1
+  let rl = m1 <> m0
+  M.lookup "foo" (unMap lr) HU.@?= Just (fromList ["bar", "baz"])
+  M.lookup "foo" (unMap rl) HU.@?= Just (fromList ["baz", "bar"])
+  toList lr HU.@?= [("fnord", "FNORD"), ("foo", "bar"), ("foo", "baz")]
+  toList rl HU.@?= [("fnord", "FNORD"), ("foo", "baz"), ("foo", "bar")]
+  M.lookup "foo" (unMap (lr <> rl)) HU.@?= Just (fromList ["bar", "baz", "baz", "bar"])
 
 currTimeMillis :: ClockType -> IO Int
 currTimeMillis t = do
