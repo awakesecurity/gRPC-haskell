@@ -56,11 +56,14 @@ instance Arbitrary B.ByteString where
 
 instance Arbitrary MetadataMap where
   arbitrary = do
-    --keys are not allowed to contain \NUL, but values are.
-    ks <- arbitrary `suchThat` all (B.notElem 0)
-    let l = length ks
-    vs <- vector l
-    return $ fromList (zip ks vs)
+    -- keys are not allowed to contain \NUL, but values are.
+    let key = arbitrary `suchThat` B.notElem 0
+    ks0 <- listOf key
+    duplicateKeys <- arbitrary
+    ks <- if duplicateKeys
+          then (ks0 <>) . concat . replicate 2 <$> listOf1 key
+          else pure ks0
+    fromList . zip ks <$> vector (length ks)
 
 roundtripMetadataKeyVals :: MetadataMap -> IO MetadataMap
 roundtripMetadataKeyVals m = do
