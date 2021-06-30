@@ -66,7 +66,6 @@
 #     };);
 
 let
-  nixpkgs = import ./nixpkgs.nix;
   overlay = pkgsNew: pkgsOld: {
 
     grpc = pkgsNew.callPackage ./nix/grpc.nix { };
@@ -201,11 +200,9 @@ let
 
   overlays = [ overlay ];
 
-in
+  config  = { };
 
-let
    nixpkgs = import ./nixpkgs.nix;
-   config  = { };
    linuxPkgs = nixpkgs { inherit config overlays; system = "x86_64-linux" ; };
   darwinPkgs = nixpkgs { inherit config overlays; system = "x86_64-darwin"; };
         pkgs = nixpkgs { inherit config overlays; };
