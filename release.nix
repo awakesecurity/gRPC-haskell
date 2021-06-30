@@ -94,9 +94,11 @@ let
 
         grpc-haskell-core =
           pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
-            (pkgsNew.haskell.lib.overrideCabal
-              (haskellPackagesNew.callPackage ./core { })
-              (_: { buildDepends = [ haskellPackagesNew.c2hs ]; })));
+            (haskellPackagesNew.callCabal2nix "grpc-haskell-core" ./core {
+                 gpr = pkgsNew.grpc;
+               }
+            )
+          );
 
         grpc-haskell-no-tests =
           pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
@@ -120,7 +122,6 @@ let
                     ]);
 
                   python = pkgsNew.python.withPackages (pkgs: [
-                    # pkgs.protobuf3_0
                     pkgs.grpcio-tools
                   ]);
 
@@ -173,11 +174,6 @@ let
       };
     };
 
-    protobuf3_2NoCheck =
-      pkgsNew.stdenv.lib.overrideDerivation
-        pkgsNew.pythonPackages.protobuf
-        (oldAttrs : {doCheck = false; doInstallCheck = false;});
-
     test-grpc-haskell =
       pkgsNew.mkShell {
         nativeBuildInputs = [
@@ -190,21 +186,15 @@ let
       };
 
     usesGRPC = haskellPackage:
+      # TODO: Try using pkgsNew.fixDarwinDylibNames (see PR#129).
       pkgsNew.haskell.lib.overrideCabal haskellPackage (oldAttributes: {
           preBuild = (oldAttributes.preBuild or "") +
             pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
               export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-            '' +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
-              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
             '';
-
           shellHook = (oldAttributes.shellHook or "") +
             pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
               export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-            '' +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
-              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
             '';
         }
       );

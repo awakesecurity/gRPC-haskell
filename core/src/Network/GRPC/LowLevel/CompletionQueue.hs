@@ -71,7 +71,7 @@ createCompletionQueue _ = do
 -- Throws 'CallError' if 'grpcCallStartBatch' returns a non-OK code.
 startBatch :: CompletionQueue -> C.Call -> C.OpArray -> Int -> C.Tag
               -> IO (Either GRPCIOError ())
-startBatch cq@CompletionQueue{..} call opArray opArraySize tag =
+startBatch cq call opArray opArraySize tag =
     withPermission Push cq $ fmap throwIfCallError $ do
       grpcDebug $ "startBatch: calling grpc_call_start_batch with pointers: "
                   ++ show call ++ " " ++ show opArray

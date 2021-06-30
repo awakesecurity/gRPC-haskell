@@ -9,7 +9,6 @@
 
 import           Data.ByteString                  (ByteString)
 import           Data.Maybe                       (fromMaybe)
-import           GHC.Generics                     (Generic)
 import           Network.GRPC.HighLevel.Generated (GRPCMethodType (..),
                                                    Host (..), Port (..),
                                                    ServerRequest (..),

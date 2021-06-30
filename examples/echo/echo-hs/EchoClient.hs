@@ -12,7 +12,6 @@ import           Data.ByteString                  (ByteString)
 import           Data.Maybe                       (fromMaybe)
 import qualified Data.Text.Lazy                   as TL
 import           Echo
-import           GHC.Generics                     (Generic)
 import           Network.GRPC.HighLevel.Client
 import           Network.GRPC.LowLevel
 import           Options.Generic
