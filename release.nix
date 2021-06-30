@@ -122,7 +122,6 @@ let
                     ]);
 
                   python = pkgsNew.python.withPackages (pkgs: [
-                    # pkgs.protobuf3_0
                     pkgs.grpcio-tools
                   ]);
 
@@ -174,11 +173,6 @@ let
 
       };
     };
-
-    protobuf3_2NoCheck =
-      pkgsNew.stdenv.lib.overrideDerivation
-        pkgsNew.pythonPackages.protobuf
-        (oldAttrs : {doCheck = false; doInstallCheck = false;});
 
     test-grpc-haskell =
       pkgsNew.mkShell {
