@@ -23,7 +23,7 @@ import           Network.GRPC.Unsafe.Time
 import           System.Clock
 import           Test.QuickCheck.Gen
 import           Test.Tasty
-import           Test.Tasty.HUnit                as HU (testCase, (@?=))
+import           Test.Tasty.HUnit                as HU (Assertion, testCase, (@?=))
 import           Test.Tasty.QuickCheck           as QC
 
 unsafeTests :: TestTree
@@ -34,6 +34,7 @@ unsafeTests = testGroup "Unit tests for unsafe C bindings"
   , roundtripTimeSpec (TimeSpec 123 123)
   , testMetadata
   , testMetadataOrdering
+  , testMetadataOrderingProp
   , testNow
   , testCreateDestroyMetadata
   , testCreateDestroyMetadataKeyVals
@@ -49,6 +50,7 @@ unsafeProperties = testGroup "QuickCheck properties for unsafe C bindings"
   , roundtripByteBufferQC
   , roundtripMetadataQC
   , metadataIsList
+  , roundtripMetadataOrdering
   ]
 
 instance Arbitrary B.ByteString where
@@ -80,6 +82,10 @@ roundtripMetadataQC = QC.testProperty "Metadata roundtrip" $
 metadataIsList :: TestTree
 metadataIsList = QC.testProperty "Metadata IsList instance" $
                    \(md :: MetadataMap) -> md == (fromList $ toList md)
+
+roundtripMetadataOrdering :: TestTree
+roundtripMetadataOrdering = QC.testProperty "Metadata map ordering" $
+  QC.ioProperty . checkMetadataOrdering
 
 largeByteString :: B.ByteString
 largeByteString = B.pack $ take (32*1024*1024) $ cycle [97..99]
@@ -164,6 +170,26 @@ testMetadataOrdering = testCase "Metadata map ordering (simple)" $ do
   toList lr HU.@?= [("fnord", "FNORD"), ("foo", "bar"), ("foo", "baz")]
   toList rl HU.@?= [("fnord", "FNORD"), ("foo", "baz"), ("foo", "bar")]
   M.lookup "foo" (unMap (lr <> rl)) HU.@?= Just ["bar", "baz", "baz", "bar"]
+
+testMetadataOrderingProp :: TestTree
+testMetadataOrderingProp = testCase "Metadata map ordering prop w/ trivial inputs" $
+  mapM_ (checkMetadataOrdering . fromList)
+    [ [("foo", "bar"), ("fnord", "FNORD"), ("foo", "baz")]
+    , [("foo", "baz"), ("fnord", "FNORD"), ("foo", "bar")]
+    ]
+
+checkMetadataOrdering :: MetadataMap -> Assertion
+checkMetadataOrdering md0 = do
+  let ikvps = (`zip` [0..]) . toList @MetadataMap $ md0
+  let n = length ikvps
+  m <- metadataAlloc n
+  let deref i = (,) <$> getMetadataKey m i <*> getMetadataVal m i
+  mapM_ (\((k, v), i) -> setMetadataKeyVal k v m i) ikvps
+  mapM_ (\(kvp, i) -> deref i >>= (HU.@?= kvp)) ikvps
+  md1 <- getAllMetadata m n
+  unMap md1 HU.@?= M.unionsWith (<>) [M.singleton k [v] | ((k, v), _i) <- ikvps]
+  md1 HU.@?= md0
+  metadataFree m
 
 currTimeMillis :: ClockType -> IO Int
 currTimeMillis t = do
