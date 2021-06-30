@@ -24,15 +24,8 @@ testing:
 
 ```bash
 $ nix-shell
-...
-Running: cabal configure --extra-include-dirs ... --extra-lib-dirs ... --enable-tests
-...
-[nix-shell]$ cabal build && cabal test
+[nix-shell]$ cabal configure --enable-tests && cabal build && cabal test
 ```
-
-Note that `cabal configure` is run automatically upon `nix-shell` entry so that
-the build can reference include and library paths for the `grpc` and `gpr`
-libraries.
 
 Using the Library
 -----------------
