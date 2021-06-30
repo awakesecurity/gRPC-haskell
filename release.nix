@@ -66,21 +66,19 @@
 #     };);
 
 let
-  nixpkgs = import ./nixpkgs.nix;
-
-  config = {
-    allowUnfree = true;
-    # For parameterized-0.5.0.0, which we patch for compatbility with
-    # proto3-wire-1.2.0 (which also uses the same patch)
-    allowBroken = true;
-  };
-
   overlay = pkgsNew: pkgsOld: {
 
     grpc = pkgsNew.callPackage ./nix/grpc.nix { };
 
     haskellPackages = pkgsOld.haskellPackages.override {
       overrides = haskellPackagesNew: haskellPackagesOld: rec {
+        parameterized =
+          pkgsNew.haskell.lib.overrideCabal
+          haskellPackagesOld.parameterized
+          (old: {
+            broken = false;
+            patches = (old.patches or [ ]) ++ [ ./nix/parameterized.patch ];
+          });
 
         haskell-src =
           haskellPackagesNew.callHackage "haskell-src" "1.0.3.1" {};
@@ -125,12 +123,12 @@ let
                     pkgs.grpcio-tools
                   ]);
 
-                in rec {
+                in {
                   configureFlags = (oldDerivation.configureFlags or []) ++ [
                     "--flags=with-examples"
                   ];
 
-                  buildDepends = [
+                  buildDepends = (oldDerivation.buildDepends or [ ]) ++ [
                     pkgsNew.makeWrapper
                     # Give our nix-shell its own cabal so we don't pick up one
                     # from the user's environment by accident.
@@ -140,9 +138,10 @@ let
                     haskellPackagesNew.c2hs
                   ];
 
-                  patches = [ tests/tests.patch ];
+                  patches =
+                    (oldDerivation.patches or [ ]) ++ [ ./tests/tests.patch ];
 
-                  postPatch = ''
+                  postPatch = (oldDerivation.postPatch or "") + ''
                     patchShebangs tests
                     substituteInPlace tests/simple-client.sh \
                       --replace @makeWrapper@ ${pkgsNew.makeWrapper} \
@@ -169,7 +168,6 @@ let
                 })
             );
 
-        parameterized = pkgsNew.haskell.lib.appendPatch haskellPackagesOld.parameterized ./nix/parameterized.patch;
 
       };
     };
@@ -202,9 +200,8 @@ let
 
   overlays = [ overlay ];
 
-in
+  config  = { };
 
-let
    nixpkgs = import ./nixpkgs.nix;
    linuxPkgs = nixpkgs { inherit config overlays; system = "x86_64-linux" ; };
   darwinPkgs = nixpkgs { inherit config overlays; system = "x86_64-darwin"; };
@@ -226,6 +223,6 @@ in
 
     grpc                       =       pkgs.grpc;
 
-    overlay                    = overlay;
+    inherit pkgs config overlay;
     inherit (pkgs) test-grpc-haskell;
   }
