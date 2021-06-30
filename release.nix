@@ -223,6 +223,6 @@ in
 
     grpc                       =       pkgs.grpc;
 
-    overlay                    = overlay;
+    inherit pkgs config overlay;
     inherit (pkgs) test-grpc-haskell;
   }
