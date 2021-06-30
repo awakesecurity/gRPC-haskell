@@ -1,5 +1,5 @@
 name:                grpc-haskell
-version:             0.1.0
+version:             0.2.0
 synopsis:            Haskell implementation of gRPC layered on shared C library.
 homepage:            https://github.com/awakenetworks/gRPC-haskell
 license:             Apache-2.0
@@ -31,7 +31,7 @@ library
     , bytestring ==0.10.*
     , proto3-suite >=0.4.1
     , proto3-wire >=1.2.0
-    , grpc-haskell-core
+    , grpc-haskell-core >=0.2.0
     , async >=2.1 && <2.3
     , managed >= 1.0.5
 
@@ -58,7 +58,7 @@ executable hellos-server
       , bytestring == 0.10.*
       , containers >=0.5 && <0.7
       , grpc-haskell
-      , grpc-haskell-core
+      , grpc-haskell-core >=0.2.0
       , proto3-suite
       , proto3-wire
       , text
@@ -78,7 +78,7 @@ executable hellos-client
       , bytestring == 0.10.*
       , containers >=0.5 && <0.7
       , grpc-haskell
-      , grpc-haskell-core
+      , grpc-haskell-core >=0.2.0
       , proto3-suite
       , proto3-wire
       , text
@@ -99,7 +99,7 @@ executable echo-server
       , containers >=0.5 && <0.7
       , deepseq
       , grpc-haskell
-      , grpc-haskell-core
+      , grpc-haskell-core >=0.2.0
       , optparse-generic
       , proto3-suite
       , proto3-wire
@@ -124,7 +124,7 @@ executable arithmetic-server
       , containers >=0.5 && <0.7
       , deepseq
       , grpc-haskell
-      , grpc-haskell-core
+      , grpc-haskell-core >=0.2.0
       , optparse-generic
       , proto3-suite
       , proto3-wire
@@ -148,7 +148,7 @@ executable arithmetic-client
       , containers >=0.5 && <0.7
       , deepseq
       , grpc-haskell
-      , grpc-haskell-core
+      , grpc-haskell-core >=0.2.0
       , optparse-generic
       , proto3-suite
       , proto3-wire
@@ -172,7 +172,7 @@ executable echo-client
       , containers >=0.5 && <0.7
       , deepseq
       , grpc-haskell
-      , grpc-haskell-core
+      , grpc-haskell-core >=0.2.0
       , optparse-generic
       , proto3-suite
       , proto3-wire
