@@ -125,7 +125,7 @@ let
                     pkgs.grpcio-tools
                   ]);
 
-                in rec {
+                in {
                   configureFlags = (oldDerivation.configureFlags or []) ++ [
                     "--flags=with-examples"
                   ];
