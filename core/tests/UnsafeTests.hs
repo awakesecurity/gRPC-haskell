@@ -5,26 +5,28 @@
 
 module UnsafeTests (unsafeTests, unsafeProperties) where
 
-import           Control.Exception               (bracket_)
-import           Control.Monad
-import qualified Data.ByteString                 as B
-import qualified Data.Map                        as M
-import           Foreign.Marshal.Alloc
-import           Foreign.Storable
-import           GHC.Exts
-import           Network.GRPC.LowLevel.GRPC      (MetadataMap(..), threadDelaySecs)
-import           Network.GRPC.Unsafe
-import           Network.GRPC.Unsafe.ByteBuffer
-import           Network.GRPC.Unsafe.ChannelArgs
-import           Network.GRPC.Unsafe.Metadata
-import           Network.GRPC.Unsafe.Security
-import           Network.GRPC.Unsafe.Slice
-import           Network.GRPC.Unsafe.Time
-import           System.Clock
-import           Test.QuickCheck.Gen
-import           Test.Tasty
-import           Test.Tasty.HUnit                as HU (Assertion, testCase, (@?=))
-import           Test.Tasty.QuickCheck           as QC
+import Control.Exception (bracket_)
+import Control.Monad
+import qualified Data.ByteString as B
+import qualified Data.Map as M
+import Data.List.NonEmpty (NonEmpty((:|)))
+import Foreign.Marshal.Alloc
+import Foreign.Storable
+import GHC.Exts
+import Network.GRPC.LowLevel.GRPC (MetadataMap (..), threadDelaySecs)
+import qualified Network.GRPC.LowLevel.GRPC.MetadataMap as MD
+import Network.GRPC.Unsafe
+import Network.GRPC.Unsafe.ByteBuffer
+import Network.GRPC.Unsafe.ChannelArgs
+import Network.GRPC.Unsafe.Metadata
+import Network.GRPC.Unsafe.Security
+import Network.GRPC.Unsafe.Slice
+import Network.GRPC.Unsafe.Time
+import System.Clock
+import Test.QuickCheck.Gen
+import Test.Tasty
+import Test.Tasty.HUnit as HU (Assertion, testCase, (@?=))
+import Test.Tasty.QuickCheck as QC
 
 unsafeTests :: TestTree
 unsafeTests = testGroup "Unit tests for unsafe C bindings"
@@ -165,11 +167,15 @@ testMetadataOrdering = testCase "Metadata map ordering (simple)" $ do
   let m1 = fromList @MetadataMap [("foo", "baz")]
   let lr = m0 <> m1
   let rl = m1 <> m0
-  M.lookup "foo" (unMap lr) @?= Just (["bar", "baz"])
-  M.lookup "foo" (unMap rl) @?= Just (["baz", "bar"])
+  M.lookup "foo" (unMap lr) @?= Just ["bar", "baz"]
+  M.lookup "foo" (unMap rl) @?= Just ["baz", "bar"]
   toList lr @?= [("fnord", "FNORD"), ("foo", "bar"), ("foo", "baz")]
   toList rl @?= [("fnord", "FNORD"), ("foo", "baz"), ("foo", "bar")]
-  M.lookup "foo" (unMap (lr <> rl)) @?= Just (["bar", "baz", "baz", "bar"])
+  M.lookup "foo" (unMap (lr <> rl)) @?= Just ["bar", "baz", "baz", "bar"]
+  MD.lookupAll "foo" lr @?= Just ("bar" :| ["baz"])
+  MD.lookupLast "foo" lr @?= Just "baz"
+  MD.lookupAll "foo" rl @?= Just ("baz" :| ["bar"])
+  MD.lookupLast "foo" rl @?= Just "bar"
 
 testMetadataOrderingProp :: TestTree
 testMetadataOrderingProp = testCase "Metadata map ordering prop w/ trivial inputs" $
