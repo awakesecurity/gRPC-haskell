@@ -67,20 +67,19 @@
 
 let
   nixpkgs = import ./nixpkgs.nix;
-
-  config = {
-    allowUnfree = true;
-    # For parameterized-0.5.0.0, which we patch for compatbility with
-    # proto3-wire-1.2.0 (which also uses the same patch)
-    allowBroken = true;
-  };
-
   overlay = pkgsNew: pkgsOld: {
 
     grpc = pkgsNew.callPackage ./nix/grpc.nix { };
 
     haskellPackages = pkgsOld.haskellPackages.override {
       overrides = haskellPackagesNew: haskellPackagesOld: rec {
+        parameterized =
+          pkgsNew.haskell.lib.overrideCabal
+          haskellPackagesOld.parameterized
+          (old: {
+            broken = false;
+            patches = (old.patches or [ ]) ++ [ ./nix/parameterized.patch ];
+          });
 
         haskell-src =
           haskellPackagesNew.callHackage "haskell-src" "1.0.3.1" {};
@@ -170,7 +169,6 @@ let
                 })
             );
 
-        parameterized = pkgsNew.haskell.lib.appendPatch haskellPackagesOld.parameterized ./nix/parameterized.patch;
 
       };
     };
@@ -207,6 +205,7 @@ in
 
 let
    nixpkgs = import ./nixpkgs.nix;
+   config  = { };
    linuxPkgs = nixpkgs { inherit config overlays; system = "x86_64-linux" ; };
   darwinPkgs = nixpkgs { inherit config overlays; system = "x86_64-darwin"; };
         pkgs = nixpkgs { inherit config overlays; };
