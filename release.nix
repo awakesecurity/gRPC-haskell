@@ -75,7 +75,7 @@ let
     allowBroken = true;
   };
 
-  overlay = pkgsNew: pkgsOld: rec {
+  overlay = pkgsNew: pkgsOld: {
 
     grpc = pkgsNew.callPackage ./nix/grpc.nix { };
 
@@ -109,15 +109,22 @@ let
         grpc-haskell =
           pkgsNew.usesGRPC
             (pkgsNew.haskell.lib.overrideCabal
-              (pkgsNew.haskell.lib.buildFromSdist (haskellPackagesNew.callCabal2nix "grpc-haskell" ./. { }))
+              (pkgsNew.haskell.lib.buildFromSdist
+                 (haskellPackagesNew.callCabal2nix "grpc-haskell" ./. { }))
               (oldDerivation:
                 let
                   ghc =
                     haskellPackagesNew.ghcWithPackages (pkgs: [
                       pkgs.grpc-haskell-no-tests
+                      # Include some additional packages in this custom ghc for
+                      # running tests in the nix-shell environment.
+                      pkgs.tasty-hunit
+                      pkgs.tasty-quickcheck
                     ]);
-                  python =
-                    pkgsNew.python.withPackages (pkgs: [ pkgs.grpcio-tools ]);
+
+                  python = pkgsNew.python.withPackages (pkgs: [
+                    pkgs.grpcio-tools
+                  ]);
 
                 in rec {
                   configureFlags = (oldDerivation.configureFlags or []) ++ [
@@ -153,51 +160,20 @@ let
                   shellHook = (oldDerivation.shellHook or "") + ''
                     # This lets us use our custom ghc and python environments in the shell.
                     export PATH=${ghc}/bin:${python}/bin''${PATH:+:}$PATH
+
+                    # This makes a newer `cabal-install` (>= 3.4.0.0) available
+                    # in the shell; cabal-install-3.2.0.0 from our nixpkgs pin
+                    # had some difficulty finding `grpc` includes and libraries,
+                    # even when the latter was explicitly added to buildDepends.
+                    export PATH=${pkgsNew.nix-shell-tools.cabal-install}/bin''${PATH:+:}$PATH
                   '';
-                }
-            )
+                })
             );
 
         parameterized = pkgsNew.haskell.lib.appendPatch haskellPackagesOld.parameterized ./nix/parameterized.patch;
+
       };
     };
-
-    protobuf3_2NoCheck =
-      pkgsNew.stdenv.lib.overrideDerivation
-        pkgsNew.pythonPackages.protobuf
-        (oldAttrs : {doCheck = false; doInstallCheck = false;});
-
-    shell-hook-common =
-      pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
-        export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-      '' +
-      pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
-        export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
-      '';
-
-    test-grpc-haskell =
-      pkgsNew.mkShell {
-        nativeBuildInputs = [
-          (with pkgsNew.haskellPackages; [
-             cabal-install
-             (ghcWithPackages (pkgs: with pkgs; [
-                grpc-haskell-core
-                # No need to guard nix-shell entry on passing package tests
-                (pkgsNew.haskell.lib.dontCheck grpc-haskell)
-                language-c
-                # Additional packages we need to have available for building
-                # and running tests in the nix-shell environment
-                mmorph pipes tasty tasty-hunit tasty-quickcheck
-              ]))
-           ])
-          (pkgsNew.python.withPackages (pkgs: [ pkgs.grpcio-tools ]))
-        ];
-        shellHook = ''
-          ${shell-hook-common}
-          echo Running: cabal configure --extra-include-dirs ${pkgsNew.grpc}/include --extra-lib-dirs ${pkgsNew.grpc}/lib --enable-tests
-          cabal configure --extra-include-dirs ${pkgsNew.grpc}/include --extra-lib-dirs ${pkgsNew.grpc}/lib --enable-tests
-        '';
-      };
 
     usesGRPC = haskellPackage:
       pkgsNew.haskell.lib.overrideCabal haskellPackage (oldAttributes: {
@@ -209,15 +185,31 @@ let
               export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
             '';
 
-          shellHook = (oldAttributes.shellHook or "") + ''
-            ${shell-hook-common}
-          '';
+          shellHook = (oldAttributes.shellHook or "") +
+            pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
+              export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+            '' +
+            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
+              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+            '';
         }
       );
   };
 
-  overlays = [ overlay ];
+  nix-shell-tools-overlay = pkgsNew: pkgsOld: {
+    nix-shell-tools =
+      let
+        # release-21.05 2021-06-29
+        url = "https://github.com/NixOS/nixpkgs/archive/71326cd12ddfa0fac40fdb451fcba7dad763c56e.tar.gz";
+        sha256 = "1939fwll9xwm7mf5crz7gfvz41c8gqd8wg7fy2v6m71viiq8lrda";
+        pin = import (builtins.fetchTarball { inherit url sha256; }) { inherit (pkgsOld) system; };
+      in {
+        # We pin a newer `cabal-install` (3.4.0.0) for use in the default `nix-shell` environment
+        inherit (pin) cabal-install;
+      };
+  };
 
+  overlays = [ nix-shell-tools-overlay overlay ];
 in
 
 let
@@ -243,5 +235,4 @@ in
     grpc                       =       pkgs.grpc;
 
     overlay                    = overlay;
-    inherit (pkgs) test-grpc-haskell;
   }
