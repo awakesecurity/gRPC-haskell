@@ -130,7 +130,7 @@ let
                     "--flags=with-examples"
                   ];
 
-                  buildDepends = [
+                  buildDepends = (oldDerivation.buildDepends or [ ]) ++ [
                     pkgsNew.makeWrapper
                     # Give our nix-shell its own cabal so we don't pick up one
                     # from the user's environment by accident.
@@ -140,9 +140,10 @@ let
                     haskellPackagesNew.c2hs
                   ];
 
-                  patches = [ tests/tests.patch ];
+                  patches =
+                    (oldDerivation.patches or [ ]) ++ [ ./tests/tests.patch ];
 
-                  postPatch = ''
+                  postPatch = (oldDerivation.postPatch or "") + ''
                     patchShebangs tests
                     substituteInPlace tests/simple-client.sh \
                       --replace @makeWrapper@ ${pkgsNew.makeWrapper} \
