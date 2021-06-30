@@ -105,7 +105,7 @@ roundtripSliceQC = QC.testProperty "Slice roundtrip: QuickCheck" $
 roundtripSliceUnit :: B.ByteString -> TestTree
 roundtripSliceUnit bs = testCase "ByteString slice roundtrip" $ do
   unslice <- roundtripSlice bs
-  unslice HU.@?= bs
+  unslice @?= bs
 
 roundtripByteBuffer :: B.ByteString -> IO B.ByteString
 roundtripByteBuffer bs = do
@@ -128,7 +128,7 @@ roundtripByteBufferQC = QC.testProperty "ByteBuffer roundtrip: QuickCheck" $
 roundtripByteBufferUnit :: B.ByteString -> TestTree
 roundtripByteBufferUnit bs = testCase "ByteBuffer roundtrip" $ do
   bs' <- roundtripByteBuffer bs
-  bs' HU.@?= bs
+  bs' @?= bs
 
 roundtripTimeSpec :: TimeSpec -> TestTree
 roundtripTimeSpec t = testCase "CTimeSpec roundtrip" $ do
@@ -151,12 +151,12 @@ testMetadata = testCase "Metadata setter/getter roundtrip" $ do
   v1 <- getMetadataVal m 1
   k2 <- getMetadataKey m 2
   v2 <- getMetadataVal m 2
-  k0 HU.@?= "hello"
-  v0 HU.@?= "world"
-  k1 HU.@?= "foo"
-  v1 HU.@?= "bar"
-  k2 HU.@?= "Haskell"
-  v2 HU.@?= "Curry"
+  k0 @?= "hello"
+  v0 @?= "world"
+  k1 @?= "foo"
+  v1 @?= "bar"
+  k2 @?= "Haskell"
+  v2 @?= "Curry"
   metadataFree m
 
 testMetadataOrdering :: TestTree
@@ -165,11 +165,11 @@ testMetadataOrdering = testCase "Metadata map ordering (simple)" $ do
   let m1 = fromList @MetadataMap [("foo", "baz")]
   let lr = m0 <> m1
   let rl = m1 <> m0
-  M.lookup "foo" (unMap lr) HU.@?= Just ["bar", "baz"]
-  M.lookup "foo" (unMap rl) HU.@?= Just ["baz", "bar"]
-  toList lr HU.@?= [("fnord", "FNORD"), ("foo", "bar"), ("foo", "baz")]
-  toList rl HU.@?= [("fnord", "FNORD"), ("foo", "baz"), ("foo", "bar")]
-  M.lookup "foo" (unMap (lr <> rl)) HU.@?= Just ["bar", "baz", "baz", "bar"]
+  M.lookup "foo" (unMap lr) @?= Just (["bar", "baz"])
+  M.lookup "foo" (unMap rl) @?= Just (["baz", "bar"])
+  toList lr @?= [("fnord", "FNORD"), ("foo", "bar"), ("foo", "baz")]
+  toList rl @?= [("fnord", "FNORD"), ("foo", "baz"), ("foo", "bar")]
+  M.lookup "foo" (unMap (lr <> rl)) @?= Just (["bar", "baz", "baz", "bar"])
 
 testMetadataOrderingProp :: TestTree
 testMetadataOrderingProp = testCase "Metadata map ordering prop w/ trivial inputs" $
@@ -185,10 +185,10 @@ checkMetadataOrdering md0 = do
   m <- metadataAlloc n
   let deref i = (,) <$> getMetadataKey m i <*> getMetadataVal m i
   mapM_ (\((k, v), i) -> setMetadataKeyVal k v m i) ikvps
-  mapM_ (\(kvp, i) -> deref i >>= (HU.@?= kvp)) ikvps
+  mapM_ (\(kvp, i) -> deref i >>= (@?= kvp)) ikvps
   md1 <- getAllMetadata m n
-  unMap md1 HU.@?= M.unionsWith (<>) [M.singleton k [v] | ((k, v), _i) <- ikvps]
-  md1 HU.@?= md0
+  unMap md1 @?= M.unionsWith (<>) [M.singleton k [v] | ((k, v), _i) <- ikvps]
+  md1 @?= md0
   metadataFree m
 
 currTimeMillis :: ClockType -> IO Int
@@ -236,8 +236,8 @@ testCreateDestroyServerCreds = testCase "Create/destroy server credentials" $
 
 assertCqEventComplete :: Event -> IO ()
 assertCqEventComplete e = do
-  eventCompletionType e HU.@?= OpComplete
-  eventSuccess e HU.@?= True
+  eventCompletionType e @?= OpComplete
+  eventSuccess e @?= True
 
 grpc :: IO a -> IO ()
 grpc = bracket_ grpcInit grpcShutdownBlocking . void
