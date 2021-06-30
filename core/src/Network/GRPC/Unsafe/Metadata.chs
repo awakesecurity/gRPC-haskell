@@ -12,7 +12,6 @@ import Data.Function (on)
 import Data.ByteString (ByteString, useAsCString,
                         useAsCStringLen)
 import Data.List (sortBy, groupBy)
-import qualified Data.SortedList as SL
 import qualified Data.Map.Strict as M
 import Data.Ord (comparing)
 import Foreign.C.String
@@ -26,28 +25,29 @@ import GHC.Exts
 #include <grpc_haskell.h>
 
 -- | Represents metadata for a given RPC, consisting of key-value pairs. Keys
--- are allowed to be repeated. Since repeated keys are unlikely in practice,
--- the 'IsList' instance uses key-value pairs as items. For example,
+-- are allowed to be repeated, with the `last` element of value list usually
+-- taken as the final value for that key. Since repeated keys are unlikely in
+-- practice, the 'IsList' instance uses key-value pairs as items. For example,
 -- @fromList [("key1","val1"),("key2","val2"),("key1","val3")]@.
-newtype MetadataMap = MetadataMap {unMap :: M.Map ByteString (SL.SortedList ByteString)}
+
+newtype MetadataMap = MetadataMap {unMap :: M.Map ByteString [ByteString]}
   deriving Eq
 
 instance Show MetadataMap where
   show m = "fromList " ++ show (M.toList (unMap m))
 
 instance Semigroup MetadataMap where
-  (MetadataMap m1) <> (MetadataMap m2) =
-    MetadataMap $ M.unionWith mappend m1 m2
+  MetadataMap m1 <> MetadataMap m2 =
+    MetadataMap $ M.unionWith (<>) m1 m2
 
 instance Monoid MetadataMap where
-  mempty = MetadataMap $ M.empty
-  mappend = (<>)
+  mempty = MetadataMap M.empty
 
 instance IsList MetadataMap where
   type Item MetadataMap = (ByteString, ByteString)
   fromList = MetadataMap
              . M.fromList
-             . map (\xs -> ((fst . head) xs, fromList $ map snd xs))
+             . map (\xs -> ((fst . head) xs, map snd xs))
              . groupBy ((==) `on` fst)
              . sortBy (comparing fst)
   toList = concatMap (\(k,vs) -> map (k,) vs)

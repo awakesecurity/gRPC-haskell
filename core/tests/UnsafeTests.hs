@@ -156,11 +156,11 @@ testMetadataOrdering = testCase "Metadata map ordering (simple)" $ do
   let m1 = fromList @MetadataMap [("foo", "baz")]
   let lr = m0 <> m1
   let rl = m1 <> m0
-  M.lookup "foo" (unMap lr) HU.@?= Just (fromList ["bar", "baz"])
-  M.lookup "foo" (unMap rl) HU.@?= Just (fromList ["baz", "bar"])
+  M.lookup "foo" (unMap lr) HU.@?= Just ["bar", "baz"]
+  M.lookup "foo" (unMap rl) HU.@?= Just ["baz", "bar"]
   toList lr HU.@?= [("fnord", "FNORD"), ("foo", "bar"), ("foo", "baz")]
   toList rl HU.@?= [("fnord", "FNORD"), ("foo", "baz"), ("foo", "bar")]
-  M.lookup "foo" (unMap (lr <> rl)) HU.@?= Just (fromList ["bar", "baz", "baz", "bar"])
+  M.lookup "foo" (unMap (lr <> rl)) HU.@?= Just ["bar", "baz", "baz", "bar"]
 
 currTimeMillis :: ClockType -> IO Int
 currTimeMillis t = do
