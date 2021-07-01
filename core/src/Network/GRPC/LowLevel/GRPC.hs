@@ -11,16 +11,16 @@ GRPC
 , grpcDebug
 , grpcDebug'
 , threadDelaySecs
-, C.MetadataMap(..)
+, MetadataMap(..)
 , C.StatusDetails(..)
 ) where
 
 import           Control.Concurrent     (threadDelay, myThreadId)
 import           Control.Exception
 import           Data.Typeable
+import           Network.GRPC.LowLevel.GRPC.MetadataMap (MetadataMap(..))
 import qualified Network.GRPC.Unsafe    as C
 import qualified Network.GRPC.Unsafe.Op as C
-import qualified Network.GRPC.Unsafe.Metadata as C
 
 -- | Functions as a proof that the gRPC core has been started. The gRPC core
 -- must be initialized to create any gRPC state, so this is a requirement for

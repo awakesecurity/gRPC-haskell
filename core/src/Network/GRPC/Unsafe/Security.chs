@@ -13,6 +13,7 @@ import Foreign.C.Types
 import Foreign.Storable
 import Foreign.Marshal.Alloc (free)
 import Foreign.Ptr (nullPtr, FunPtr, Ptr, castPtr)
+import Network.GRPC.LowLevel.GRPC.MetadataMap (MetadataMap)
 
 #include <grpc/grpc.h>
 #include <grpc/grpc_security.h>

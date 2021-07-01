@@ -1,5 +1,5 @@
 name:                grpc-haskell-core
-version:             0.1.0
+version:             0.2.0
 synopsis:            Haskell implementation of gRPC layered on shared C library.
 homepage:            https://github.com/awakenetworks/gRPC-haskell
 license:             Apache-2.0
@@ -28,7 +28,6 @@ library
     , containers >=0.5 && <0.7
     , managed >= 1.0.0 && < 1.1
     , transformers
-    , sorted-list >=0.1.6.1 && <=0.3
 
   c-sources:
     cbits/grpc_haskell.c
@@ -50,6 +49,7 @@ library
     Network.GRPC.LowLevel.CompletionQueue.Internal
     Network.GRPC.LowLevel.CompletionQueue.Unregistered
     Network.GRPC.LowLevel.GRPC
+    Network.GRPC.LowLevel.GRPC.MetadataMap
     Network.GRPC.LowLevel.Op
     Network.GRPC.LowLevel.Server
     Network.GRPC.LowLevel.Call
