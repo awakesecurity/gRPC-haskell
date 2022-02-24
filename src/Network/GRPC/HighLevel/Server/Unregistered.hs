@@ -124,5 +124,7 @@ serverLoop ServerOptions{..} =
           ]
           ++
           foldMap (pure . MaxReceiveMessageLength) optMaxReceiveMessageLength
+          ++
+          foldMap (pure . MaxMetadataSize) optMaxMetadataSize
       , sslConfig = optSSLConfig
       }
