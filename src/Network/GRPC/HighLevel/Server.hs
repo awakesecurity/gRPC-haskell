@@ -227,6 +227,9 @@ data ServerOptions = ServerOptions
   , optLogger               :: String -> IO ()
     -- ^ Logging function to use to log errors in handling calls.
   , optMaxReceiveMessageLength :: Maybe Natural
+    -- ^ Maximum length (in bytes) that the service may receive in a single message.
+  , optMaxMetadataSize :: Maybe Natural
+    -- ^ Maximum metadata size (in bytes) that the service may receive in a single request.
   }
 
 defaultOptions :: ServerOptions
@@ -244,6 +247,7 @@ defaultOptions = ServerOptions
   , optSSLConfig            = Nothing
   , optLogger               = hPutStrLn stderr
   , optMaxReceiveMessageLength = Nothing
+  , optMaxMetadataSize = Nothing
   }
 
 serverLoop :: ServerOptions -> IO ()

@@ -64,11 +64,11 @@ main :: IO ()
 main = do exitVar <- newEmptyMVar
 
           forkIO $ simpleServiceServer (SimpleService
-            { simpleServiceDone = handleDone exitVar
-            , simpleServiceNormalCall = handleNormalCall
-            , simpleServiceClientStreamingCall = handleClientStreamingCall
-            , simpleServiceServerStreamingCall = handleServerStreamingCall
-            , simpleServiceBiDiStreamingCall = handleBiDiStreamingCall })
+            { simpleServicedone = handleDone exitVar
+            , simpleServicenormalCall = handleNormalCall
+            , simpleServiceclientStreamingCall = handleClientStreamingCall
+            , simpleServiceserverStreamingCall = handleServerStreamingCall
+            , simpleServicebiDiStreamingCall = handleBiDiStreamingCall })
             defaultServiceOptions
 
           takeMVar exitVar
