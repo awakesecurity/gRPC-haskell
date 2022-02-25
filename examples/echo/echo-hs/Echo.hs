@@ -42,10 +42,8 @@ import Network.GRPC.HighLevel.Server.Unregistered as HsGRPC
        (serverLoop)
  
 data Echo request response = Echo{echoDoEcho ::
-                                  request 'HsGRPC.Normal Examples.Echo.Echo.EchoRequest
-                                    Examples.Echo.Echo.EchoResponse
-                                    ->
-                                    Hs.IO (response 'HsGRPC.Normal Examples.Echo.Echo.EchoResponse)}
+                                  request 'HsGRPC.Normal Echo.EchoRequest Echo.EchoResponse ->
+                                    Hs.IO (response 'HsGRPC.Normal Echo.EchoResponse)}
                            deriving Hs.Generic
  
 echoServer ::
