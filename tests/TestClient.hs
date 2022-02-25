@@ -36,7 +36,7 @@ import Test.Tasty.HUnit ((@?=), assertFailure, testCase)
 testNormalCall client = testCase "Normal call" $
   do randoms <- fromList <$> replicateM 1000 (randomRIO (1, 1000))
      let req = SimpleServiceRequest "NormalRequest" randoms
-     res <- simpleServiceNormalCall client
+     res <- simpleServicenormalCall client
               (ClientNormalRequest req 10 mempty)
      case res of
        ClientErrorResponse err -> assertFailure ("ClientErrorResponse: " <> show err)
@@ -48,7 +48,7 @@ testNormalCall client = testCase "Normal call" $
 testClientStreamingCall client = testCase "Client-streaming call" $
   do iterationCount <- randomRIO (5, 50)
      v <- newEmptyMVar
-     res <- simpleServiceClientStreamingCall client . ClientWriterRequest 10 mempty $ \send ->
+     res <- simpleServiceclientStreamingCall client . ClientWriterRequest 10 mempty $ \send ->
        do (finalName, totalSum) <-
              fmap ((mconcat *** (sum . mconcat)) . unzip) .
              replicateM iterationCount $
@@ -86,7 +86,7 @@ testServerStreamingCall client = testCase "Server-streaming call" $
                   do response @?= "Test"
                      num @?= expNum
                      checkResults nums recv
-     res <- simpleServiceServerStreamingCall client $
+     res <- simpleServiceserverStreamingCall client $
             ClientReaderRequest (SimpleServiceRequest "Test" (fromList nums)) 10 mempty
               (\_ _ -> checkResults nums)
      case res of
@@ -113,7 +113,7 @@ testBiDiStreamingCall client = testCase "Bidi-streaming call" $
 
      iterations <- randomRIO (50, 500)
 
-     res <- simpleServiceBiDiStreamingCall client $
+     res <- simpleServicebiDiStreamingCall client $
             ClientBiDiRequest 10 mempty (\_ _ -> handleRequests iterations)
      case res of
        ClientErrorResponse err -> assertFailure ("ClientErrorResponse: " <> show err)
@@ -132,4 +132,4 @@ main = do
           , testClientStreamingCall service
           , testServerStreamingCall service
           , testBiDiStreamingCall service ]) `finally`
-         (simpleServiceDone service (ClientNormalRequest SimpleServiceDone 10 mempty))
+         (simpleServicedone service (ClientNormalRequest SimpleServiceDone 10 mempty))
