@@ -1,0 +1,13 @@
+diff --git a/proto3-wire.cabal b/proto3-wire.cabal
+index 6db123a..9d7c958 100644
+--- a/proto3-wire.cabal
++++ b/proto3-wire.cabal
+@@ -55,7 +55,7 @@ test-suite tests
+   build-depends:       base >=4.9 && <=5.0,
+                        bytestring >=0.10.6.0 && <0.11.0,
+                        cereal >= 0.5.1 && <0.6,
+-                       doctest >= 0.7.0 && <0.18,
++                       doctest >= 0.7.0 && <0.19,
+                        proto3-wire,
+                        QuickCheck >=2.8 && <3.0,
+                        tasty >= 0.11 && <1.5,

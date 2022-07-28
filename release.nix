@@ -68,41 +68,44 @@
 let
   overlay = pkgsNew: pkgsOld: {
 
-    grpc = pkgsNew.callPackage ./nix/grpc.nix { };
-
     haskellPackages = pkgsOld.haskellPackages.override {
       overrides = haskellPackagesNew: haskellPackagesOld: rec {
-        parameterized =
-          pkgsNew.haskell.lib.overrideCabal
-          haskellPackagesOld.parameterized
-          (old: {
-            broken = false;
-            patches = (old.patches or [ ]) ++ [ ./nix/parameterized.patch ];
-          });
 
-        haskell-src =
-          haskellPackagesNew.callHackage "haskell-src" "1.0.3.1" {};
+        data-diverse =
+          pkgsNew.lib.pipe haskellPackagesOld.data-diverse [
+            (haskellAddPatch pkgsNew ./nix/data-diverse.patch)
+            (haskellMarkUnbroken pkgsNew)
+          ];
 
         proto3-wire =
-          haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
+          pkgsNew.lib.pipe haskellPackagesOld.proto3-wire [
+            (haskellAddPatch pkgsNew ./nix/proto3-wire.patch)
+          ];
 
         proto3-suite =
-          pkgsNew.haskell.lib.dontCheck
-            (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
+          pkgsNew.lib.pipe haskellPackagesOld.proto3-suite [
+            (haskellAddPatch pkgsNew ./nix/proto3-suite.patch)
+            pkgsNew.haskell.lib.dontCheck # 4 out of 74 tests failed
+          ];
 
         grpc-haskell-core =
-          pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
-            (haskellPackagesNew.callCabal2nix "grpc-haskell-core" ./core {
-                 gpr = pkgsNew.grpc;
-               }
-            )
-          );
+          pkgsNew.lib.pipe (
+            haskellPackagesNew.callCabal2nix "grpc-haskell-core" ./core {
+              gpr = pkgsNew.grpc;
+            }
+          ) [
+            pkgsNew.usesGRPC
+            pkgsNew.haskell.lib.buildFromSdist
+          ];
 
         grpc-haskell-no-tests =
-          pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
-            (pkgsNew.haskell.lib.dontCheck
-              (haskellPackagesNew.callCabal2nix "grpc-haskell" ./. { })
-            ));
+          pkgsNew.lib.pipe (
+            haskellPackagesNew.callCabal2nix "grpc-haskell" ./. { }
+          ) [
+            pkgsNew.haskell.lib.dontCheck
+            pkgsNew.usesGRPC
+            pkgsNew.haskell.lib.buildFromSdist
+          ];
 
         grpc-haskell =
           pkgsNew.usesGRPC
@@ -207,7 +210,19 @@ let
             '';
         }
       );
+
+    # Fix this error when entering a nix-shell:
+    # error: mox-0.7.8 not supported for interpreter python2.7
+    python = pkgsNew.python3;
   };
+
+  haskellAddPatch = pkgs: patchFile:
+    pkgs.lib.flip pkgs.haskell.lib.overrideCabal (old: {
+      patches = (old.patches or [ ]) ++ [ patchFile ];
+    });
+
+  haskellMarkUnbroken = pkgs:
+    pkgs.lib.flip pkgs.haskell.lib.overrideCabal (old: { broken = false; });
 
   overlays = [ overlay ];
 
@@ -217,6 +232,21 @@ let
    linuxPkgs = nixpkgs { inherit config overlays; system = "x86_64-linux" ; };
   darwinPkgs = nixpkgs { inherit config overlays; system = "x86_64-darwin"; };
         pkgs = nixpkgs { inherit config overlays; };
+
+  shell = pkgs.haskellPackages.shellFor {
+    name = "gRPC-haskell-shell";
+    withHoogle = true;
+
+    packages = p: [
+      p.grpc-haskell-core
+      p.grpc-haskell
+    ];
+
+    buildInputs = [
+      pkgs.cabal-install
+      pkgs.grpc
+    ];
+  };
 
 in
   {
@@ -234,6 +264,6 @@ in
 
     grpc                       =       pkgs.grpc;
 
-    inherit pkgs config overlay;
+    inherit pkgs config overlay shell;
     inherit (pkgs) test-grpc-haskell;
   }

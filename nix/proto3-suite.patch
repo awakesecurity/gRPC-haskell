@@ -1,0 +1,13 @@
+diff --git a/proto3-suite.cabal b/proto3-suite.cabal
+index 0898741..9959935 100644
+--- a/proto3-suite.cabal
++++ b/proto3-suite.cabal
+@@ -48,7 +48,7 @@ library
+   if flag(swagger)
+     exposed-modules:   Proto3.Suite.DotProto.Generate.Swagger
+                        Proto3.Suite.DotProto.Generate.Swagger.Wrappers
+-    build-depends:     swagger2 >=2.1.6 && <2.8
++    build-depends:     swagger2 >=2.1.6 && <3
+     cpp-options:       -DSWAGGER
+     if flag(swagger-wrapper-format)
+       hs-source-dirs:  src/swagger-wrapper-format
