@@ -143,7 +143,8 @@ serverEndpoint ServerConfig{..} = endpoint host port
 addPort :: C.Server -> ServerConfig -> IO Int
 addPort server conf@ServerConfig{..} =
   case sslConfig of
-    Nothing -> C.grpcServerAddInsecureHttp2Port server e
+    Nothing ->
+      C.withInsecureServerCredentials $ C.grpcServerAddHttp2Port server e
     Just ServerSSLConfig{..} ->
       do crc <- mapM B.readFile clientRootCert
          spk <- B.readFile serverPrivateKey
@@ -152,7 +153,7 @@ addPort server conf@ServerConfig{..} =
            case customMetadataProcessor of
              Just p -> C.setMetadataProcessor creds p
              Nothing -> return ()
-           C.serverAddSecureHttp2Port server e creds
+           C.grpcServerAddHttp2Port server e creds
   where e = unEndpoint $ serverEndpoint conf
 
 startServer :: GRPC -> ServerConfig -> IO Server
