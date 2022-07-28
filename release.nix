@@ -248,6 +248,16 @@ let
     ];
   };
 
+  # Stack build using Nix requires also “gmp” and “zlib”
+  stack-env =
+    pkgs.haskellPackages.grpc-haskell.env.overrideAttrs (old: {
+      propagatedBuildInputs = (old.propagatedBuildInputs or [ ]) ++ [
+        pkgs.gmp
+        pkgs.zlib
+        pkgs.grpc
+      ];
+    });
+
 in
   {
     grpc-haskell-core-linux    =  linuxPkgs.haskellPackages.grpc-haskell-core;
@@ -264,6 +274,6 @@ in
 
     grpc                       =       pkgs.grpc;
 
-    inherit pkgs config overlay shell;
+    inherit pkgs config overlay shell stack-env;
     inherit (pkgs) test-grpc-haskell;
   }

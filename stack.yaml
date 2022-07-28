@@ -2,7 +2,7 @@
 # For more information, see: http://docs.haskellstack.org/en/stable/yaml_configuration/
 
 # Specifies the GHC version and set of packages available (e.g., lts-3.5, nightly-2015-09-21, ghc-7.10.2)
-resolver: lts-14.1
+resolver: lts-19.16
 
 # Local packages, usually specified by relative directory name
 packages:
@@ -18,10 +18,23 @@ extra-package-dbs: []
 
 
 extra-deps:
+
 - git: git@github.com:awakesecurity/proto3-suite.git
-  commit: 3f6dd6f612cf2eba3c05798926ff924b0d5ab4fa
+  # “v0.5.0” tag, as in nixpkgs pin
+  commit: 54662fa765afc4a581edc29e12ea3c5bf45da158
+
 - git: git@github.com:awakesecurity/proto3-wire.git
-  commit: 4f355bbac895d577d8a28f567ab4380f042ccc24
+  # Trying to take “v1.2.2”, as in nixpkgs, but in this repo there’s only
+  # “1.4.0” tag. Found a commit with title “Version 1.2.1 → 1.2.2” assuming it’s
+  # the one I’m looking for.
+  commit: 25b378b8e663a9f5305a648b826200e88e5d11b8
+
+
+# Fix dependency bounds for “proto3-suite” and “proto3-wire”.
+# It seems there is no way with Stack to apply a patch for a dependency
+# as it’s done in Nix.
+allow-newer: true
+
 
 # Control whether we use the GHC we find on the path
 #
@@ -58,4 +71,4 @@ nix:
   enable: false
   pure: false
   shell-file: release.nix
-  nix-shell-options: ["-A", "grpc-haskell.env"]
+  nix-shell-options: ["-A", "stack-env"]
