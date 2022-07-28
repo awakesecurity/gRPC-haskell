@@ -30,7 +30,7 @@
 # ... and then add this line below in the Haskell package overrides section:
 #
 #     ${package-name} =
-#       haskellPackagesNew.callPackage ./nix/${package-name}.nix { };
+#       hsPkgsSelf.callPackage ./nix/${package-name}.nix { };
 #
 # ... replacing `${package-name}` with the name of the package that you would
 # like to upgrade and `${version}` with the version you want to upgrade to.
@@ -41,7 +41,7 @@
 #     $ cabal2nix <your private git url>/${package-name}.git > ./nix/${package-name}.nix
 #
 # ...but also be sure to supply `fetchgit = pkgs.fetchgitPrivate` in the
-# `haskellPackagesNew.callPackage` invocation for your private package.
+# `hsPkgsSelf.callPackage` invocation for your private package.
 #
 # Note that `cabal2nix` also takes an optional `--revision` flag if you want to
 # pick a revision other than the latest to depend on.
@@ -66,128 +66,100 @@
 #     };);
 
 let
-  overlay = pkgsNew: pkgsOld: {
+  overlay = pkgsSelf: pkgsSuper: {
 
-    haskellPackages = pkgsOld.haskellPackages.override {
-      overrides = haskellPackagesNew: haskellPackagesOld: rec {
+    haskellPackages = (hsPkgsOverridden pkgsSuper).extend (hsSelf: hsSuper: {
 
-        data-diverse =
-          pkgsNew.lib.pipe haskellPackagesOld.data-diverse [
-            # Patch for GHC 9.x support
-            (haskellAddPatch pkgsNew (pkgsNew.fetchpatch {
-              url = "https://github.com/louispan/data-diverse/commit/4033c90c44dab5824f76d64b7128bb6dea2b5dc7.patch";
-              sha256 = "sha256-d6bC1Z7uCLtYF3FXGzo3XNdRPQgeAUjL1RW1Tiv7MnM=";
-            }))
+      grpc-haskell-core =
+        pkgsSelf.lib.pipe (
+          hsSelf.callCabal2nix "grpc-haskell-core" ./core {
+            gpr = pkgsSelf.grpc;
+          }
+        ) [
+          pkgsSelf.usesGRPC
+          pkgsSelf.haskell.lib.buildFromSdist
+        ];
 
-            (haskellMarkUnbroken pkgsNew)
+      grpc-haskell-no-tests =
+        pkgsSelf.lib.pipe (hsSelf.callCabal2nix "grpc-haskell" ./. { }) [
+          pkgsSelf.haskell.lib.dontCheck
+          pkgsSelf.usesGRPC
+          pkgsSelf.haskell.lib.buildFromSdist
+        ];
+
+      grpc-haskell =
+        let
+          ghc =
+            hsSelf.ghcWithPackages (pkgs: [
+              pkgs.grpc-haskell-no-tests
+              # Include some additional packages in this custom ghc for
+              # running tests in the nix-shell environment.
+              pkgs.tasty-quickcheck
+              pkgs.turtle
+            ]);
+
+          python = pkgsSelf.python.withPackages (pkgs: [
+            pkgs.grpcio-tools
+          ]);
+
+          override = old: {
+            configureFlags = (old.configureFlags or []) ++ [
+              "--flags=with-examples"
+            ];
+
+            buildDepends = (old.buildDepends or [ ]) ++ [
+              pkgsSelf.makeWrapper
+              # Give our nix-shell its own cabal so we don't pick up one
+              # from the user's environment by accident.
+              hsSelf.cabal-install
+
+              # And likewise for c2hs
+              hsSelf.c2hs
+            ];
+
+            patches =
+              (old.patches or [ ]) ++ [ ./tests/tests.patch ];
+
+            postPatch = (old.postPatch or "") + ''
+              patchShebangs tests
+              substituteInPlace tests/simple-client.sh \
+                --replace @makeWrapper@ ${pkgsSelf.makeWrapper} \
+                --replace @grpc@ ${pkgsSelf.grpc}
+              substituteInPlace tests/simple-server.sh \
+                --replace @makeWrapper@ ${pkgsSelf.makeWrapper} \
+                --replace @grpc@ ${pkgsSelf.grpc}
+              wrapProgram tests/protoc.sh \
+                --prefix PATH : ${python}/bin
+              wrapProgram tests/test-client.sh \
+                --prefix PATH : ${python}/bin
+              wrapProgram tests/test-server.sh \
+                --prefix PATH : ${python}/bin
+              wrapProgram tests/simple-client.sh \
+                --prefix PATH : ${ghc}/bin
+              wrapProgram tests/simple-server.sh \
+                --prefix PATH : ${ghc}/bin
+            '';
+
+            shellHook = (old.shellHook or "") + ''
+              # This lets us use our custom ghc and python environments in the shell.
+              export PATH=${ghc}/bin:${python}/bin''${PATH:+:}$PATH
+            '';
+          };
+        in
+          pkgsSelf.lib.pipe (hsSelf.callCabal2nix "grpc-haskell" ./. { }) [
+            pkgsSelf.haskell.lib.buildFromSdist
+            (pkgsSelf.lib.flip pkgsSelf.haskell.lib.overrideCabal override)
+            pkgsSelf.usesGRPC
           ];
 
-        proto3-wire =
-          pkgsNew.lib.pipe haskellPackagesOld.proto3-wire [
-            (haskellAddPatch pkgsNew ./nix/proto3-wire.patch)
-          ];
-
-        proto3-suite =
-          pkgsNew.lib.pipe haskellPackagesOld.proto3-suite [
-            (haskellAddPatch pkgsNew ./nix/proto3-suite.patch)
-            pkgsNew.haskell.lib.dontCheck # 4 out of 74 tests failed
-          ];
-
-        grpc-haskell-core =
-          pkgsNew.lib.pipe (
-            haskellPackagesNew.callCabal2nix "grpc-haskell-core" ./core {
-              gpr = pkgsNew.grpc;
-            }
-          ) [
-            pkgsNew.usesGRPC
-            pkgsNew.haskell.lib.buildFromSdist
-          ];
-
-        grpc-haskell-no-tests =
-          pkgsNew.lib.pipe (
-            haskellPackagesNew.callCabal2nix "grpc-haskell" ./. { }
-          ) [
-            pkgsNew.haskell.lib.dontCheck
-            pkgsNew.usesGRPC
-            pkgsNew.haskell.lib.buildFromSdist
-          ];
-
-        grpc-haskell =
-          pkgsNew.usesGRPC
-            (pkgsNew.haskell.lib.overrideCabal
-              (pkgsNew.haskell.lib.buildFromSdist (haskellPackagesNew.callCabal2nix "grpc-haskell" ./. { }))
-              (oldDerivation:
-                let
-                  ghc =
-                    haskellPackagesNew.ghcWithPackages (pkgs: [
-                      pkgs.grpc-haskell-no-tests
-                      # Include some additional packages in this custom ghc for
-                      # running tests in the nix-shell environment.
-                      pkgs.tasty-quickcheck
-                      pkgs.turtle
-                    ]);
-
-                  python = pkgsNew.python.withPackages (pkgs: [
-                    pkgs.grpcio-tools
-                  ]);
-
-                in {
-                  configureFlags = (oldDerivation.configureFlags or []) ++ [
-                    "--flags=with-examples"
-                  ];
-
-                  buildDepends = (oldDerivation.buildDepends or [ ]) ++ [
-                    pkgsNew.makeWrapper
-                    # Give our nix-shell its own cabal so we don't pick up one
-                    # from the user's environment by accident.
-                    haskellPackagesNew.cabal-install
-
-                    # And likewise for c2hs
-                    haskellPackagesNew.c2hs
-                  ];
-
-                  patches =
-                    (oldDerivation.patches or [ ]) ++ [ ./tests/tests.patch ];
-
-                  postPatch = (oldDerivation.postPatch or "") + ''
-                    patchShebangs tests
-                    substituteInPlace tests/simple-client.sh \
-                      --replace @makeWrapper@ ${pkgsNew.makeWrapper} \
-                      --replace @grpc@ ${pkgsNew.grpc}
-                    substituteInPlace tests/simple-server.sh \
-                      --replace @makeWrapper@ ${pkgsNew.makeWrapper} \
-                      --replace @grpc@ ${pkgsNew.grpc}
-                    wrapProgram tests/protoc.sh \
-                      --prefix PATH : ${python}/bin
-                    wrapProgram tests/test-client.sh \
-                      --prefix PATH : ${python}/bin
-                    wrapProgram tests/test-server.sh \
-                      --prefix PATH : ${python}/bin
-                    wrapProgram tests/simple-client.sh \
-                      --prefix PATH : ${ghc}/bin
-                    wrapProgram tests/simple-server.sh \
-                      --prefix PATH : ${ghc}/bin
-                  '';
-
-                  shellHook = (oldDerivation.shellHook or "") + ''
-                    # This lets us use our custom ghc and python environments in the shell.
-                    export PATH=${ghc}/bin:${python}/bin''${PATH:+:}$PATH
-                  '';
-                })
-            );
-
-
-      };
-    };
+    });
 
     test-grpc-haskell =
-      pkgsNew.mkShell {
+      pkgsSelf.mkShell {
         nativeBuildInputs = [
-          (pkgsNew.haskellPackages.ghcWithPackages (pkgs: [
-                pkgs.grpc-haskell
-              ]
-            )
-          )
+          (pkgsSelf.haskellPackages.ghcWithPackages (pkgs: [
+            pkgs.grpc-haskell
+          ]))
         ];
       };
 
@@ -196,38 +168,64 @@ let
       # grpc-haskell{-,core} code into `ghci` from within `nix-shell`
       # environments.
       #
-      # TODO: We might try using pkgsNew.fixDarwinDylibNames (see PR#129)
+      # TODO: We might try using pkgsSelf.fixDarwinDylibNames (see PR#129)
       # instead of setting DYLD_LIBRARY_PATH, but we might still need them
       # around for `ghci` as on Linux.
 
-      pkgsNew.haskell.lib.overrideCabal haskellPackage (oldAttributes: {
-          preBuild = (oldAttributes.preBuild or "") +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
-              export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-            '';
+      pkgsSelf.haskell.lib.overrideCabal haskellPackage (oldAttributes: {
+        preBuild = (oldAttributes.preBuild or "") +
+          pkgsSelf.lib.optionalString pkgsSelf.stdenv.isDarwin ''
+            export DYLD_LIBRARY_PATH=${pkgsSelf.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+          '';
 
-          shellHook = (oldAttributes.shellHook or "") +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isDarwin ''
-              export DYLD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
-            '' +
-            pkgsNew.lib.optionalString pkgsNew.stdenv.isLinux ''
-              export LD_LIBRARY_PATH=${pkgsNew.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
-            '';
-        }
-      );
+        shellHook = (oldAttributes.shellHook or "") +
+          pkgsSelf.lib.optionalString pkgsSelf.stdenv.isDarwin ''
+            export DYLD_LIBRARY_PATH=${pkgsSelf.grpc}/lib''${DYLD_LIBRARY_PATH:+:}$DYLD_LIBRARY_PATH
+          '' +
+          pkgsSelf.lib.optionalString pkgsSelf.stdenv.isLinux ''
+            export LD_LIBRARY_PATH=${pkgsSelf.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
+          '';
+      });
 
     # Fix this error when entering a nix-shell:
     # error: mox-0.7.8 not supported for interpreter python2.7
-    python = pkgsNew.python3;
+    python = pkgsSelf.python3;
   };
 
-  haskellAddPatch = pkgs: patchFile:
+  hsAddPatch = pkgs: patchFile:
     pkgs.lib.flip pkgs.haskell.lib.overrideCabal (old: {
       patches = (old.patches or [ ]) ++ [ patchFile ];
     });
 
-  haskellMarkUnbroken = pkgs:
+  hsMarkUnbroken = pkgs:
     pkgs.lib.flip pkgs.haskell.lib.overrideCabal (old: { broken = false; });
+
+  # Overrides for Haskell packages this library depends on
+  hsPkgsOverridden = pkgs:
+    pkgs.haskellPackages.extend (self: super: {
+      data-diverse =
+        pkgs.lib.pipe super.data-diverse [
+          # Patch for GHC 9.x support
+          (hsAddPatch pkgs (pkgs.fetchpatch {
+            url = "https://github.com/louispan/data-diverse/commit/4033c90c44dab5824f76d64b7128bb6dea2b5dc7.patch";
+            sha256 = "sha256-d6bC1Z7uCLtYF3FXGzo3XNdRPQgeAUjL1RW1Tiv7MnM=";
+          }))
+
+          # The patch above makes it not to be broken anymore
+          (hsMarkUnbroken pkgs)
+        ];
+
+      proto3-wire =
+        pkgs.lib.pipe super.proto3-wire [
+          (hsAddPatch pkgs ./nix/proto3-wire.patch)
+        ];
+
+      proto3-suite =
+        pkgs.lib.pipe super.proto3-suite [
+          (hsAddPatch pkgs ./nix/proto3-suite.patch)
+          pkgs.haskell.lib.dontCheck # 4 out of 74 tests failed
+        ];
+    });
 
   overlays = [ overlay ];
 
@@ -281,4 +279,7 @@ in
 
     inherit pkgs config overlay shell stack-env;
     inherit (pkgs) test-grpc-haskell;
+
+    inherit hsPkgsOverridden; # Function :: nixpkgs -> new haskellPackages
+    inherit (hsPkgsOverridden (nixpkgs {})) data-diverse proto3-wire proto3-suite;
   }
