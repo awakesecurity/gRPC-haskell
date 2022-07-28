@@ -73,7 +73,12 @@ let
 
         data-diverse =
           pkgsNew.lib.pipe haskellPackagesOld.data-diverse [
-            (haskellAddPatch pkgsNew ./nix/data-diverse.patch)
+            # Patch for GHC 9.x support
+            (haskellAddPatch pkgsNew (pkgsNew.fetchpatch {
+              url = "https://github.com/louispan/data-diverse/commit/4033c90c44dab5824f76d64b7128bb6dea2b5dc7.patch";
+              sha256 = "sha256-d6bC1Z7uCLtYF3FXGzo3XNdRPQgeAUjL1RW1Tiv7MnM=";
+            }))
+
             (haskellMarkUnbroken pkgsNew)
           ];
 
