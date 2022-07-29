@@ -66,7 +66,34 @@
 #     };);
 
 let
+  # Taking specific Python version.
+  #
+  # N.B. Mind that some of the dependencies of gRPC Python packages
+  # (“grpcio-status” and “grpcio-tools”) do not support Python 2 anymore:
+  # “error: mox-0.7.8 not supported for interpreter python2.7”.
+  # So do not use “python” as a value since it defaults to Python 2.
+  pythonVer = "python3";
+
   overlay = pkgsSelf: pkgsSuper: {
+
+    # “grpc-haskell” is made for specific version of gRPC library.
+    # So this override makes sure it would still work against another nixpkgs
+    # pin where gRPC can have different version.
+    grpc = pkgsSelf.callPackage nix/grpc-pin/grpc.nix {
+      # grpc builds with c++14 so abseil must also be built that way
+      abseil-cpp = pkgsSelf.abseil-cpp_202111.override {
+        cxxStandard = "14";
+      };
+    };
+
+    # As recommended for “grpc” derivation also overriding
+    # “grpcio-status” and “grpcio-tools” to the same version.
+    ${pythonVer} = pkgsSuper.${pythonVer}.override {
+      packageOverrides = pySelf: pySuper: {
+        grpcio-status = pySelf.callPackage nix/grpc-pin/grpcio-status.nix {};
+        grpcio-tools = pySelf.callPackage nix/grpc-pin/grpcio-tools.nix {};
+      };
+    };
 
     haskellPackages = (hsPkgsOverridden pkgsSuper).extend (hsSelf: hsSuper: {
 
@@ -98,7 +125,7 @@ let
               pkgs.turtle
             ]);
 
-          python = pkgsSelf.python.withPackages (pkgs: [
+          python = pkgsSelf.${pythonVer}.withPackages (pkgs: [
             pkgs.grpcio-tools
           ]);
 
@@ -186,10 +213,6 @@ let
             export LD_LIBRARY_PATH=${pkgsSelf.grpc}/lib''${LD_LIBRARY_PATH:+:}$LD_LIBRARY_PATH
           '';
       });
-
-    # Fix this error when entering a nix-shell:
-    # error: mox-0.7.8 not supported for interpreter python2.7
-    python = pkgsSelf.python3;
   };
 
   hsAddPatch = pkgs: patchFile:
