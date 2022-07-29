@@ -227,7 +227,7 @@ let
   hsPkgsOverridden = pkgs:
     pkgs.haskellPackages.extend (self: super: {
       data-diverse =
-        pkgs.lib.pipe super.data-diverse [
+        pkgs.lib.pipe (self.callPackage nix/data-diverse.nix {}) [
           # Patch for GHC 9.x support
           (hsAddPatch pkgs (pkgs.fetchpatch {
             url = "https://github.com/louispan/data-diverse/commit/4033c90c44dab5824f76d64b7128bb6dea2b5dc7.patch";
@@ -239,13 +239,13 @@ let
         ];
 
       proto3-wire =
-        pkgs.lib.pipe super.proto3-wire [
-          (hsAddPatch pkgs ./nix/proto3-wire.patch)
+        pkgs.lib.pipe (self.callPackage nix/proto3-wire.nix {}) [
+          (hsAddPatch pkgs nix/proto3-wire.patch)
         ];
 
       proto3-suite =
-        pkgs.lib.pipe super.proto3-suite [
-          (hsAddPatch pkgs ./nix/proto3-suite.patch)
+        pkgs.lib.pipe (self.callPackage nix/proto3-suite.nix {}) [
+          (hsAddPatch pkgs nix/proto3-suite.patch)
           pkgs.haskell.lib.dontCheck # 4 out of 74 tests failed
         ];
     });
