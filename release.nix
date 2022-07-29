@@ -1,7 +1,7 @@
 # If you would like to test and build changes quickly using `cabal`, run:
 #
 #     $ nix-shell
-#     [nix-shell]$ cabal configure --enable-tests && cabal test
+#     [nix-shell]$ cabal configure --enable-tests && cabal build && cabal test
 #
 # This will open up a Nix shell where all of your Haskell tools will work like
 # normal, except that all dependencies (including C libraries) are managed by
@@ -121,6 +121,8 @@ let
               pkgs.grpc-haskell-no-tests
               # Include some additional packages in this custom ghc for
               # running tests in the nix-shell environment.
+              pkgs.pipes
+              pkgs.tasty-hunit
               pkgs.tasty-quickcheck
               pkgs.turtle
             ]);
@@ -136,6 +138,7 @@ let
 
             buildDepends = (old.buildDepends or [ ]) ++ [
               pkgsSelf.makeWrapper
+
               # Give our nix-shell its own cabal so we don't pick up one
               # from the user's environment by accident.
               hsSelf.cabal-install
