@@ -178,7 +178,7 @@ let
         in
           pkgsSelf.lib.pipe (hsSelf.callCabal2nix "grpc-haskell" ./. { }) [
             pkgsSelf.haskell.lib.buildFromSdist
-            (pkgsSelf.lib.flip pkgsSelf.haskell.lib.overrideCabal override)
+            (pkgsSelf.haskell.lib.compose.overrideCabal override)
             pkgsSelf.usesGRPC
           ];
 
@@ -218,13 +218,8 @@ let
       });
   };
 
-  hsAddPatch = pkgs: patchFile:
-    pkgs.lib.flip pkgs.haskell.lib.overrideCabal (old: {
-      patches = (old.patches or [ ]) ++ [ patchFile ];
-    });
-
   hsMarkUnbroken = pkgs:
-    pkgs.lib.flip pkgs.haskell.lib.overrideCabal (old: { broken = false; });
+    pkgs.haskell.lib.compose.overrideCabal (old: { broken = false; });
 
   # Overrides for Haskell packages this library depends on
   hsPkgsOverridden = pkgs:
@@ -232,7 +227,7 @@ let
       data-diverse =
         pkgs.lib.pipe (self.callPackage nix/data-diverse.nix {}) [
           # Patch for GHC 9.x support
-          (hsAddPatch pkgs (pkgs.fetchpatch {
+          (pkgs.haskell.lib.compose.appendPatch (pkgs.fetchpatch {
             url = "https://github.com/louispan/data-diverse/commit/4033c90c44dab5824f76d64b7128bb6dea2b5dc7.patch";
             sha256 = "sha256-d6bC1Z7uCLtYF3FXGzo3XNdRPQgeAUjL1RW1Tiv7MnM=";
           }))
@@ -243,12 +238,12 @@ let
 
       proto3-wire =
         pkgs.lib.pipe (self.callPackage nix/proto3-wire.nix {}) [
-          (hsAddPatch pkgs nix/proto3-wire.patch)
+          (pkgs.haskell.lib.compose.appendPatch nix/proto3-wire.patch)
         ];
 
       proto3-suite =
         pkgs.lib.pipe (self.callPackage nix/proto3-suite.nix {}) [
-          (hsAddPatch pkgs nix/proto3-suite.patch)
+          (pkgs.haskell.lib.compose.appendPatch nix/proto3-suite.patch)
           pkgs.haskell.lib.dontCheck # 4 out of 74 tests failed
         ];
     });
