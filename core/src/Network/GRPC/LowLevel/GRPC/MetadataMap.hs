@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -5,6 +6,8 @@ module Network.GRPC.LowLevel.GRPC.MetadataMap where
 
 import Data.ByteString (ByteString)
 import Data.Function (on)
+import Data.Data (Data)
+import Data.Typeable (Typeable)
 import GHC.Exts (IsList(..))
 import Data.List (sortBy, groupBy)
 import Data.Ord (comparing)
@@ -29,8 +32,9 @@ import qualified Data.Map.Strict as M
    Just "y"
 -}
 
-newtype MetadataMap = MetadataMap {unMap :: M.Map ByteString [ByteString]}
-  deriving Eq
+newtype MetadataMap = MetadataMap 
+  {unMap :: M.Map ByteString [ByteString]}
+  deriving (Data, Eq, Ord, Typeable)
 
 instance Show MetadataMap where
   show m = "fromList " ++ show (M.toList (unMap m))
