@@ -238,7 +238,7 @@ void op_send_message(grpc_op *op_array, size_t i,
                          grpc_byte_buffer *payload){
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_SEND_MESSAGE;
-  op->data.send_message.send_message = grpc_byte_buffer_copy(payload);
+  op->data.send_message.send_message = payload;
   op->flags = 0;
   op->reserved = NULL;
 }
