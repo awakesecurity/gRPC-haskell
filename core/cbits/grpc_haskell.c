@@ -220,10 +220,7 @@ void op_send_initial_metadata(grpc_op *op_array, size_t i,
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_SEND_INITIAL_METADATA;
   op->data.send_initial_metadata.count = n_metadata;
-  op->data.send_initial_metadata.metadata
-    = malloc(n_metadata*sizeof(grpc_metadata));
-  memcpy(op->data.send_initial_metadata.metadata, arr,
-         n_metadata*sizeof(grpc_metadata));
+  op->data.send_initial_metadata.metadata = arr;
   op->flags = 0;
   op->reserved = NULL;
 }
