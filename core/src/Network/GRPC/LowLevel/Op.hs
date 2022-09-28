@@ -56,7 +56,7 @@ data OpContext =
 -- when processing 'OpRecvStatusOnClient'. It appears that gRPC actually ignores
 -- this length and reallocates a longer string if necessary.
 defaultStatusStringLen :: Int
-defaultStatusStringLen = 128
+defaultStatusStringLen = 20
 
 -- | Allocates and initializes the 'Opcontext' corresponding to the given 'Op'.
 createOpContext :: Op -> IO OpContext
