@@ -295,10 +295,7 @@ void op_send_status_server(grpc_op *op_array, size_t i,
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_SEND_STATUS_FROM_SERVER;
   op->data.send_status_from_server.trailing_metadata_count = metadata_count;
-  op->data.send_status_from_server.trailing_metadata
-    = malloc(sizeof(grpc_metadata)*metadata_count);
-  memcpy(op->data.send_status_from_server.trailing_metadata, m,
-         metadata_count*sizeof(grpc_metadata));
+  op->data.send_status_from_server.trailing_metadata = m;
   op->data.send_status_from_server.status = status;
   op->data.send_status_from_server.status_details = details;
   op->flags = 0;
