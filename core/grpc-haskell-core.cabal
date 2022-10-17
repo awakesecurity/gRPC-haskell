@@ -22,7 +22,7 @@ Flag Debug
 library
   build-depends:
       base >=4.8 && <5.0
-    , clock >=0.6.0 && <0.8.0
+    , clock >=0.6.0 && <0.9
     , bytestring ==0.10.*
     , stm >=2.4 && <2.6
     , containers >=0.5 && <0.7
