@@ -4,7 +4,7 @@
 {-# LANGUAGE StandaloneDeriving         #-}
 
 module Network.GRPC.LowLevel.GRPC(
-GRPC
+  GRPC (GRPC)
 , withGRPC
 , GRPCIOError(..)
 , throwIfCallError
