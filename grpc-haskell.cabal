@@ -28,7 +28,7 @@ flag with-examples
 library
   build-depends:
       base >=4.8 && <5.0
-    , bytestring ==0.10.*
+    , bytestring >= 0.10 && <0.12
     , proto3-suite >=0.4.3
     , proto3-wire >=1.2.2
     , grpc-haskell-core >=0.2.1
@@ -55,7 +55,7 @@ executable hellos-server
     build-depends:
       base >=4.8 && <5.0
       , async
-      , bytestring == 0.10.*
+      , bytestring >= 0.10 && <0.12
       , containers >=0.5 && <0.7
       , grpc-haskell
       , grpc-haskell-core >=0.2.0
@@ -75,7 +75,7 @@ executable hellos-client
     build-depends:
       base >=4.8 && <5.0
       , async
-      , bytestring == 0.10.*
+      , bytestring >= 0.10 && <0.12
       , containers >=0.5 && <0.7
       , grpc-haskell
       , grpc-haskell-core >=0.2.0
@@ -95,7 +95,7 @@ executable echo-server
     build-depends:
       base >=4.8 && <5.0
       , async
-      , bytestring == 0.10.*
+      , bytestring >= 0.10 && <0.12
       , containers >=0.5 && <0.7
       , deepseq
       , grpc-haskell
@@ -120,7 +120,7 @@ executable arithmetic-server
     build-depends:
       base >=4.8 && <5.0
       , async
-      , bytestring == 0.10.*
+      , bytestring >= 0.10 && <0.12
       , containers >=0.5 && <0.7
       , deepseq
       , grpc-haskell
@@ -144,7 +144,7 @@ executable arithmetic-client
     build-depends:
       base >=4.8 && <5.0
       , async
-      , bytestring == 0.10.*
+      , bytestring >= 0.10 && <0.12
       , containers >=0.5 && <0.7
       , deepseq
       , grpc-haskell
@@ -168,7 +168,7 @@ executable echo-client
     build-depends:
       base >=4.8 && <5.0
       , async
-      , bytestring == 0.10.*
+      , bytestring >= 0.10 && <0.12
       , containers >=0.5 && <0.7
       , deepseq
       , grpc-haskell
@@ -191,7 +191,7 @@ executable echo-client
 test-suite tests
   build-depends:
       base >=4.8 && <5.0
-    , bytestring ==0.10.*
+    , bytestring >= 0.10 && <0.12
     , unix
     , time
     , async
@@ -228,7 +228,7 @@ benchmark bench
     , async ==2.1.*
     , criterion ==1.1.*
     , proto3-suite
-    , bytestring ==0.10.*
+    , bytestring >= 0.10 && <0.12
     , random >=1.0.0
   hs-source-dirs: bench
   main-is: Bench.hs
