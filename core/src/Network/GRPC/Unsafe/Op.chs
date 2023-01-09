@@ -17,7 +17,12 @@ import Foreign.Ptr
 {#context prefix = "grpc" #}
 
 {#enum grpc_op_type as OpType {underscoreToCase} deriving (Eq, Show)#}
-{#enum grpc_status_code as StatusCode {underscoreToCase} deriving (Eq, Read, Show)#}
+
+-- | A set of well defined status codes RPCs use.
+{#enum 
+  grpc_status_code as StatusCode {underscoreToCase} 
+    deriving (Bounded, Eq, Ord, Read, Show)
+  #}
 
 -- NOTE: We don't alloc the space for the enum in Haskell because enum size is
 -- implementation-dependent. See:
