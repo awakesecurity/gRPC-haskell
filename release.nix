@@ -68,8 +68,6 @@
 let
   overlay = pkgsNew: pkgsOld: {
 
-    grpc = pkgsNew.callPackage ./nix/grpc.nix { };
-
     haskellPackages = pkgsOld.haskellPackages.override {
       overrides = haskellPackagesNew: haskellPackagesOld: rec {
         parameterized =
