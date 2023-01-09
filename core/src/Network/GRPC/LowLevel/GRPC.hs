@@ -50,26 +50,32 @@ stopGRPC GRPC = do
 
 -- | Describes all errors that can occur while running a GRPC-related IO
 -- action.
-data GRPCIOError = GRPCIOCallError C.CallError
-                   -- ^ Errors that can occur while the call is in flight. These
-                   -- errors come from the core gRPC library directly.
-                   | GRPCIOTimeout
-                   -- ^ Indicates that we timed out while waiting for an
-                   -- operation to complete on the 'CompletionQueue'.
-                   | GRPCIOShutdown
-                   -- ^ Indicates that the 'CompletionQueue' is shutting down
-                   -- and no more work can be processed. This can happen if the
-                   -- client or server is shutting down.
-                   | GRPCIOShutdownFailure
-                   -- ^ Thrown if a 'CompletionQueue' fails to shut down in a
-                   -- reasonable amount of time.
-                   | GRPCIOUnknownError
-                   | GRPCIOBadStatusCode C.StatusCode C.StatusDetails
+data GRPCIOError 
+  = GRPCIOCallError C.CallError
+    -- ^ Errors that can occur while the call is in flight. These
+    -- errors come from the core gRPC library directly.
+  | GRPCIOTimeout
+    -- ^ Indicates that we timed out while waiting for an
+    -- operation to complete on the 'CompletionQueue'.
+  | GRPCIOShutdown
+    -- ^ Indicates that the 'CompletionQueue' is shutting down
+    -- and no more work can be processed. This can happen if the
+    -- client or server is shutting down.
+  | GRPCIOShutdownFailure
+    -- ^ Thrown if a 'CompletionQueue' fails to shut down in a
+    -- reasonable amount of time.
+  | GRPCIOUnknownError
+  | GRPCIOBadStatusCode C.StatusCode C.StatusDetails
+  | GRPCIODecodeError String
+  | GRPCIOInternalUnexpectedRecv String -- debugging description
+  | GRPCIOHandlerException String
+  deriving 
+    ( Eq
+    , Ord -- ^ @since 0.3.1
+    , Show
+    , Typeable
+    )
 
-                   | GRPCIODecodeError String
-                   | GRPCIOInternalUnexpectedRecv String -- debugging description
-                   | GRPCIOHandlerException String
-  deriving (Eq, Show, Typeable)
 instance Exception GRPCIOError
 
 throwIfCallError :: C.CallError -> Either GRPCIOError ()

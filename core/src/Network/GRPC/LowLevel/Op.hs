@@ -334,7 +334,7 @@ writesDonePrim c cq = f <$> runOps c cq [OpSendCloseFromClient]
 -- to a valid gRPC 'StatusCode' (i.e. some integer @(i ::'Int')@ less than @0@
 -- or greater than @16@), then 'intToStatusCode' will return 'Nothing'.
 --
--- @since 3.0.1
+-- @since 0.3.1
 intToStatusCode :: Int -> Maybe StatusCode 
 intToStatusCode i 
   | lower <= i && i <= upper = Just (toEnum i)
