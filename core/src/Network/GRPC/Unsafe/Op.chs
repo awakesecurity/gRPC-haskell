@@ -27,6 +27,7 @@ import Foreign.Ptr
 -- NOTE: We don't alloc the space for the enum in Haskell because enum size is
 -- implementation-dependent. See:
 -- http://stackoverflow.com/questions/1113855/is-the-sizeofenum-sizeofint-always
+
 -- | Allocates space for a 'StatusCode' and returns a pointer to it. Used to
 -- receive a status code from the server with 'opRecvStatusClient'.
 {#fun unsafe create_status_code_ptr as ^ {} -> `Ptr StatusCode' castPtr#}

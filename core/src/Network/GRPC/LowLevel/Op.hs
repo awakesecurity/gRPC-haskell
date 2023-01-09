@@ -19,6 +19,7 @@ import           Foreign.Storable                      (peek)
 import           Network.GRPC.LowLevel.CompletionQueue
 import           Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe                   as C (Call)
+import           Network.GRPC.Unsafe.Op                (StatusCode)
 import qualified Network.GRPC.Unsafe.ByteBuffer        as C
 import qualified Network.GRPC.Unsafe.Metadata          as C
 import qualified Network.GRPC.Unsafe.Op                as C
@@ -325,3 +326,22 @@ writesDonePrim c cq = f <$> runOps c cq [OpSendCloseFromClient]
     f (Right []) = Right ()
     f Right{}    = Left (GRPCIOInternalUnexpectedRecv "writesDonePrim")
     f (Left e)   = Left e
+
+--------------------------------------------------------------------------------
+
+-- | Convert an 'Int' to a 'StatusCode' according to integer codes that 
+-- corresponds to each gRPC status code. If the given 'Int' does not correspond 
+-- to a valid gRPC 'StatusCode' (i.e. some integer @(i ::'Int')@ less than @0@
+-- or greater than @16@), then 'intToStatusCode' will return 'Nothing'.
+--
+-- @since 3.0.1
+intToStatusCode :: Int -> Maybe StatusCode 
+intToStatusCode i 
+  | lower <= i && i <= upper = Just (toEnum i)
+  | otherwise                = Nothing
+  where 
+    lower :: Int 
+    lower = fromEnum (minBound :: StatusCode)
+
+    upper :: Int 
+    upper = fromEnum (maxBound :: StatusCode)
