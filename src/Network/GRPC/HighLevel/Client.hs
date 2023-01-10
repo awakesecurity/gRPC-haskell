@@ -1,8 +1,10 @@
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE DeriveFunctor       #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE KindSignatures      #-}
 {-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving  #-}
 
 module Network.GRPC.HighLevel.Client
   ( ClientError(..)
@@ -64,7 +66,11 @@ type ServiceClient service = service ClientRequest ClientResult
 data ClientError
   = ClientErrorNoParse ParseError
   | ClientIOError GRPCIOError
-  deriving (Show, Eq)
+  deriving 
+    ( Eq
+    , Ord -- ^ @since 0.3.1
+    , Show
+    )
 
 data ClientRequest (streamType :: GRPCMethodType) request response where
   ClientNormalRequest :: request -> TimeoutSeconds -> MetadataMap -> ClientRequest 'Normal request response
@@ -76,11 +82,45 @@ data ClientRequest (streamType :: GRPCMethodType) request response where
   ClientBiDiRequest :: TimeoutSeconds -> MetadataMap -> (LL.ClientCall -> MetadataMap -> StreamRecv response -> StreamSend request -> WritesDone -> IO ()) -> ClientRequest 'BiDiStreaming request response
 
 data ClientResult (streamType :: GRPCMethodType) response where
-  ClientNormalResponse :: response -> MetadataMap -> MetadataMap -> StatusCode -> StatusDetails -> ClientResult 'Normal response
-  ClientWriterResponse :: Maybe response -> MetadataMap -> MetadataMap -> StatusCode -> StatusDetails -> ClientResult 'ClientStreaming response
-  ClientReaderResponse :: MetadataMap -> StatusCode -> StatusDetails -> ClientResult 'ServerStreaming response
-  ClientBiDiResponse   :: MetadataMap -> StatusCode -> StatusDetails -> ClientResult 'BiDiStreaming response
-  ClientErrorResponse  :: ClientError -> ClientResult streamType response
+  ClientNormalResponse :: 
+    response -> 
+    MetadataMap -> 
+    MetadataMap -> 
+    StatusCode -> 
+    StatusDetails -> 
+    ClientResult 'Normal response
+  ClientWriterResponse :: 
+    Maybe response -> 
+    MetadataMap -> 
+    MetadataMap -> 
+    StatusCode -> 
+    StatusDetails -> 
+    ClientResult 'ClientStreaming response
+  ClientReaderResponse :: 
+    MetadataMap -> 
+    StatusCode -> 
+    StatusDetails -> 
+    ClientResult 'ServerStreaming response
+  ClientBiDiResponse :: 
+    MetadataMap -> 
+    StatusCode -> 
+    StatusDetails -> 
+    ClientResult 'BiDiStreaming response
+  ClientErrorResponse :: 
+    ClientError -> 
+    ClientResult streamType response
+
+-- | @since 0.3.1
+deriving instance Ord a => Ord (ClientResult s a)
+
+-- | @since 0.3.1
+deriving instance Eq a => Eq (ClientResult s a)
+
+-- | @since 0.3.1
+deriving instance Functor (ClientResult s)
+
+-- | @since 0.3.1
+deriving instance Show a => Show (ClientResult s a)
 
 class ClientRegisterable (methodType :: GRPCMethodType) where
   clientRegisterMethod :: LL.Client
