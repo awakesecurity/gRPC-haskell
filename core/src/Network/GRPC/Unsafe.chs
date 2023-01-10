@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE StandaloneDeriving         #-}
 
 module Network.GRPC.Unsafe where
@@ -29,8 +30,16 @@ import Network.GRPC.Unsafe.Constants
 
 {#context prefix = "grpc" #}
 
-newtype StatusDetails = StatusDetails {unStatusDetails :: ByteString}
-  deriving (Eq, IsString, Monoid, Semigroup, Show)
+-- | A message that carry the details about a 'StatusCode'. Typical usage will 
+-- only provide descriptions of 'StatusCode' in a 'StatusDetails' when the 
+-- status-code is an error. 
+newtype StatusDetails = StatusDetails 
+  {unStatusDetails :: ByteString}
+  deriving newtype 
+    ( Eq
+    , Ord -- ^ @since 0.3.1
+    , IsString, Monoid, Semigroup, Show
+    )
 
 {#pointer *grpc_completion_queue as CompletionQueue newtype #}
 
@@ -98,7 +107,10 @@ newtype Reserved = Reserved {unReserved :: Ptr ()}
 reserved :: Reserved
 reserved = Reserved nullPtr
 
-{#enum grpc_call_error as CallError {underscoreToCase} deriving (Show, Eq)#}
+{#enum 
+  grpc_call_error as CallError {underscoreToCase} 
+    deriving (Bounded, Eq, Ord, Show)
+  #}
 
 -- | Represents the type of a completion event on a 'CompletionQueue'.
 -- 'QueueShutdown' only occurs if the queue is shutting down (e.g., when the
