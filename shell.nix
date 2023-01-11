@@ -1,1 +1,7 @@
-(import ./release.nix).grpc-haskell.env
+let 
+  pkgs = import ./release.nix;
+in pkgs.grpc-haskell.env.overrideAttrs (self: {
+  buildInputs = self.buildInputs ++ [
+    pkgs.grpc
+  ];
+})
