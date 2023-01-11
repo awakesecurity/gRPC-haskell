@@ -4,8 +4,10 @@
 {-# LANGUAGE StandaloneDeriving         #-}
 
 module Network.GRPC.LowLevel.GRPC(
-GRPC
+  GRPC
 , withGRPC
+, startGRPC
+, stopGRPC
 , GRPCIOError(..)
 , throwIfCallError
 , grpcDebug
@@ -17,6 +19,7 @@ GRPC
 
 import           Control.Concurrent     (threadDelay, myThreadId)
 import           Control.Exception
+import           Data.Functor (($>))
 import           Data.Typeable
 import           Network.GRPC.LowLevel.GRPC.MetadataMap (MetadataMap(..))
 import qualified Network.GRPC.Unsafe    as C
@@ -28,8 +31,22 @@ import qualified Network.GRPC.Unsafe.Op as C
 data GRPC = GRPC
 
 withGRPC :: (GRPC -> IO a) -> IO a
-withGRPC = bracket (C.grpcInit >> return GRPC)
-                   (\_ -> grpcDebug "withGRPC: shutting down" >> C.grpcShutdown)
+withGRPC = bracket startGRPC stopGRPC 
+
+-- | Start gRPC core and obtain a 'GRPC' witness. This function does not perform
+-- any cleanup once the gRPC server is no longer needed. 
+--
+-- Where possible, consider using 'withGRPC' which handles shutdown of gRPC 
+-- automatically with 'bracket'. 
+startGRPC :: IO GRPC 
+startGRPC = C.grpcInit $> GRPC
+
+-- | Shutdown gRPC core given a 'GRPC' witnessing that gRPC core has been 
+-- initialized.
+stopGRPC :: GRPC -> IO ()
+stopGRPC GRPC = do 
+  grpcDebug "withGRPC: shutting down"
+  C.grpcShutdown
 
 -- | Describes all errors that can occur while running a GRPC-related IO
 -- action.
