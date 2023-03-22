@@ -30,9 +30,11 @@ echo "Nix store path for grpc is ${grpc}."
 echo "Creating symlinks into /usr/local/include and /usr/local/lib..."
 ln -sf "${grpc}/include/grpc" /usr/local/include/grpc
 ln -sf "${grpc}/lib/libgrpc.dylib" /usr/local/lib/libgrpc.dylib
+ln -sf "${grpc}/lib/libgpr.dylib" /usr/local/lib/libgpr.dylib
 
-echo "Creating the following symlinks:"
+echo "Created the following symlinks:"
 ls -ld /usr/local/include/grpc
 ls -l /usr/local/lib/libgrpc.dylib
+ls -l /usr/local/lib/libgpr.dylib
 
 echo "All done."
