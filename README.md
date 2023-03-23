@@ -7,7 +7,7 @@ have extended and released under the same [`LICENSE`](./LICENSE)
 Installation
 ------------
 
-**The current version of this library requires gRPC version 1.34.1. Newer versions may work but have not been tested.**
+**The current version of this library requires gRPC version 1.46.3. Newer versions may work but have not been tested.**
 
 Usage
 -----
@@ -22,7 +22,7 @@ put the completed package into the nix store. `nix-shell` can be used to give
 you a development environment where you can use `cabal` for development and
 testing:
 
-```bash
+``` console
 $ nix-shell
 [nix-shell]$ cabal configure --enable-tests && cabal build && cabal test
 ```

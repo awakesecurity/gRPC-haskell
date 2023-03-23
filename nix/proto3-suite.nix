@@ -1,23 +1,18 @@
 { mkDerivation, aeson, aeson-pretty, attoparsec, base
 , base64-bytestring, binary, bytestring, cereal, containers
-, contravariant, deepseq, doctest, fetchgit, filepath, foldl
-, generic-arbitrary, hashable, haskell-src
+, contravariant, deepseq, doctest, filepath, foldl
+, generic-arbitrary, hashable, haskell-src, hedgehog
 , insert-ordered-containers, lens, lib, mtl, neat-interpolation
 , optparse-applicative, optparse-generic, parsec, parsers, pretty
 , pretty-show, proto3-wire, QuickCheck, quickcheck-instances
 , range-set-list, safe, swagger2, system-filepath, tasty
-, tasty-hunit, tasty-quickcheck, text, time, transformers, turtle
-, vector
+, tasty-hedgehog, tasty-hunit, tasty-quickcheck, text, time
+, transformers, turtle, vector
 }:
 mkDerivation {
   pname = "proto3-suite";
-  version = "0.4.3";
-  src = fetchgit {
-    url = "https://github.com/awakesecurity/proto3-suite.git";
-    sha256 = "0bjqczi6wddxv0n7qmfbrr19ajgq66xdkxx8vfcgbmv8ygma3vlw";
-    rev = "7af7d76dcf9cc71ddada3aa4a38abf46f65550ca";
-    fetchSubmodules = true;
-  };
+  version = "0.5.0";
+  sha256 = "sha256-lcm+En6esErjAvfycogkc7ixSXVpjdAz7dTJIIZPwCc=";
   isLibrary = true;
   isExecutable = true;
   enableSeparateDataOutput = true;
@@ -35,9 +30,9 @@ mkDerivation {
   ];
   testHaskellDepends = [
     aeson attoparsec base base64-bytestring bytestring cereal
-    containers deepseq doctest generic-arbitrary mtl pretty-show
-    proto3-wire QuickCheck swagger2 tasty tasty-hunit tasty-quickcheck
-    text transformers turtle vector
+    containers deepseq doctest generic-arbitrary hedgehog mtl
+    pretty-show proto3-wire QuickCheck swagger2 tasty tasty-hedgehog
+    tasty-hunit tasty-quickcheck text transformers turtle vector
   ];
   description = "A higher-level API to the proto3-wire library";
   license = lib.licenses.asl20;

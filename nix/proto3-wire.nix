@@ -6,7 +6,7 @@
 mkDerivation {
   pname = "proto3-wire";
   version = "1.2.2";
-  sha256 = "8d409536a89a0187f0576711966d2ef45d43acab7b6a3a1c5ee12f6d01adbfb9";
+  sha256 = "sha256-jUCVNqiaAYfwV2cRlm0u9F1DrKt7ajocXuEvbQGtv7k=";
   libraryHaskellDepends = [
     base bytestring cereal containers deepseq ghc-prim hashable
     parameterized primitive QuickCheck safe text transformers
