@@ -30,7 +30,7 @@ import Foreign.Ptr
 -- library reference for more information regarding the 'StatusCode' enum. 
 {#enum 
   grpc_status_code as StatusCode {underscoreToCase} 
-    deriving (Bounded, Data, Eq, Generic, Ord, Read, Show)
+    deriving (Bounded, Data, Eq, Generic, Lift, Ord, Read, Show)
   #}
 
 -- | Allocates space for a 'StatusCode' and returns a pointer to it. Used to
