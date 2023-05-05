@@ -1,11 +1,18 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric      #-}
+{-# LANGUAGE DerivingVia        #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 module Network.GRPC.Unsafe.Op where
 
-{#import Network.GRPC.Unsafe.Slice#}
+import Data.Data (Data)
+
+import GHC.Generics (Generic)
 
 import Foreign.C.Types
 import Foreign.Ptr
+
+{#import Network.GRPC.Unsafe.Slice#}
 {#import Network.GRPC.Unsafe.ByteBuffer#}
 {#import Network.GRPC.Unsafe.Metadata#}
 
@@ -16,12 +23,16 @@ import Foreign.Ptr
 
 {#context prefix = "grpc" #}
 
-{#enum grpc_op_type as OpType {underscoreToCase} deriving (Eq, Show)#}
-{#enum grpc_status_code as StatusCode {underscoreToCase} deriving (Eq, Read, Show)#}
+-- StatusCode ------------------------------------------------------------------
 
--- NOTE: We don't alloc the space for the enum in Haskell because enum size is
--- implementation-dependent. See:
--- http://stackoverflow.com/questions/1113855/is-the-sizeofenum-sizeofint-always
+-- | 'StatusCode' enumerates the set of gRPC status codes. See the 
+-- ["gRPC Core"](https://grpc.github.io/grpc/core/md_doc_statuscodes.html)
+-- library reference for more information regarding the 'StatusCode' enum. 
+{#enum 
+  grpc_status_code as StatusCode {underscoreToCase} 
+    deriving (Bounded, Data, Eq, Generic, Ord, Read, Show)
+  #}
+
 -- | Allocates space for a 'StatusCode' and returns a pointer to it. Used to
 -- receive a status code from the server with 'opRecvStatusClient'.
 {#fun unsafe create_status_code_ptr as ^ {} -> `Ptr StatusCode' castPtr#}
@@ -30,13 +41,27 @@ import Foreign.Ptr
 
 {#fun unsafe destroy_status_code_ptr as ^ {castPtr `Ptr StatusCode'} -> `()' #}
 
+--------------------------------------------------------------------------------
+
+{#enum 
+  grpc_op_type as OpType {underscoreToCase} 
+    deriving (Eq, Show)
+  #}
+
+-- NOTE: We don't alloc the space for the enum in Haskell because enum size is
+-- implementation-dependent. See:
+-- http://stackoverflow.com/questions/1113855/is-the-sizeofenum-sizeofint-always
+
 -- | Represents an array of ops to be passed to 'grpcCallStartBatch'.
 -- Create an array with 'opArrayCreate', then create individual ops in the array
 -- using the op* functions. For these functions, the first two arguments are
 -- always the OpArray to mutate and the index in the array at which to create
 -- the new op. After processing the batch and getting out any results, call
 -- 'opArrayDestroy'.
-{#pointer *grpc_op as OpArray newtype #}
+{#pointer 
+
+  *grpc_op as OpArray newtype 
+  #}
 
 deriving instance Show OpArray
 
