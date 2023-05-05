@@ -1,16 +1,18 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric      #-}
-{-# LANGUAGE DerivingVia        #-}
+{-# LANGUAGE DeriveLift         #-}
 {-# LANGUAGE StandaloneDeriving #-}
 
 module Network.GRPC.Unsafe.Op where
 
 import Data.Data (Data)
 
-import GHC.Generics (Generic)
-
 import Foreign.C.Types
 import Foreign.Ptr
+
+import GHC.Generics (Generic)
+
+import Language.Haskell.TH.Syntax (Lift)
 
 {#import Network.GRPC.Unsafe.Slice#}
 {#import Network.GRPC.Unsafe.ByteBuffer#}
