@@ -1,5 +1,5 @@
 name:                grpc-haskell-core
-version:             0.3.0
+version:             0.4.0
 synopsis:            Haskell implementation of gRPC layered on shared C library.
 homepage:            https://github.com/awakenetworks/gRPC-haskell
 license:             Apache-2.0
@@ -21,16 +21,18 @@ Flag Debug
 
 library
   build-depends:
-      base >=4.8 && <5.0
-    , clock >=0.6.0 && <0.9
-    , bytestring ==0.10.*
-    , stm >=2.4 && <2.6
-    , containers >=0.5 && <0.7
-    , managed >= 1.0.0 && < 1.1
+      base             >= 4.8    && < 5.0
+    , clock            >= 0.6.0  && < 0.9
+    , bytestring       == 0.10.*
+    , stm              >= 2.4    && < 2.6
+    , containers       >= 0.5    && < 0.7
+    , managed          >= 1.0.0  && < 1.1
+    , template-haskell >= 2.16.0 && < 2.21
     , transformers
 
   c-sources:
     cbits/grpc_haskell.c
+
   exposed-modules:
   -- NOTE: the order of these matters to c2hs.
     Network.GRPC.Unsafe.Constants
