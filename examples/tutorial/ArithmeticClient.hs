@@ -7,8 +7,7 @@ import           Arithmetic
 import           Network.GRPC.HighLevel.Generated
 
 clientConfig :: ClientConfig
-clientConfig = ClientConfig { clientServerHost = "localhost"
-                            , clientServerPort = 50051
+clientConfig = ClientConfig { clientServerEndpoint = "localhost:50051"
                             , clientArgs = []
                             , clientSSLConfig = Nothing
                             , clientAuthority = Nothing

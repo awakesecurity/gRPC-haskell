@@ -14,12 +14,12 @@ import qualified Data.Text.Lazy                   as TL
 import           Echo
 import           Network.GRPC.HighLevel.Client
 import           Network.GRPC.LowLevel
+import           Network.GRPC.LowLevel.Call       (Endpoint(..))
 import           Options.Generic
 import           Prelude                          hiding (FilePath)
 
 data Args = Args
-  { bind       :: Maybe ByteString <?> "grpc endpoint hostname (default \"localhost\")"
-  , port       :: Maybe Int        <?> "grpc endpoint port (default 50051)"
+  { endpoint   :: Maybe ByteString <?> "grpc endpoint (default \"localhost:50051\")"
   , payload    :: Maybe TL.Text    <?> "string to echo (default \"hullo!\")"
   } deriving (Generic, Show)
 instance ParseRecord Args
@@ -32,8 +32,7 @@ main = do
     rqt      = EchoRequest pay
     expected = EchoResponse pay
     cfg      = ClientConfig
-                 (Host . fromMaybe "localhost" . unHelpful $ bind)
-                 (Port . fromMaybe 50051       . unHelpful $ port)
+                 (Endpoint . fromMaybe "localhost:50051" . unHelpful $ endpoint)
                  [] Nothing Nothing
   withGRPC $ \g -> withClient g cfg $ \c -> do
     Echo{..} <- echoClient c

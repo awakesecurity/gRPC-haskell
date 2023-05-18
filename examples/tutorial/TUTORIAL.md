@@ -155,8 +155,7 @@ The client-side code generated for us is `arithmeticClient`, which takes a `Clie
 
 ```haskell
 clientConfig :: ClientConfig
-clientConfig = ClientConfig { clientServerHost = "localhost"
-                            , clientServerPort = 50051
+clientConfig = ClientConfig { clientServerEndpoint = "localhost:50051"
                             , clientArgs = []
                             , clientSSLConfig = Nothing
                             , clientAuthority = Nothing

@@ -16,7 +16,7 @@ import qualified Network.GRPC.Unsafe.Time                           as C
 import           Network.GRPC.LowLevel.Call
 import           Network.GRPC.LowLevel.Client                       (Client (..),
                                                                      NormalRequestResult (..),
-                                                                     clientEndpoint,
+                                                                     clientServerEndpoint,
                                                                      compileNormalRequestResults)
 import           Network.GRPC.LowLevel.CompletionQueue              (TimeoutSeconds)
 import qualified Network.GRPC.LowLevel.CompletionQueue.Unregistered as U
@@ -34,7 +34,7 @@ clientCreateCall Client{..} meth timeout = do
   let parentCall = C.Call nullPtr
   C.withDeadlineSeconds timeout $ \deadline -> do
     U.channelCreateCall clientChannel parentCall C.propagateDefaults
-      clientCQ meth (clientEndpoint clientConfig) deadline
+      clientCQ meth (clientServerEndpoint clientConfig) deadline
 
 withClientCall :: Client
                -> MethodName
