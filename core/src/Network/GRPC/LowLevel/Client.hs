@@ -56,8 +56,7 @@ data ClientSSLConfig = ClientSSLConfig
 
 -- | Configuration necessary to set up a client.
 
-data ClientConfig = ClientConfig {clientServerHost :: Host,
-                                  clientServerPort :: Port,
+data ClientConfig = ClientConfig {clientServerEndpoint :: Endpoint,
                                   clientArgs :: [C.Arg],
                                   -- ^ Optional arguments for setting up the
                                   -- channel on the client. Supplying an empty
@@ -74,9 +73,6 @@ data ClientConfig = ClientConfig {clientServerHost :: Host,
                                   -- pseudo-header will be set to the supplied value.
                                  }
 
-clientEndpoint :: ClientConfig -> Endpoint
-clientEndpoint ClientConfig{..} = endpoint clientServerHost clientServerPort
-
 addMetadataCreds :: C.ChannelCredentials
                     -> Maybe C.ClientMetadataCreate
                     -> IO C.ChannelCredentials
@@ -86,7 +82,7 @@ addMetadataCreds c (Just create) = do
   C.compositeChannelCredentialsCreate c callCreds C.reserved
 
 createChannel :: ClientConfig -> C.GrpcChannelArgs -> IO C.Channel
-createChannel conf@ClientConfig{..} chanargs =
+createChannel ClientConfig{..} chanargs =
   case clientSSLConfig of
     Nothing -> C.grpcInsecureChannelCreate e chanargs C.reserved
     Just (ClientSSLConfig rootCertPath Nothing plugin) ->
@@ -101,7 +97,7 @@ createChannel conf@ClientConfig{..} chanargs =
          C.withChannelCredentials rootCert privKey clientCert $ \creds -> do
            creds' <- addMetadataCreds creds plugin
            C.secureChannelCreate creds' e chanargs C.reserved
-  where (Endpoint e) = clientEndpoint conf
+  where (Endpoint e) = clientServerEndpoint
 
 createClient :: GRPC -> ClientConfig -> IO Client
 createClient grpc clientConfig =
@@ -138,7 +134,7 @@ clientRegisterMethod :: Client
                      -> MethodName
                      -> IO (C.CallHandle)
 clientRegisterMethod Client{..} meth = do
-  let host = fromMaybe (unEndpoint (clientEndpoint clientConfig)) (clientAuthority clientConfig)
+  let host = fromMaybe (unEndpoint (clientServerEndpoint clientConfig)) (clientAuthority clientConfig)
   C.grpcChannelRegisterCall clientChannel
                             (unMethodName meth)
                             host
@@ -149,7 +145,7 @@ clientRegisterMethodNormal :: Client
                            -> MethodName
                            -> IO (RegisteredMethod 'Normal)
 clientRegisterMethodNormal c meth = do
-  let e = clientEndpoint (clientConfig c)
+  let e = clientServerEndpoint (clientConfig c)
   h <- clientRegisterMethod c meth
   return $ RegisteredMethodNormal meth e h
 
@@ -158,7 +154,7 @@ clientRegisterMethodClientStreaming :: Client
                                     -> MethodName
                                     -> IO (RegisteredMethod 'ClientStreaming)
 clientRegisterMethodClientStreaming c meth = do
-  let e = clientEndpoint (clientConfig c)
+  let e = clientServerEndpoint (clientConfig c)
   h <- clientRegisterMethod c meth
   return $  RegisteredMethodClientStreaming meth e h
 
@@ -166,7 +162,7 @@ clientRegisterMethodServerStreaming :: Client
                                     -> MethodName
                                     -> IO (RegisteredMethod 'ServerStreaming)
 clientRegisterMethodServerStreaming c meth = do
-  let e = clientEndpoint (clientConfig c)
+  let e = clientServerEndpoint (clientConfig c)
   h <- clientRegisterMethod c meth
   return $ RegisteredMethodServerStreaming meth e h
 
@@ -175,7 +171,7 @@ clientRegisterMethodBiDiStreaming :: Client
                                   -> MethodName
                                   -> IO (RegisteredMethod 'BiDiStreaming)
 clientRegisterMethodBiDiStreaming c meth = do
-  let e = clientEndpoint (clientConfig c)
+  let e = clientServerEndpoint (clientConfig c)
   h <- clientRegisterMethod c meth
   return $ RegisteredMethodBiDiStreaming meth e h
 
