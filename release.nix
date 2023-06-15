@@ -68,20 +68,16 @@
 let
   overlay = pkgsNew: pkgsOld: {
 
-    grpc = pkgsNew.callPackage ./nix/grpc.nix { };
-
     haskellPackages = pkgsOld.haskellPackages.override {
       overrides = haskellPackagesNew: haskellPackagesOld: rec {
-        parameterized =
-          pkgsNew.haskell.lib.overrideCabal
-          haskellPackagesOld.parameterized
-          (old: {
-            broken = false;
-            patches = (old.patches or [ ]) ++ [ ./nix/parameterized.patch ];
-          });
+        dhall =
+          haskellPackagesNew.callPackage ./nix/dhall.nix { };
 
-        haskell-src =
-          haskellPackagesNew.callHackage "haskell-src" "1.0.3.1" {};
+        large-generics =
+          haskellPackagesNew.callPackage ./nix/large-generics.nix { };
+
+        large-records =
+          haskellPackagesNew.callPackage ./nix/large-records.nix { };
 
         proto3-wire =
           haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
@@ -89,6 +85,15 @@ let
         proto3-suite =
           pkgsNew.haskell.lib.dontCheck
             (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
+
+        range-set-list =
+          haskellPackagesNew.callPackage ./nix/range-set-list.nix { };
+
+        record-dot-preprocessor =
+          haskellPackagesNew.callPackage ./nix/record-dot-preprocessor.nix { };
+
+        word-compat =
+          haskellPackagesNew.callPackage ./nix/word-compat.nix { };
 
         grpc-haskell-core =
           pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
