@@ -120,11 +120,12 @@ let
                       pkgs.grpc-haskell-no-tests
                       # Include some additional packages in this custom ghc for
                       # running tests in the nix-shell environment.
+                      pkgs.tasty-hunit
                       pkgs.tasty-quickcheck
                       pkgs.turtle
                     ]);
 
-                  python = pkgsNew.python.withPackages (pkgs: [
+                  python = pkgsNew.python310.withPackages (pkgs: [
                     pkgs.grpcio-tools
                   ]);
 
@@ -141,6 +142,9 @@ let
 
                     # And likewise for c2hs
                     haskellPackagesNew.c2hs
+
+                    # For compile-proto-file
+                    haskellPackagesNew.proto3-suite
                   ];
 
                   patches =

@@ -33,22 +33,22 @@ import System.Random
 import Test.Tasty
 import Test.Tasty.HUnit ((@?=), assertFailure, testCase)
 
-testNormalCall client = testCase "Normal call" $
+testNormalCall SimpleService{..} = testCase "Normal call" $
   do randoms <- fromList <$> replicateM 1000 (randomRIO (1, 1000))
      let req = SimpleServiceRequest "NormalRequest" randoms
-     res <- simpleServicenormalCall client
+     res <- simpleServicenormalCall
               (ClientNormalRequest req 10 mempty)
      case res of
        ClientErrorResponse err -> assertFailure ("ClientErrorResponse: " <> show err)
-       ClientNormalResponse res _ _ stsCode _ ->
+       ClientNormalResponse SimpleServiceResponse{..} _ _ stsCode _ ->
          do stsCode @?= StatusOk
-            simpleServiceResponseResponse res @?= "NormalRequest"
-            simpleServiceResponseNum res @?= sum randoms
+            simpleServiceResponseResponse @?= "NormalRequest"
+            simpleServiceResponseNum @?= sum randoms
 
-testClientStreamingCall client = testCase "Client-streaming call" $
+testClientStreamingCall SimpleService{..} = testCase "Client-streaming call" $
   do iterationCount <- randomRIO (5, 50)
      v <- newEmptyMVar
-     res <- simpleServiceclientStreamingCall client . ClientWriterRequest 10 mempty $ \send ->
+     res <- simpleServiceclientStreamingCall . ClientWriterRequest 10 mempty $ \send ->
        do (finalName, totalSum) <-
              fmap ((mconcat *** (sum . mconcat)) . unzip) .
              replicateM iterationCount $
@@ -62,12 +62,12 @@ testClientStreamingCall client = testCase "Client-streaming call" $
      case res of
        ClientErrorResponse err -> assertFailure ("ClientErrorResponse: " <> show err)
        ClientWriterResponse Nothing _ _ _ _ -> assertFailure "No response received"
-       ClientWriterResponse (Just res) _ _ stsCode _ ->
+       ClientWriterResponse (Just SimpleServiceResponse{..}) _ _ stsCode _ ->
          do stsCode @?= StatusOk
-            simpleServiceResponseResponse res @?= finalName
-            simpleServiceResponseNum res @?= totalSum
+            simpleServiceResponseResponse @?= finalName
+            simpleServiceResponseNum @?= totalSum
 
-testServerStreamingCall client = testCase "Server-streaming call" $
+testServerStreamingCall SimpleService{..} = testCase "Server-streaming call" $
   do numCount <- randomRIO (50, 500)
      nums <- replicateM numCount randomIO
 
@@ -86,7 +86,7 @@ testServerStreamingCall client = testCase "Server-streaming call" $
                   do response @?= "Test"
                      num @?= expNum
                      checkResults nums recv
-     res <- simpleServiceserverStreamingCall client $
+     res <- simpleServiceserverStreamingCall $
             ClientReaderRequest (SimpleServiceRequest "Test" (fromList nums)) 10 mempty
               (\_ _ -> checkResults nums)
      case res of
@@ -94,7 +94,7 @@ testServerStreamingCall client = testCase "Server-streaming call" $
        ClientReaderResponse _ sts _ ->
          sts @?= StatusOk
 
-testBiDiStreamingCall client = testCase "Bidi-streaming call" $
+testBiDiStreamingCall SimpleService{..} = testCase "Bidi-streaming call" $
   do let handleRequests (0 :: Int) _ _ done = done >> pure ()
          handleRequests n recv send done =
            do numCount <- randomRIO (10, 1000)
@@ -113,7 +113,7 @@ testBiDiStreamingCall client = testCase "Bidi-streaming call" $
 
      iterations <- randomRIO (50, 500)
 
-     res <- simpleServicebiDiStreamingCall client $
+     res <- simpleServicebiDiStreamingCall $
             ClientBiDiRequest 10 mempty (\_ _ -> handleRequests iterations)
      case res of
        ClientErrorResponse err -> assertFailure ("ClientErrorResponse: " <> show err)
@@ -125,11 +125,11 @@ main = do
   threadDelay 10000000
   withGRPC $ \grpc ->
    withClient grpc (ClientConfig "localhost:50051" [] Nothing Nothing) $ \client ->
-    do service <- simpleServiceClient client
+    do service@SimpleService{..} <- simpleServiceClient client
 
        (defaultMain $ testGroup "Send gRPC requests"
           [ testNormalCall service
           , testClientStreamingCall service
           , testServerStreamingCall service
           , testBiDiStreamingCall service ]) `finally`
-         (simpleServicedone service (ClientNormalRequest SimpleServiceDone 10 mempty))
+         (simpleServicedone (ClientNormalRequest SimpleServiceDone 10 mempty))

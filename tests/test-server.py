@@ -3,12 +3,12 @@ import simple_pb2_grpc
 from uuid import uuid4
 from concurrent import futures
 import random
-import Queue
+import queue
 import grpc
 
-print "Starting python server"
+print("Starting python server")
 
-done_queue = Queue.Queue()
+done_queue = queue.Queue()
 
 class SimpleServiceServer(simple_pb2_grpc.SimpleServiceServicer):
     def done(self, request, context):
