@@ -7,6 +7,7 @@
 # The SHA256 will be printed as the last line of stdout.
 
 import (builtins.fetchTarball {
-    url    = "https://github.com/NixOS/nixpkgs/archive/dd9f73e7d34486b09b966738ace161e621a0480b.tar.gz";
-    sha256 = "0s674386v5b24a9fia26439gw9wsyhif85k2nzpxkp61293v3n3h";
+    # nixos-21.11 as on 2023-06-15
+    url    = "https://github.com/NixOS/nixpkgs/archive/eabc38219184cc3e04a974fe31857d8e0eac098d.tar.gz";
+    sha256 = "04ffwp2gzq0hhz7siskw6qh9ys8ragp7285vi1zh8xjksxn1msc5";
   })

@@ -8,9 +8,9 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3.0.2
+      - uses: actions/checkout@v3.5.3
         name: Checkout
-      - uses: cachix/install-nix-action@v20 
+      - uses: cachix/install-nix-action@v21
         name: Install Nix
       - uses: cachix/cachix-action@v12
         name: Set up Cachix
@@ -21,9 +21,9 @@ jobs:
   build-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3.0.2
+      - uses: actions/checkout@v3.5.3
         name: Checkout
-      - uses: cachix/install-nix-action@v20 
+      - uses: cachix/install-nix-action@v21
         name: Install Nix
       - uses: cachix/cachix-action@v12
         name: Set up Cachix
