@@ -220,10 +220,7 @@ void op_send_initial_metadata(grpc_op *op_array, size_t i,
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_SEND_INITIAL_METADATA;
   op->data.send_initial_metadata.count = n_metadata;
-  op->data.send_initial_metadata.metadata
-    = malloc(n_metadata*sizeof(grpc_metadata));
-  memcpy(op->data.send_initial_metadata.metadata, arr,
-         n_metadata*sizeof(grpc_metadata));
+  op->data.send_initial_metadata.metadata = arr;
   op->flags = 0;
   op->reserved = NULL;
 }
@@ -241,7 +238,7 @@ void op_send_message(grpc_op *op_array, size_t i,
                          grpc_byte_buffer *payload){
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_SEND_MESSAGE;
-  op->data.send_message.send_message = grpc_byte_buffer_copy(payload);
+  op->data.send_message.send_message = payload;
   op->flags = 0;
   op->reserved = NULL;
 }
@@ -298,10 +295,7 @@ void op_send_status_server(grpc_op *op_array, size_t i,
   grpc_op *op = op_array + i;
   op->op = GRPC_OP_SEND_STATUS_FROM_SERVER;
   op->data.send_status_from_server.trailing_metadata_count = metadata_count;
-  op->data.send_status_from_server.trailing_metadata
-    = malloc(sizeof(grpc_metadata)*metadata_count);
-  memcpy(op->data.send_status_from_server.trailing_metadata, m,
-         metadata_count*sizeof(grpc_metadata));
+  op->data.send_status_from_server.trailing_metadata = m;
   op->data.send_status_from_server.status = status;
   op->data.send_status_from_server.status_details = details;
   op->flags = 0;
