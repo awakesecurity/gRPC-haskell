@@ -70,6 +70,9 @@ let
 
     haskellPackages = pkgsOld.haskellPackages.override {
       overrides = haskellPackagesNew: haskellPackagesOld: rec {
+        data-diverse =
+          pkgsNew.haskell.lib.unmarkBroken haskellPackagesOld.data-diverse;
+
         dhall =
           haskellPackagesNew.callPackage ./nix/dhall.nix { };
 
