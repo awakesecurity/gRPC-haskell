@@ -71,7 +71,12 @@ let
     haskellPackages = pkgsOld.haskellPackages.override {
       overrides = haskellPackagesNew: haskellPackagesOld: rec {
         data-diverse =
-          pkgsNew.haskell.lib.unmarkBroken haskellPackagesOld.data-diverse;
+          pkgsNew.haskell.lib.overrideCabal haskellPackagesOld.data-diverse (old: {
+            broken = assert !old.broken ->
+              builtins.trace "remove the data-diverse override in release.nix" false;
+              false;
+            doCheck = false;
+          });
 
         dhall =
           haskellPackagesNew.callPackage ./nix/dhall.nix { };
