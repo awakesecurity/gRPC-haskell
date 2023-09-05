@@ -1,5 +1,6 @@
 dist
 .stack-work/
+stack*.lock
 *.pyc
 *.pyo
 *.o
