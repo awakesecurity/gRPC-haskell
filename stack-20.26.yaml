@@ -1,0 +1,13 @@
+resolver: lts-20.26
+
+packages:
+- '.'
+- 'core'
+
+extra-deps:
+- git: git@github.com:awakesecurity/proto3-suite.git
+  commit: 5beaf4ab206b5c82a2161dd0850e91b3663135ec
+- git: git@github.com:awakesecurity/proto3-wire.git
+  commit: ee6ca644eef86cc5f31da85fb48e10b20ab0e1a1
+- large-generics-0.2.1
+- large-records-0.4

@@ -23,7 +23,7 @@ library
   build-depends:
       base             >= 4.8    && < 5.0
     , clock            >= 0.6.0  && < 0.9
-    , bytestring       == 0.10.*
+    , bytestring       >= 0.10 && <0.12
     , stm              >= 2.4    && < 2.6
     , containers       >= 0.5    && < 0.7
     , managed          >= 1.0.0  && < 1.1
@@ -83,7 +83,7 @@ test-suite tests
   build-depends:
       base >=4.8 && <5.0
     , grpc-haskell-core
-    , bytestring ==0.10.*
+    , bytestring >= 0.10 && <0.12
     , unix
     , time
     , async >=2.1 && <2.3
