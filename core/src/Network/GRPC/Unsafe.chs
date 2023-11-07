@@ -189,14 +189,6 @@ castPeek p = do
    useAsCString* `ByteString', useAsCString* `ByteString', `CTimeSpecPtr',unReserved `Reserved'}
   -> `Call'#}
 
--- | Create a channel (on the client) to the server. The first argument is
--- host and port, e.g. @"localhost:50051"@. The gRPC docs say that most clients
--- are expected to pass a 'nullPtr' for the 'ChannelArgsPtr'. We currently don't
--- expose any functions for creating channel args, since they are entirely
--- undocumented.
-{#fun grpc_insecure_channel_create as ^
-  {useAsCString* `ByteString', `GrpcChannelArgs', unReserved `Reserved'} -> `Channel'#}
-
 {#fun grpc_channel_register_call as ^
   {`Channel', useAsCString* `ByteString',useAsCString* `ByteString',unReserved `Reserved'}
   -> `CallHandle' CallHandle#}
@@ -257,9 +249,6 @@ getPeerPeek cstr = do
 
 {#fun grpc_server_register_completion_queue as ^
   {`Server', `CompletionQueue', unReserved `Reserved'} -> `()'#}
-
-{#fun grpc_server_add_insecure_http2_port as ^
-  {`Server', useAsCString* `ByteString'} -> `Int'#}
 
 -- | Starts a server. To shut down the server, call these in order:
 -- 'grpcServerShutdownAndNotify', 'grpcServerCancelAllCalls',

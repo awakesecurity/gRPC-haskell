@@ -62,11 +62,8 @@ data ClientConfig = ClientConfig {clientServerEndpoint :: Endpoint,
                                   -- channel on the client. Supplying an empty
                                   -- list will cause the channel to use gRPC's
                                   -- default options.
-                                  clientSSLConfig :: Maybe ClientSSLConfig,
-                                  -- ^ If 'Nothing', the client will use an
-                                  -- insecure connection to the server.
-                                  -- Otherwise, will use the supplied config to
-                                  -- connect using SSL.
+                                  clientSSLConfig :: ClientSSLConfig,
+                                  -- Use the supplied config to connect using SSL.
                                   clientAuthority :: Maybe ByteString
                                   -- ^ If 'Nothing', the :authority pseudo-header will
                                   -- be the endpoint host. Otherwise, the :authority
@@ -84,19 +81,18 @@ addMetadataCreds c (Just create) = do
 createChannel :: ClientConfig -> C.GrpcChannelArgs -> IO C.Channel
 createChannel ClientConfig{..} chanargs =
   case clientSSLConfig of
-    Nothing -> C.grpcInsecureChannelCreate e chanargs C.reserved
-    Just (ClientSSLConfig rootCertPath Nothing plugin) ->
+    (ClientSSLConfig rootCertPath Nothing plugin) ->
       do rootCert <- mapM B.readFile rootCertPath
          C.withChannelCredentials rootCert Nothing Nothing $ \creds -> do
            creds' <- addMetadataCreds creds plugin
-           C.secureChannelCreate creds' e chanargs C.reserved
-    Just (ClientSSLConfig x (Just (ClientSSLKeyCertPair y z)) plugin) ->
+           C.grpcChannelCreate e creds' chanargs
+    (ClientSSLConfig x (Just (ClientSSLKeyCertPair y z)) plugin) ->
       do rootCert <- mapM B.readFile x
          privKey <- Just <$> B.readFile y
          clientCert <- Just <$> B.readFile z
          C.withChannelCredentials rootCert privKey clientCert $ \creds -> do
            creds' <- addMetadataCreds creds plugin
-           C.secureChannelCreate creds' e chanargs C.reserved
+           C.grpcChannelCreate e creds' chanargs
   where (Endpoint e) = clientServerEndpoint
 
 createClient :: GRPC -> ClientConfig -> IO Client

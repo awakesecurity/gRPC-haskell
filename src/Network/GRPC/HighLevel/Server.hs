@@ -222,7 +222,7 @@ data ServerOptions = ServerOptions
     -- ^ Optional custom suffix to add to the user agent string.
   , optInitialMetadata      :: MetadataMap
     -- ^ Metadata to send at the beginning of each call.
-  , optSSLConfig            :: Maybe ServerSSLConfig
+  , optSSLConfig            :: ServerSSLConfig
     -- ^ Security configuration.
   , optLogger               :: String -> IO ()
     -- ^ Logging function to use to log errors in handling calls.

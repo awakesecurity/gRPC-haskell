@@ -252,11 +252,11 @@ withServerCredentials a b c d = bracket (sslServerCredentialsCreate a b c d)
 
 -- * Creating Secure Clients/Servers
 
-{#fun server_add_secure_http2_port as ^
+{#fun grpc_server_add_http2_port as ^
   {`Server',useAsCString*  `ByteString', `ServerCredentials'} -> `Int'#}
 
-{#fun secure_channel_create as ^
-  {`ChannelCredentials',useAsCString* `ByteString', `GrpcChannelArgs', unReserved `Reserved'}
+{#fun grpc_channel_create as ^
+  {useAsCString* `ByteString', `ChannelCredentials', `GrpcChannelArgs'}
   -> `Channel'#}
 
 -- * Custom metadata processing -- server side
