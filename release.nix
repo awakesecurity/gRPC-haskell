@@ -159,6 +159,10 @@ let
                     (oldDerivation.patches or [ ]) ++ [ ./tests/tests.patch ];
 
                   postPatch = (oldDerivation.postPatch or "") + ''
+                    for bin in tests/*.sh; do
+                      chmod a+x "$bin"
+                    done
+
                     patchShebangs tests
                     substituteInPlace tests/simple-client.sh \
                       --replace @makeWrapper@ ${pkgsNew.makeWrapper} \
