@@ -62,8 +62,11 @@ data ClientConfig = ClientConfig {clientServerEndpoint :: Endpoint,
                                   -- channel on the client. Supplying an empty
                                   -- list will cause the channel to use gRPC's
                                   -- default options.
-                                  clientSSLConfig :: ClientSSLConfig,
-                                  -- Use the supplied config to connect using SSL.
+                                  clientSSLConfig :: Maybe ClientSSLConfig,
+                                  -- ^ If 'Nothing', the client will use an
+                                  -- insecure connection to the server.
+                                  -- Otherwise, will use the supplied config to
+                                  -- connect using SSL.
                                   clientAuthority :: Maybe ByteString
                                   -- ^ If 'Nothing', the :authority pseudo-header will
                                   -- be the endpoint host. Otherwise, the :authority
@@ -81,12 +84,15 @@ addMetadataCreds c (Just create) = do
 createChannel :: ClientConfig -> C.GrpcChannelArgs -> IO C.Channel
 createChannel ClientConfig{..} chanargs =
   case clientSSLConfig of
-    (ClientSSLConfig rootCertPath Nothing plugin) ->
+    Nothing ->
+      C.withInsecureChannelCredentials $ \creds ->
+        C.grpcChannelCreate e creds chanargs
+    Just (ClientSSLConfig rootCertPath Nothing plugin) ->
       do rootCert <- mapM B.readFile rootCertPath
          C.withChannelCredentials rootCert Nothing Nothing $ \creds -> do
            creds' <- addMetadataCreds creds plugin
            C.grpcChannelCreate e creds' chanargs
-    (ClientSSLConfig x (Just (ClientSSLKeyCertPair y z)) plugin) ->
+    Just (ClientSSLConfig x (Just (ClientSSLKeyCertPair y z)) plugin) ->
       do rootCert <- mapM B.readFile x
          privKey <- Just <$> B.readFile y
          clientCert <- Just <$> B.readFile z

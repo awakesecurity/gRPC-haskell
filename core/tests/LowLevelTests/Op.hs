@@ -76,17 +76,10 @@ withClientServerUnaryCall grpc f = do
           f (c, s, cc, sc)
 
 serverConf :: ServerConfig
-serverConf = ServerConfig "localhost" 50051 [("/foo")] [] [] [] [] serverSSLConf
-
-serverSSLConf :: ServerSSLConfig
-serverSSLConf = ServerSSLConfig Nothing "tests/ssl/localhost.key" "tests/ssl/localhost.crt" SslDontRequestClientCertificate Nothing
-
+serverConf = ServerConfig "localhost" 50051 [("/foo")] [] [] [] [] Nothing
 
 clientConf :: ClientConfig
-clientConf = ClientConfig "localhost:50051" [] clientSSLConf Nothing
-
-clientSSLConf :: ClientSSLConfig
-clientSSLConf = ClientSSLConfig (Just "tests/ssl/localhost.crt") Nothing Nothing
+clientConf = ClientConfig "localhost:50051" [] Nothing Nothing
 
 clientEmptySendOps :: [Op]
 clientEmptySendOps =

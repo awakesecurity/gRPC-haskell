@@ -132,23 +132,27 @@ data ServerConfig = ServerConfig
   , serverArgs        :: [C.Arg]
   -- ^ Optional arguments for setting up the channel on the server. Supplying an
   -- empty list will cause the channel to use gRPC's default options.
-  , sslConfig :: ServerSSLConfig
-  -- ^ Server-side SSL configuration.
+  , sslConfig :: Maybe ServerSSLConfig
+  -- ^ Server-side SSL configuration. If 'Nothing', the server will use an
+  -- insecure connection.
   }
 
 serverEndpoint :: ServerConfig -> Endpoint
 serverEndpoint ServerConfig{..} = endpoint host port
 
 addPort :: C.Server -> ServerConfig -> IO Int
-addPort server conf@ServerConfig{sslConfig=ServerSSLConfig{..}} = do
-  crc <- mapM B.readFile clientRootCert
-  spk <- B.readFile serverPrivateKey
-  sc <- B.readFile serverCert
-  C.withServerCredentials crc spk sc clientCertRequest $ \creds -> do
-    case customMetadataProcessor of
-      Just p -> C.setMetadataProcessor creds p
-      Nothing -> return ()
-    C.grpcServerAddHttp2Port server e creds
+addPort server conf@ServerConfig{..} =
+  case sslConfig of
+    Nothing -> C.withInsecureServerCredentials $ C.grpcServerAddHttp2Port server e
+    Just ServerSSLConfig{..} ->
+      do crc <- mapM B.readFile clientRootCert
+         spk <- B.readFile serverPrivateKey
+         sc <- B.readFile serverCert
+         C.withServerCredentials crc spk sc clientCertRequest $ \creds -> do
+           case customMetadataProcessor of
+             Just p -> C.setMetadataProcessor creds p
+             Nothing -> return ()
+           C.grpcServerAddHttp2Port server e creds
   where e = unEndpoint $ serverEndpoint conf
 
 startServer :: GRPC -> ServerConfig -> IO Server

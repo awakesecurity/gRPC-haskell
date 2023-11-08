@@ -156,19 +156,32 @@ testPayload =
         return ("reply test", dummyMeta, StatusOk, "details string")
       r @?= Right ()
 
-
 testSSL :: TestTree
 testSSL =
   csTest' "request/response using SSL" client server
   where
-    client = TestClient stdClientConf $ \c -> do
+    clientConf = stdClientConf
+                 {clientSSLConfig = Just (ClientSSLConfig
+                                            (Just "tests/ssl/localhost.crt")
+                                            Nothing
+                                            Nothing)
+                }
+    client = TestClient clientConf $ \c -> do
       rm <- clientRegisterMethodNormal c "/foo"
       clientRequest c rm 10 "hi" mempty >>= do
         checkReqRslt $ \NormalRequestResult{..} -> do
           rspCode @?= StatusOk
           rspBody @?= "reply test"
 
-    server = TestServer defServerConf $ \s -> do
+    serverConf' = defServerConf
+                  { sslConfig = Just (ServerSSLConfig
+                                        Nothing
+                                        "tests/ssl/localhost.key"
+                                        "tests/ssl/localhost.crt"
+                                        SslDontRequestClientCertificate
+                                        Nothing)
+                  }
+    server = TestServer serverConf' $ \s -> do
       r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{} body -> do
         body @?= "hi"
         return ("reply test", mempty, StatusOk, "")
@@ -185,10 +198,10 @@ testServerAuthProcessorCancel =
   csTest' "request rejection by auth processor" client server
   where
     clientConf = stdClientConf
-                 {clientSSLConfig = ClientSSLConfig
-                                      (Just "tests/ssl/localhost.crt")
-                                      Nothing
-                                      Nothing
+                 {clientSSLConfig = Just (ClientSSLConfig
+                                            (Just "tests/ssl/localhost.crt")
+                                            Nothing
+                                            Nothing)
                 }
     client = TestClient clientConf $ \c -> do
       rm <- clientRegisterMethodNormal c "/foo"
@@ -207,8 +220,12 @@ testServerAuthProcessorCancel =
       return $ AuthProcessorResult mempty mempty status details
 
     serverConf' = defServerConf
-                  { sslConfig = defServerSSLConf
-                    { customMetadataProcessor = serverProcessor }
+                  { sslConfig = Just (ServerSSLConfig
+                                        Nothing
+                                        "tests/ssl/localhost.key"
+                                        "tests/ssl/localhost.crt"
+                                        SslDontRequestClientCertificate
+                                        serverProcessor)
                   }
     server = TestServer serverConf' $ \s -> do
       r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{..} _body -> do
@@ -232,10 +249,10 @@ testAuthMetadataTransfer =
       addedProp @?= Just (AuthProperty "foo1" "bar1")
       return $ ClientMetadataCreateResult [("foo","bar")] StatusOk ""
     clientConf = stdClientConf
-                 {clientSSLConfig = ClientSSLConfig
-                                       (Just "tests/ssl/localhost.crt")
-                                       Nothing
-                                       (Just plugin)
+                 {clientSSLConfig = Just (ClientSSLConfig
+                                            (Just "tests/ssl/localhost.crt")
+                                            Nothing
+                                            (Just plugin))
                 }
     client = TestClient clientConf $ \c -> do
       rm <- clientRegisterMethodNormal c "/foo"
@@ -256,12 +273,12 @@ testAuthMetadataTransfer =
       return $ AuthProcessorResult mempty mempty StatusOk ""
 
     serverConf' = defServerConf
-                  { sslConfig = ServerSSLConfig
-                                  Nothing
-                                  "tests/ssl/localhost.key"
-                                  "tests/ssl/localhost.crt"
-                                  SslDontRequestClientCertificate
-                                  serverProcessor
+                  { sslConfig = Just (ServerSSLConfig
+                                        Nothing
+                                        "tests/ssl/localhost.key"
+                                        "tests/ssl/localhost.crt"
+                                        SslDontRequestClientCertificate
+                                        serverProcessor)
                   }
     server = TestServer serverConf' $ \s -> do
       r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{} body -> do
@@ -285,10 +302,10 @@ testAuthMetadataPropagate = testCase "auth metadata inherited by children" $ do
     clientPlugin _ =
       return $ ClientMetadataCreateResult [("foo","bar")] StatusOk ""
     clientConf = stdClientConf
-                 {clientSSLConfig = ClientSSLConfig
-                                      (Just "tests/ssl/localhost.crt")
-                                      Nothing
-                                      (Just clientPlugin)
+                 {clientSSLConfig = Just (ClientSSLConfig
+                                            (Just "tests/ssl/localhost.crt")
+                                            Nothing
+                                            (Just clientPlugin))
                 }
     client = do
       threadDelaySecs 3
@@ -305,12 +322,12 @@ testAuthMetadataPropagate = testCase "auth metadata inherited by children" $ do
       return $ AuthProcessorResult mempty mempty StatusOk ""
 
     server1ServerConf = defServerConf
-                 {sslConfig = ServerSSLConfig
-                                Nothing
-                                "tests/ssl/localhost.key"
-                                "tests/ssl/localhost.crt"
-                                SslDontRequestClientCertificate
-                                (Just server1ServerPlugin),
+                 {sslConfig = Just (ServerSSLConfig
+                                      Nothing
+                                      "tests/ssl/localhost.key"
+                                      "tests/ssl/localhost.crt"
+                                      SslDontRequestClientCertificate
+                                      (Just server1ServerPlugin)),
                   methodsToRegisterNormal = ["/foo"]
                 }
 
@@ -318,10 +335,10 @@ testAuthMetadataPropagate = testCase "auth metadata inherited by children" $ do
       return $ ClientMetadataCreateResult [("foo1","bar1")] StatusOk ""
 
     server1ClientConf = stdClientConf
-                 {clientSSLConfig = ClientSSLConfig
-                                       (Just "tests/ssl/localhost.crt")
-                                       Nothing
-                                       (Just server1ClientPlugin),
+                 {clientSSLConfig = Just (ClientSSLConfig
+                                            (Just "tests/ssl/localhost.crt")
+                                            Nothing
+                                            (Just server1ClientPlugin)),
                   clientServerEndpoint = "localhost:50052"
                 }
 
@@ -347,12 +364,12 @@ testAuthMetadataPropagate = testCase "auth metadata inherited by children" $ do
       return $ AuthProcessorResult mempty mempty StatusOk ""
 
     server2ServerConf = defServerConf
-                 {sslConfig = ServerSSLConfig
-                                Nothing
-                                "tests/ssl/localhost.key"
-                                "tests/ssl/localhost.crt"
-                                SslDontRequestClientCertificate
-                                (Just server2ServerPlugin),
+                 {sslConfig = Just (ServerSSLConfig
+                                      Nothing
+                                      "tests/ssl/localhost.key"
+                                      "tests/ssl/localhost.crt"
+                                      SslDontRequestClientCertificate
+                                      (Just server2ServerPlugin)),
                   methodsToRegisterNormal = ["/foo"],
                   port = 50052
                 }
@@ -656,7 +673,7 @@ testCustomUserAgent =
   where
     clientArgs = [UserAgentPrefix "prefix!", UserAgentSuffix "suffix!"]
     client =
-      TestClient (ClientConfig "localhost:50051" clientArgs defClientSSLConf Nothing) $
+      TestClient (ClientConfig "localhost:50051" clientArgs Nothing Nothing) $
         \c -> do rm <- clientRegisterMethodNormal c "/foo"
                  void $ clientRequest c rm 4 "" mempty
     server = TestServer (serverConf (["/foo"],[],[],[])) $ \s -> do
@@ -679,7 +696,7 @@ testClientCompression =
       TestClient (ClientConfig
                    "localhost:50051"
                    [CompressionAlgArg GrpcCompressDeflate]
-                   defClientSSLConf
+                   Nothing
                    Nothing) $ \c -> do
         rm <- clientRegisterMethodNormal c "/foo"
         void $ clientRequest c rm 1 "hello" mempty
@@ -696,7 +713,7 @@ testClientServerCompression =
   where
     cconf = ClientConfig "localhost:50051"
                          [CompressionAlgArg GrpcCompressDeflate]
-                         defClientSSLConf
+                         Nothing
                          Nothing
     client = TestClient cconf $ \c -> do
       rm <- clientRegisterMethodNormal c "/foo"
@@ -712,7 +729,7 @@ testClientServerCompression =
                          50051
                          ["/foo"] [] [] []
                          [CompressionAlgArg GrpcCompressDeflate]
-                         defServerSSLConf
+                         Nothing
     server = TestServer sconf $ \s -> do
       let rm = head (normalMethods s)
       serverHandleNormalCall s rm dummyMeta $ \sc -> do
@@ -726,7 +743,7 @@ testClientServerCompressionLvl =
   where
     cconf = ClientConfig "localhost:50051"
                          [CompressionLevelArg GrpcCompressLevelHigh]
-                         defClientSSLConf
+                         Nothing
                          Nothing
     client = TestClient cconf $ \c -> do
       rm <- clientRegisterMethodNormal c "/foo"
@@ -742,7 +759,7 @@ testClientServerCompressionLvl =
                          50051
                          ["/foo"] [] [] []
                          [CompressionLevelArg GrpcCompressLevelLow]
-                         defServerSSLConf
+                         Nothing
     server = TestServer sconf $ \s -> do
       let rm = head (normalMethods s)
       serverHandleNormalCall s rm dummyMeta $ \sc -> do
@@ -759,7 +776,7 @@ testClientMaxReceiveMessageLengthChannelArg = do
   where
     -- The server always sends a 4-byte payload
     pay    = "four"
-    server = TestServer (ServerConfig "localhost" 50051 ["/foo"] [] [] [] [] defServerSSLConf) $ \s -> do
+    server = TestServer (ServerConfig "localhost" 50051 ["/foo"] [] [] [] [] Nothing) $ \s -> do
       let rm = head (normalMethods s)
       void $ serverHandleNormalCall s rm mempty $ \sc -> do
         payload sc @?= pay
@@ -769,7 +786,7 @@ testClientMaxReceiveMessageLengthChannelArg = do
       rm <- clientRegisterMethodNormal c "/foo"
       clientRequest c rm 1 pay mempty >>= k
       where
-        conf = ClientConfig "localhost:50051" [MaxReceiveMessageLength n] defClientSSLConf Nothing
+        conf = ClientConfig "localhost:50051" [MaxReceiveMessageLength n] Nothing Nothing
 
     -- Expect success when the max recv payload size is set to 4 bytes, and we
     -- are sent 4.
@@ -867,10 +884,7 @@ stdTestClient :: (Client -> IO ()) -> TestClient
 stdTestClient = TestClient stdClientConf
 
 stdClientConf :: ClientConfig
-stdClientConf = ClientConfig "localhost:50051" [] defClientSSLConf Nothing
-
-defClientSSLConf :: ClientSSLConfig
-defClientSSLConf = ClientSSLConfig (Just "tests/ssl/localhost.crt") Nothing Nothing
+stdClientConf = ClientConfig "localhost:50051" [] Nothing Nothing
 
 data TestServer = TestServer ServerConfig (Server -> IO ())
 
@@ -879,10 +893,7 @@ runTestServer (TestServer conf f) =
   runManaged $ mgdGRPC >>= mgdServer conf >>= liftIO . f
 
 defServerConf :: ServerConfig
-defServerConf = ServerConfig "localhost" 50051 [] [] [] [] [] defServerSSLConf
-
-defServerSSLConf :: ServerSSLConfig
-defServerSSLConf = ServerSSLConfig Nothing "tests/ssl/localhost.key" "tests/ssl/localhost.crt" SslDontRequestClientCertificate Nothing
+defServerConf = ServerConfig "localhost" 50051 [] [] [] [] [] Nothing
 
 serverConf :: ([MethodName],[MethodName],[MethodName],[MethodName])
               -> ServerConfig
