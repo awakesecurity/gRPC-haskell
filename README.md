@@ -7,7 +7,7 @@ have extended and released under the same [`LICENSE`](./LICENSE)
 Installation
 ------------
 
-**The current version of this library requires gRPC version 1.42.0. Newer versions may work but have not been tested.**
+**The current version of this library requires gRPC version 1.45.0. Newer versions may work but have not been tested.**
 
 Usage
 -----

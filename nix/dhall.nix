@@ -20,6 +20,7 @@ mkDerivation {
   sha256 = "f3e95cfa0ef1a89d5ca29591b7925db51551150a27f3fd02717ce69699e8e03c";
   revision = "2";
   editedCabalFile = "02z0jmzzp20yj46iz6i384xwc6k2anxb33smvc4yhpmhqjs0aq8a";
+  jailbreak = true;
   isLibrary = true;
   isExecutable = true;
   enableSeparateDataOutput = true;

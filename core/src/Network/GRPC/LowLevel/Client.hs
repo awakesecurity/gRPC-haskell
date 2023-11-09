@@ -84,19 +84,21 @@ addMetadataCreds c (Just create) = do
 createChannel :: ClientConfig -> C.GrpcChannelArgs -> IO C.Channel
 createChannel ClientConfig{..} chanargs =
   case clientSSLConfig of
-    Nothing -> C.grpcInsecureChannelCreate e chanargs C.reserved
+    Nothing ->
+      C.withInsecureChannelCredentials $ \creds ->
+        C.grpcChannelCreate e creds chanargs
     Just (ClientSSLConfig rootCertPath Nothing plugin) ->
       do rootCert <- mapM B.readFile rootCertPath
          C.withChannelCredentials rootCert Nothing Nothing $ \creds -> do
            creds' <- addMetadataCreds creds plugin
-           C.secureChannelCreate creds' e chanargs C.reserved
+           C.grpcChannelCreate e creds' chanargs
     Just (ClientSSLConfig x (Just (ClientSSLKeyCertPair y z)) plugin) ->
       do rootCert <- mapM B.readFile x
          privKey <- Just <$> B.readFile y
          clientCert <- Just <$> B.readFile z
          C.withChannelCredentials rootCert privKey clientCert $ \creds -> do
            creds' <- addMetadataCreds creds plugin
-           C.secureChannelCreate creds' e chanargs C.reserved
+           C.grpcChannelCreate e creds' chanargs
   where (Endpoint e) = clientServerEndpoint
 
 createClient :: GRPC -> ClientConfig -> IO Client

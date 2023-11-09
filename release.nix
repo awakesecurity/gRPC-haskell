@@ -70,6 +70,14 @@ let
 
     haskellPackages = pkgsOld.haskellPackages.override {
       overrides = haskellPackagesNew: haskellPackagesOld: rec {
+        data-diverse =
+          pkgsNew.haskell.lib.overrideCabal haskellPackagesOld.data-diverse (old: {
+            broken = assert !old.broken ->
+              builtins.trace "remove the data-diverse override in release.nix" false;
+              false;
+            doCheck = false;
+          });
+
         dhall =
           haskellPackagesNew.callPackage ./nix/dhall.nix { };
 
@@ -151,6 +159,10 @@ let
                     (oldDerivation.patches or [ ]) ++ [ ./tests/tests.patch ];
 
                   postPatch = (oldDerivation.postPatch or "") + ''
+                    for bin in tests/*.sh; do
+                      chmod a+x "$bin"
+                    done
+
                     patchShebangs tests
                     substituteInPlace tests/simple-client.sh \
                       --replace @makeWrapper@ ${pkgsNew.makeWrapper} \
