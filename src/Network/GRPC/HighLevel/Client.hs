@@ -1,63 +1,71 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE KindSignatures      #-}
-{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Network.GRPC.HighLevel.Client
-  ( ClientError(..)
-  , ClientRegisterable(..)
-  , ClientRequest(..)
-  , ClientResult(..)
-  , GRPCMethodType(..)
-  , MetadataMap(..)
-  , RegisteredMethod
-  , ServiceClient
-  , StatusCode(..)
-  , StatusDetails(..)
-  , StreamRecv
-  , StreamSend
-  , TimeoutSeconds
-  , WritesDone
-
-  , LL.Client
-  , LL.ClientConfig(..)
-  , LL.ClientSSLConfig(..)
-  , LL.ClientSSLKeyCertPair(..)
-  , LL.Host(..)
-  , LL.Port(..)
-
-  , clientRequest
+module Network.GRPC.HighLevel.Client (
+  ClientError (..),
+  ClientRegisterable (..),
+  ClientRequest (..),
+  ClientResult (..),
+  GRPCMethodType (..),
+  MetadataMap (..),
+  RegisteredMethod,
+  ServiceClient,
+  StatusCode (..),
+  StatusDetails (..),
+  StreamRecv,
+  StreamSend,
+  TimeoutSeconds,
+  WritesDone,
+  LL.Client,
+  LL.ClientConfig (..),
+  LL.ClientSSLConfig (..),
+  LL.ClientSSLKeyCertPair (..),
+  LL.Host (..),
+  LL.Port (..),
+  clientRequest,
 
   -- * Client utility functions
-  , acquireClient
-  , simplifyServerStreaming
-  , simplifyUnary
-  )
-
+  acquireClient,
+  simplifyServerStreaming,
+  simplifyUnary,
+)
 where
 
-import           Control.Monad.Managed                 (Managed, liftIO,
-                                                        managed)
-import qualified Data.ByteString.Lazy                  as BL
-import           Network.GRPC.HighLevel.Server         (convertRecv,
-                                                        convertSend)
-import           Network.GRPC.LowLevel                 (GRPCIOError (..),
-                                                        GRPCMethodType (..),
-                                                        MetadataMap (..),
-                                                        StatusCode (..),
-                                                        StatusDetails (..),
-                                                        StreamRecv, StreamSend)
-import qualified Network.GRPC.LowLevel                 as LL
-import           Network.GRPC.LowLevel.CompletionQueue (TimeoutSeconds)
-import           Network.GRPC.LowLevel.Op              (WritesDone)
-import           Proto3.Suite                          (Message, fromByteString,
-                                                        toLazyByteString)
-import           Proto3.Wire.Decode                    (ParseError)
+import Control.Monad.Managed (
+  Managed,
+  liftIO,
+  managed,
+ )
+import qualified Data.ByteString.Lazy as BL
+import Network.GRPC.HighLevel.Server (
+  convertRecv,
+  convertSend,
+ )
+import Network.GRPC.LowLevel (
+  GRPCIOError (..),
+  GRPCMethodType (..),
+  MetadataMap (..),
+  StatusCode (..),
+  StatusDetails (..),
+  StreamRecv,
+  StreamSend,
+ )
+import qualified Network.GRPC.LowLevel as LL
+import Network.GRPC.LowLevel.CompletionQueue (TimeoutSeconds)
+import Network.GRPC.LowLevel.Op (WritesDone)
+import Proto3.Suite (
+  Message,
+  fromByteString,
+  toLazyByteString,
+ )
+import Proto3.Wire.Decode (ParseError)
 
 newtype RegisteredMethod (mt :: GRPCMethodType) request response
   = RegisteredMethod (LL.RegisteredMethod mt)
-  deriving Show
+  deriving (Show)
 
 type ServiceClient service = service ClientRequest ClientResult
 
@@ -79,13 +87,14 @@ data ClientResult (streamType :: GRPCMethodType) response where
   ClientNormalResponse :: response -> MetadataMap -> MetadataMap -> StatusCode -> StatusDetails -> ClientResult 'Normal response
   ClientWriterResponse :: Maybe response -> MetadataMap -> MetadataMap -> StatusCode -> StatusDetails -> ClientResult 'ClientStreaming response
   ClientReaderResponse :: MetadataMap -> StatusCode -> StatusDetails -> ClientResult 'ServerStreaming response
-  ClientBiDiResponse   :: MetadataMap -> StatusCode -> StatusDetails -> ClientResult 'BiDiStreaming response
-  ClientErrorResponse  :: ClientError -> ClientResult streamType response
+  ClientBiDiResponse :: MetadataMap -> StatusCode -> StatusDetails -> ClientResult 'BiDiStreaming response
+  ClientErrorResponse :: ClientError -> ClientResult streamType response
 
 class ClientRegisterable (methodType :: GRPCMethodType) where
-  clientRegisterMethod :: LL.Client
-                       -> LL.MethodName
-                       -> IO (RegisteredMethod methodType request response)
+  clientRegisterMethod ::
+    LL.Client ->
+    LL.MethodName ->
+    IO (RegisteredMethod methodType request response)
 
 instance ClientRegisterable 'Normal where
   clientRegisterMethod client methodName =
@@ -103,11 +112,14 @@ instance ClientRegisterable 'BiDiStreaming where
   clientRegisterMethod client methodName =
     RegisteredMethod <$> LL.clientRegisterMethodBiDiStreaming client methodName
 
-clientRequest :: (Message request, Message response) =>
-                 LL.Client -> RegisteredMethod streamType request response
-              -> ClientRequest streamType request response -> IO (ClientResult streamType response)
+clientRequest ::
+  (Message request, Message response) =>
+  LL.Client ->
+  RegisteredMethod streamType request response ->
+  ClientRequest streamType request response ->
+  IO (ClientResult streamType response)
 clientRequest client (RegisteredMethod method) (ClientNormalRequest req timeout meta) =
-    mkResponse <$> LL.clientRequest client method timeout (BL.toStrict (toLazyByteString req)) meta
+  mkResponse <$> LL.clientRequest client method timeout (BL.toStrict (toLazyByteString req)) meta
   where
     mkResponse (Left ioError_) = ClientErrorResponse (ClientIOError ioError_)
     mkResponse (Right rsp) =
@@ -116,7 +128,7 @@ clientRequest client (RegisteredMethod method) (ClientNormalRequest req timeout 
         Right parsedRsp ->
           ClientNormalResponse parsedRsp (LL.initMD rsp) (LL.trailMD rsp) (LL.rspCode rsp) (LL.details rsp)
 clientRequest client (RegisteredMethod method) (ClientWriterRequest timeout meta handler) =
-    mkResponse <$> LL.clientWriter client method timeout meta (handler . convertSend)
+  mkResponse <$> LL.clientWriter client method timeout meta (handler . convertSend)
   where
     mkResponse (Left ioError_) = ClientErrorResponse (ClientIOError ioError_)
     mkResponse (Right (rsp_, initMD_, trailMD_, rspCode_, details_)) =
@@ -125,24 +137,24 @@ clientRequest client (RegisteredMethod method) (ClientWriterRequest timeout meta
         Right parsedRsp ->
           ClientWriterResponse parsedRsp initMD_ trailMD_ rspCode_ details_
 clientRequest client (RegisteredMethod method) (ClientReaderRequest req timeout meta handler) =
-    mkResponse <$> LL.clientReader client method timeout (BL.toStrict (toLazyByteString req)) meta (\cc m recv -> handler cc m (convertRecv recv))
+  mkResponse <$> LL.clientReader client method timeout (BL.toStrict (toLazyByteString req)) meta (\cc m recv -> handler cc m (convertRecv recv))
   where
     mkResponse (Left ioError_) = ClientErrorResponse (ClientIOError ioError_)
     mkResponse (Right (meta_, rspCode_, details_)) =
       ClientReaderResponse meta_ rspCode_ details_
 clientRequest client (RegisteredMethod method) (ClientBiDiRequest timeout meta handler) =
-    mkResponse <$> LL.clientRW client method timeout meta (\cc _m recv send writesDone -> handler cc meta (convertRecv recv) (convertSend send) writesDone)
+  mkResponse <$> LL.clientRW client method timeout meta (\cc _m recv send writesDone -> handler cc meta (convertRecv recv) (convertSend send) writesDone)
   where
     mkResponse (Left ioError_) = ClientErrorResponse (ClientIOError ioError_)
     mkResponse (Right (meta_, rspCode_, details_)) =
       ClientBiDiResponse meta_ rspCode_ details_
 
-acquireClient
-  :: LL.ClientConfig
-     -- ^ The client configuration (host, port, SSL settings, etc)
-  -> (LL.Client -> IO (ServiceClient service))
-     -- ^ The client implementation (typically generated)
-  -> Managed (ServiceClient service)
+acquireClient ::
+  -- | The client configuration (host, port, SSL settings, etc)
+  LL.ClientConfig ->
+  -- | The client implementation (typically generated)
+  (LL.Client -> IO (ServiceClient service)) ->
+  Managed (ServiceClient service)
 acquireClient cfg impl = do
   g <- managed LL.withGRPC
   c <- managed (LL.withClient g cfg)
@@ -151,67 +163,64 @@ acquireClient cfg impl = do
 -- | A utility for simplifying server-streaming gRPC client requests; you can
 -- use this to avoid 'ClientRequest' and 'ClientResult' pattern-matching
 -- boilerplate at call sites.
-simplifyServerStreaming :: TimeoutSeconds
-                           -- ^ RPC call timeout, in seconds
-                        -> MetadataMap
-                           -- ^ RPC call metadata
-                        -> (ClientError -> IO StatusDetails)
-                           -- ^ Handler for client errors
-                        -> (StatusCode -> StatusDetails -> IO StatusDetails)
-                           -- ^ Handler for non-StatusOk response
-                        -> (ClientRequest 'ServerStreaming request response
-                            -> IO (ClientResult 'ServerStreaming response))
-                           -- ^ Endpoint implementation (typically generated by grpc-haskell)
-                        -> request
-                           -- ^ Request payload
-                        -> (LL.ClientCall -> MetadataMap -> StreamRecv response -> IO ())
-                           -- ^ Stream handler; note that the 'StreamRecv'
-                           -- action must be called repeatedly in order to
-                           -- consume the stream
-                        -> IO StatusDetails
+simplifyServerStreaming ::
+  -- | RPC call timeout, in seconds
+  TimeoutSeconds ->
+  -- | RPC call metadata
+  MetadataMap ->
+  -- | Handler for client errors
+  (ClientError -> IO StatusDetails) ->
+  -- | Handler for non-StatusOk response
+  (StatusCode -> StatusDetails -> IO StatusDetails) ->
+  -- | Endpoint implementation (typically generated by grpc-haskell)
+  ( ClientRequest 'ServerStreaming request response ->
+    IO (ClientResult 'ServerStreaming response)
+  ) ->
+  -- | Request payload
+  request ->
+  -- | Stream handler; note that the 'StreamRecv'
+  -- action must be called repeatedly in order to
+  -- consume the stream
+  (LL.ClientCall -> MetadataMap -> StreamRecv response -> IO ()) ->
+  IO StatusDetails
 simplifyServerStreaming timeout meta clientError nonStatusOkError f x handler = do
-
   let request = ClientReaderRequest x timeout meta handler
 
   response <- f request
 
   case response of
-    ClientReaderResponse _ StatusOk details
-      -> pure details
-
-    ClientReaderResponse _ statusCode details
-      -> nonStatusOkError statusCode details
-
-    ClientErrorResponse err
-      -> clientError err
+    ClientReaderResponse _ StatusOk details ->
+      pure details
+    ClientReaderResponse _ statusCode details ->
+      nonStatusOkError statusCode details
+    ClientErrorResponse err ->
+      clientError err
 
 -- | A utility for simplifying unary gRPC client requests; you can use this to
 -- avoid 'ClientRequest' and 'ClientResult' pattern-matching boilerplate at
 -- call sites.
-simplifyUnary :: TimeoutSeconds
-                -- ^ RPC call timeout, in seconds
-              -> MetadataMap
-                 -- ^ RPC call metadata
-              -> (ClientError -> IO (response, StatusDetails))
-                 -- ^ Handler for client errors
-              -> (response -> StatusCode -> StatusDetails -> IO (response, StatusDetails))
-                 -- ^ Handler for non-StatusOK responses
-              -> (ClientRequest 'Normal request response -> IO (ClientResult 'Normal response))
-                 -- ^ Endpoint implementation (typically generated by grpc-haskell)
-              -> (request -> IO (response, StatusDetails))
-                 -- ^ The simplified happy-path (StatusOk) unary call action
+simplifyUnary ::
+  -- | RPC call timeout, in seconds
+  TimeoutSeconds ->
+  -- | RPC call metadata
+  MetadataMap ->
+  -- | Handler for client errors
+  (ClientError -> IO (response, StatusDetails)) ->
+  -- | Handler for non-StatusOK responses
+  (response -> StatusCode -> StatusDetails -> IO (response, StatusDetails)) ->
+  -- | Endpoint implementation (typically generated by grpc-haskell)
+  (ClientRequest 'Normal request response -> IO (ClientResult 'Normal response)) ->
+  -- | The simplified happy-path (StatusOk) unary call action
+  (request -> IO (response, StatusDetails))
 simplifyUnary timeout meta clientError nonStatusOkError f x = do
-
   let request = ClientNormalRequest x timeout meta
 
   response <- f request
 
   case response of
-    ClientNormalResponse y _ _ StatusOk details
-      -> pure (y, details)
-
-    ClientNormalResponse y _ _ code details
-      -> nonStatusOkError y code details
-
-    ClientErrorResponse err
-      -> clientError err
+    ClientNormalResponse y _ _ StatusOk details ->
+      pure (y, details)
+    ClientNormalResponse y _ _ code details ->
+      nonStatusOkError y code details
+    ClientErrorResponse err ->
+      clientError err

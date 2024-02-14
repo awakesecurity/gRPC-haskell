@@ -27,7 +27,7 @@ testCancelFromServer =
   testCase "Client/Server - client receives server cancellation" $
     runSerialTest $ \grpc ->
       withClientServerUnaryCall grpc $
-        \(Client {..}, Server {}, ClientCall {..}, sc@ServerCall {}) -> do
+        \(Client{..}, Server{}, ClientCall{..}, sc@ServerCall{}) -> do
           serverCallCancel sc StatusPermissionDenied "TestStatus"
           clientRes <- runOps unsafeCC clientCQ clientRecvOps
           case clientRes of
@@ -45,10 +45,10 @@ runSerialTest f =
 
 withClientServerUnaryCall ::
   GRPC ->
-  ( ( Client,
-      Server,
-      ClientCall,
-      ServerCall ByteString
+  ( ( Client
+    , Server
+    , ClientCall
+    , ServerCall ByteString
     ) ->
     IO (Either GRPCIOError a)
   ) ->
@@ -83,21 +83,21 @@ clientConf = ClientConfig "localhost:50051" [] Nothing Nothing
 
 clientEmptySendOps :: [Op]
 clientEmptySendOps =
-  [ OpSendInitialMetadata mempty,
-    OpSendMessage "",
-    OpSendCloseFromClient
+  [ OpSendInitialMetadata mempty
+  , OpSendMessage ""
+  , OpSendCloseFromClient
   ]
 
 clientRecvOps :: [Op]
 clientRecvOps =
-  [ OpRecvInitialMetadata,
-    OpRecvMessage,
-    OpRecvStatusOnClient
+  [ OpRecvInitialMetadata
+  , OpRecvMessage
+  , OpRecvStatusOnClient
   ]
 
 serverEmptyRecvOps :: [Op]
 serverEmptyRecvOps =
-  [ OpSendInitialMetadata mempty,
-    OpRecvMessage,
-    OpRecvCloseOnServer
+  [ OpSendInitialMetadata mempty
+  , OpRecvMessage
+  , OpRecvCloseOnServer
   ]
