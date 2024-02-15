@@ -1,47 +1,53 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RankNTypes          #-}
-{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Network.GRPC.HighLevel.Server.Unregistered where
 
-import           Control.Arrow
-import           Control.Concurrent.MVar                   (newEmptyMVar,
-                                                            putMVar,
-                                                            takeMVar)
-import qualified Control.Exception                         as CE
-import           Control.Monad
-import           Data.Foldable                             (find)
-import           Network.GRPC.HighLevel.Server
-import           Network.GRPC.LowLevel
-import           Network.GRPC.LowLevel.Server              (forkServer)
-import qualified Network.GRPC.LowLevel.Call.Unregistered   as U
+import Control.Arrow
+import Control.Concurrent.MVar (
+  newEmptyMVar,
+  putMVar,
+  takeMVar,
+ )
+import qualified Control.Exception as CE
+import Control.Monad
+import Data.Foldable (find)
+import Network.GRPC.HighLevel.Server
+import Network.GRPC.LowLevel
+import qualified Network.GRPC.LowLevel.Call.Unregistered as U
+import Network.GRPC.LowLevel.Server (forkServer)
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
-import           Proto3.Suite.Class
+import Proto3.Suite.Class
 
-dispatchLoop :: Server
-             -> (String -> IO ())
-             -> MetadataMap
-             -> [Handler 'Normal]
-             -> [Handler 'ClientStreaming]
-             -> [Handler 'ServerStreaming]
-             -> [Handler 'BiDiStreaming]
-             -> IO ()
+dispatchLoop ::
+  Server ->
+  (String -> IO ()) ->
+  MetadataMap ->
+  [Handler 'Normal] ->
+  [Handler 'ClientStreaming] ->
+  [Handler 'ServerStreaming] ->
+  [Handler 'BiDiStreaming] ->
+  IO ()
 dispatchLoop s logger md hN hC hS hB =
   forever $ U.withServerCallAsync s $ \sc ->
     case findHandler sc allHandlers of
       Just (AnyHandler ah) -> case ah of
-        UnaryHandler _ h        -> unaryHandler sc h
+        UnaryHandler _ h -> unaryHandler sc h
         ClientStreamHandler _ h -> csHandler sc h
         ServerStreamHandler _ h -> ssHandler sc h
-        BiDiStreamHandler _ h   -> bdHandler sc h
-      Nothing                   -> unknownHandler sc
+        BiDiStreamHandler _ h -> bdHandler sc h
+      Nothing -> unknownHandler sc
   where
-    allHandlers = map AnyHandler hN ++ map AnyHandler hC
-                  ++ map AnyHandler hS ++ map AnyHandler hB
+    allHandlers =
+      map AnyHandler hN
+        ++ map AnyHandler hC
+        ++ map AnyHandler hS
+        ++ map AnyHandler hB
 
     findHandler sc = find ((== U.callMethod sc) . anyHandlerMethodName)
 
@@ -66,7 +72,8 @@ dispatchLoop s logger md hN hC hS hB =
 
     handleError :: IO a -> IO ()
     handleError = (handleCallError logger . left herr =<<) . CE.try
-      where herr (e :: CE.SomeException) = GRPCIOHandlerException (show e)
+      where
+        herr (e :: CE.SomeException) = GRPCIOHandlerException (show e)
 
 serverLoop :: ServerOptions -> IO ()
 serverLoop ServerOptions{..} =
@@ -97,34 +104,34 @@ serverLoop ServerOptions{..} =
       -- kills the "dispatchLoop" thread and any other thread we
       -- may have started with "forkServer".
       done <- newEmptyMVar
-      launched <- forkServer server $
-        dispatchLoop server
-                     optLogger
-                     optInitialMetadata
-                     optNormalHandlers
-                     optClientStreamHandlers
-                     optServerStreamHandlers
-                     optBiDiStreamHandlers
-        `CE.finally` putMVar done ()
+      launched <-
+        forkServer server $
+          dispatchLoop
+            server
+            optLogger
+            optInitialMetadata
+            optNormalHandlers
+            optClientStreamHandlers
+            optServerStreamHandlers
+            optBiDiStreamHandlers
+            `CE.finally` putMVar done ()
       when launched $
         takeMVar done
   where
-    config = ServerConfig
-      { host                             = optServerHost
-      , port                             = optServerPort
-      , methodsToRegisterNormal          = []
-      , methodsToRegisterClientStreaming = []
-      , methodsToRegisterServerStreaming = []
-      , methodsToRegisterBiDiStreaming   = []
-      , serverArgs                       =
-          [CompressionAlgArg GrpcCompressDeflate | optUseCompression]
-          ++
-          [ UserAgentPrefix optUserAgentPrefix
-          , UserAgentSuffix optUserAgentSuffix
-          ]
-          ++
-          foldMap (pure . MaxReceiveMessageLength) optMaxReceiveMessageLength
-          ++
-          foldMap (pure . MaxMetadataSize) optMaxMetadataSize
-      , sslConfig = optSSLConfig
-      }
+    config =
+      ServerConfig
+        { host = optServerHost
+        , port = optServerPort
+        , methodsToRegisterNormal = []
+        , methodsToRegisterClientStreaming = []
+        , methodsToRegisterServerStreaming = []
+        , methodsToRegisterBiDiStreaming = []
+        , serverArgs =
+            [CompressionAlgArg GrpcCompressDeflate | optUseCompression]
+              ++ [ UserAgentPrefix optUserAgentPrefix
+                 , UserAgentSuffix optUserAgentSuffix
+                 ]
+              ++ foldMap (pure . MaxReceiveMessageLength) optMaxReceiveMessageLength
+              ++ foldMap (pure . MaxMetadataSize) optMaxMetadataSize
+        , sslConfig = optSSLConfig
+        }

@@ -1,75 +1,85 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PatternSynonyms     #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE ViewPatterns        #-}
-{-# LANGUAGE RankNTypes          #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ViewPatterns #-}
 
 -- | This module defines data structures and operations pertaining to registered
 -- servers using registered calls; for unregistered support, see
 -- `Network.GRPC.LowLevel.Server.Unregistered`.
 module Network.GRPC.LowLevel.Server where
 
-import           Control.Concurrent                    (ThreadId
-                                                        , forkFinally
-                                                        , myThreadId
-                                                        , killThread)
-import           Control.Concurrent.STM                (atomically
-                                                        , check)
-import           Control.Concurrent.STM.TVar           (TVar
-                                                        , modifyTVar'
-                                                        , readTVar
-                                                        , writeTVar
-                                                        , readTVarIO
-                                                        , newTVarIO)
-import           Control.Exception                     (bracket)
-import           Control.Monad
-import           Control.Monad.IO.Class
-import           Control.Monad.Trans.Except
-import           Data.ByteString                       (ByteString)
-import qualified Data.ByteString                       as B
+import Control.Concurrent (
+  ThreadId,
+  forkFinally,
+  killThread,
+  myThreadId,
+ )
+import Control.Concurrent.STM (
+  atomically,
+  check,
+ )
+import Control.Concurrent.STM.TVar (
+  TVar,
+  modifyTVar',
+  newTVarIO,
+  readTVar,
+  readTVarIO,
+  writeTVar,
+ )
+import Control.Exception (bracket)
+import Control.Monad
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Except
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import qualified Data.Set as S
-import           Network.GRPC.LowLevel.Call
-import           Network.GRPC.LowLevel.CompletionQueue (CompletionQueue,
-                                                        createCompletionQueue,
-                                                        pluck,
-                                                        serverRegisterCompletionQueue,
-                                                        serverRequestCall,
-                                                        serverShutdownAndNotify,
-                                                        shutdownCompletionQueue)
-import           Network.GRPC.LowLevel.GRPC
-import           Network.GRPC.LowLevel.Op
-import qualified Network.GRPC.Unsafe                   as C
-import qualified Network.GRPC.Unsafe.ChannelArgs       as C
-import qualified Network.GRPC.Unsafe.Op                as C
-import qualified Network.GRPC.Unsafe.Security          as C
+import Network.GRPC.LowLevel.Call
+import Network.GRPC.LowLevel.CompletionQueue (
+  CompletionQueue,
+  createCompletionQueue,
+  pluck,
+  serverRegisterCompletionQueue,
+  serverRequestCall,
+  serverShutdownAndNotify,
+  shutdownCompletionQueue,
+ )
+import Network.GRPC.LowLevel.GRPC
+import Network.GRPC.LowLevel.Op
+import qualified Network.GRPC.Unsafe as C
+import qualified Network.GRPC.Unsafe.ChannelArgs as C
+import qualified Network.GRPC.Unsafe.Op as C
+import qualified Network.GRPC.Unsafe.Security as C
 
 -- | Wraps various gRPC state needed to run a server.
 data Server = Server
-  { serverGRPC           :: GRPC
-  , unsafeServer         :: C.Server
-  , listeningPort        :: Port
-  , serverCQ             :: CompletionQueue
+  { serverGRPC :: GRPC
+  , unsafeServer :: C.Server
+  , listeningPort :: Port
+  , serverCQ :: CompletionQueue
   -- ^ CQ used for receiving new calls.
-  , serverCallCQ               :: CompletionQueue
+  , serverCallCQ :: CompletionQueue
   -- ^ CQ for running ops on calls. Not used to receive new calls.
-  , normalMethods        :: [RegisteredMethod 'Normal]
-  , sstreamingMethods    :: [RegisteredMethod 'ServerStreaming]
-  , cstreamingMethods    :: [RegisteredMethod 'ClientStreaming]
+  , normalMethods :: [RegisteredMethod 'Normal]
+  , sstreamingMethods :: [RegisteredMethod 'ServerStreaming]
+  , cstreamingMethods :: [RegisteredMethod 'ClientStreaming]
   , bidiStreamingMethods :: [RegisteredMethod 'BiDiStreaming]
-  , serverConfig         :: ServerConfig
-  , outstandingForks     :: TVar (S.Set ThreadId)
-  , serverShuttingDown   :: TVar Bool
+  , serverConfig :: ServerConfig
+  , outstandingForks :: TVar (S.Set ThreadId)
+  , serverShuttingDown :: TVar Bool
   }
 
 -- TODO: should we make a forkGRPC function instead? I am not sure if it would
 -- be safe to let the call handlers threads keep running after the server stops,
 -- so I'm taking the more conservative route of ensuring the server will
 -- stay alive. Experiment more when time permits.
+
 -- | Fork a thread from the server (presumably for a handler) with the guarantee
 -- that the server won't shut down while the thread is alive.
 -- Returns true if the fork happens successfully, and false if the server is
@@ -83,7 +93,7 @@ forkServer :: Server -> IO () -> IO Bool
 forkServer Server{..} f = do
   shutdown <- readTVarIO serverShuttingDown
   case shutdown of
-    True  -> return False
+    True -> return False
     False -> do
       -- NB: The spawned thread waits on 'ready' before running 'f' to ensure
       -- that its ThreadId is inserted into outstandingForks before the cleanup
@@ -92,44 +102,55 @@ forkServer Server{..} f = do
       -- subsequent deadlock in stopServer. We can use a dead-list instead if we
       -- need something more performant.
       ready <- newTVarIO False
-      tid   <- let act = do atomically (check =<< readTVar ready)
-                            f
-               in forkFinally act cleanup
+      tid <- forkFinally (atomically (check =<< readTVar ready) >> f) cleanup
+
       atomically $ do
         modifyTVar' outstandingForks (S.insert tid)
         modifyTVar' ready (const True)
-#ifdef DEBUG
-      tids <- readTVarIO outstandingForks
-      grpcDebug $ "after fork and bookkeeping: outstandingForks=" ++ show tids
-#endif
+
+      debug
+
       return True
-      where cleanup _ = do
-              tid <- myThreadId
-              atomically $ modifyTVar' outstandingForks (S.delete tid)
+  where
+    cleanup _ = do
+      tid <- myThreadId
+      atomically $ modifyTVar' outstandingForks (S.delete tid)
+
+#ifdef DEBUG
+    -- This is intentionally moved outside of the 'do' block so that this file
+    -- can be auto-formatted by fourmolu. Fourmolu's support for formatting CPP
+    -- fails inside of 'do' blocks.
+    debug = do
+      tids <- readTVarIO outstandingForks
+      grpcDebug ("after fork and bookkeeping: outstandingForks=" ++ show tids)
+# else
+    debug = pure ()
+#endif
 
 -- | Configuration for SSL.
 data ServerSSLConfig = ServerSSLConfig
-  {clientRootCert :: Maybe FilePath,
-   serverPrivateKey :: FilePath,
-   serverCert :: FilePath,
-   clientCertRequest :: C.SslClientCertificateRequestType,
-   -- ^ Whether to request a certificate from the client, and what to do with it
-   -- if received.
-   customMetadataProcessor :: Maybe C.ProcessMeta}
+  { clientRootCert :: Maybe FilePath
+  , serverPrivateKey :: FilePath
+  , serverCert :: FilePath
+  , clientCertRequest :: C.SslClientCertificateRequestType
+  -- ^ Whether to request a certificate from the client, and what to do with it
+  -- if received.
+  , customMetadataProcessor :: Maybe C.ProcessMeta
+  }
 
 -- | Configuration needed to start a server.
 data ServerConfig = ServerConfig
-  { host              :: Host
-    -- ^ Name of the host the server is running on. Not sure how this is
-    -- used. Setting to "localhost" works fine in tests.
-  , port              :: Port
-    -- ^ Port on which to listen for requests.
+  { host :: Host
+  -- ^ Name of the host the server is running on. Not sure how this is
+  -- used. Setting to "localhost" works fine in tests.
+  , port :: Port
+  -- ^ Port on which to listen for requests.
   , methodsToRegisterNormal :: [MethodName]
-    -- ^ List of normal (non-streaming) methods to register.
+  -- ^ List of normal (non-streaming) methods to register.
   , methodsToRegisterClientStreaming :: [MethodName]
   , methodsToRegisterServerStreaming :: [MethodName]
   , methodsToRegisterBiDiStreaming :: [MethodName]
-  , serverArgs        :: [C.Arg]
+  , serverArgs :: [C.Arg]
   -- ^ Optional arguments for setting up the channel on the server. Supplying an
   -- empty list will cause the channel to use gRPC's default options.
   , sslConfig :: Maybe ServerSSLConfig
@@ -145,15 +166,17 @@ addPort server conf@ServerConfig{..} =
   case sslConfig of
     Nothing -> C.withInsecureServerCredentials $ C.grpcServerAddHttp2Port server e
     Just ServerSSLConfig{..} ->
-      do crc <- mapM B.readFile clientRootCert
-         spk <- B.readFile serverPrivateKey
-         sc <- B.readFile serverCert
-         C.withServerCredentials crc spk sc clientCertRequest $ \creds -> do
-           case customMetadataProcessor of
-             Just p -> C.setMetadataProcessor creds p
-             Nothing -> return ()
-           C.grpcServerAddHttp2Port server e creds
-  where e = unEndpoint $ serverEndpoint conf
+      do
+        crc <- mapM B.readFile clientRootCert
+        spk <- B.readFile serverPrivateKey
+        sc <- B.readFile serverCert
+        C.withServerCredentials crc spk sc clientCertRequest $ \creds -> do
+          case customMetadataProcessor of
+            Just p -> C.setMetadataProcessor creds p
+            Nothing -> return ()
+          C.grpcServerAddHttp2Port server e creds
+  where
+    e = unEndpoint $ serverEndpoint conf
 
 startServer :: GRPC -> ServerConfig -> IO Server
 startServer grpc conf@ServerConfig{..} =
@@ -162,7 +185,8 @@ startServer grpc conf@ServerConfig{..} =
     server <- C.grpcServerCreate args C.reserved
     actualPort <- addPort server conf
     when (unPort port > 0 && actualPort /= unPort port) $
-      error $ "Unable to bind port: " ++ show port
+      error $
+        "Unable to bind port: " ++ show port
     cq <- createCompletionQueue grpc
     grpcDebug $ "startServer: server CQ: " ++ show cq
     serverRegisterCompletionQueue server cq
@@ -171,26 +195,44 @@ startServer grpc conf@ServerConfig{..} =
     -- to partition them this way, but we get very convenient phantom typing
     -- elsewhere by doing so.
     -- TODO: change order of args so we can eta reduce.
-    ns <- mapM (\nm -> serverRegisterMethodNormal server nm e)
-               methodsToRegisterNormal
-    ss <- mapM (\nm -> serverRegisterMethodServerStreaming server nm e)
-               methodsToRegisterServerStreaming
-    cs <- mapM (\nm -> serverRegisterMethodClientStreaming server nm e)
-               methodsToRegisterClientStreaming
-    bs <- mapM (\nm -> serverRegisterMethodBiDiStreaming server nm e)
-               methodsToRegisterBiDiStreaming
+    ns <-
+      mapM
+        (\nm -> serverRegisterMethodNormal server nm e)
+        methodsToRegisterNormal
+    ss <-
+      mapM
+        (\nm -> serverRegisterMethodServerStreaming server nm e)
+        methodsToRegisterServerStreaming
+    cs <-
+      mapM
+        (\nm -> serverRegisterMethodClientStreaming server nm e)
+        methodsToRegisterClientStreaming
+    bs <-
+      mapM
+        (\nm -> serverRegisterMethodBiDiStreaming server nm e)
+        methodsToRegisterBiDiStreaming
     C.grpcServerStart server
     forks <- newTVarIO S.empty
     shutdown <- newTVarIO False
     ccq <- createCompletionQueue grpc
-    return $ Server grpc server (Port actualPort) cq ccq ns ss cs bs conf forks
-      shutdown
-
-
+    return $
+      Server
+        grpc
+        server
+        (Port actualPort)
+        cq
+        ccq
+        ns
+        ss
+        cs
+        bs
+        conf
+        forks
+        shutdown
 
 stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?
-stopServer Server{ unsafeServer = s, .. } = do
+stopServer Server{unsafeServer = s, ..} = do
   grpcDebug "stopServer: calling shutdownNotify."
   shutdownNotify serverCQ
   grpcDebug "stopServer: cancelling all calls."
@@ -201,34 +243,35 @@ stopServer Server{ unsafeServer = s, .. } = do
   grpcDebug "stopServer: shutting down CQ."
   shutdownCQ serverCQ
   shutdownCQ serverCallCQ
-
-  where shutdownCQ scq = do
-          shutdownResult <- shutdownCompletionQueue scq
-          case shutdownResult of
-            Left _ -> do putStrLn "Warning: completion queue didn't shut down."
-                         putStrLn "Trying to stop server anyway."
-            Right _ -> return ()
-        shutdownNotify scq = do
-          let shutdownTag = C.tag 0
-          serverShutdownAndNotify s scq shutdownTag
-          grpcDebug "called serverShutdownAndNotify; plucking."
-          shutdownEvent <- pluck scq shutdownTag (Just 30)
-          grpcDebug $ "shutdownNotify: got shutdown event" ++ show shutdownEvent
-          case shutdownEvent of
-            -- This case occurs when we pluck but the queue is already in the
-            -- 'shuttingDown' state, implying we already tried to shut down.
-            Left GRPCIOShutdown -> error "Called stopServer twice!"
-            Left _              -> error "Failed to stop server."
-            Right _             -> return ()
-        cleanupForks = do
-          atomically $ writeTVar serverShuttingDown True
-          liveForks <- readTVarIO outstandingForks
-          grpcDebug $ "Server shutdown: killing threads: " ++ show liveForks
-          mapM_ killThread liveForks
-          -- wait for threads to shut down
-          grpcDebug "Server shutdown: waiting until all threads are dead."
-          atomically $ check . (==0) . S.size =<< readTVar outstandingForks
-          grpcDebug "Server shutdown: All forks cleaned up."
+  where
+    shutdownCQ scq = do
+      shutdownResult <- shutdownCompletionQueue scq
+      case shutdownResult of
+        Left _ -> do
+          putStrLn "Warning: completion queue didn't shut down."
+          putStrLn "Trying to stop server anyway."
+        Right _ -> return ()
+    shutdownNotify scq = do
+      let shutdownTag = C.tag 0
+      serverShutdownAndNotify s scq shutdownTag
+      grpcDebug "called serverShutdownAndNotify; plucking."
+      shutdownEvent <- pluck scq shutdownTag (Just 30)
+      grpcDebug $ "shutdownNotify: got shutdown event" ++ show shutdownEvent
+      case shutdownEvent of
+        -- This case occurs when we pluck but the queue is already in the
+        -- 'shuttingDown' state, implying we already tried to shut down.
+        Left GRPCIOShutdown -> error "Called stopServer twice!"
+        Left _ -> error "Failed to stop server."
+        Right _ -> return ()
+    cleanupForks = do
+      atomically $ writeTVar serverShuttingDown True
+      liveForks <- readTVarIO outstandingForks
+      grpcDebug $ "Server shutdown: killing threads: " ++ show liveForks
+      mapM_ killThread liveForks
+      -- wait for threads to shut down
+      grpcDebug "Server shutdown: waiting until all threads are dead."
+      atomically $ check . (== 0) . S.size =<< readTVar outstandingForks
+      grpcDebug "Server shutdown: All forks cleaned up."
 
 -- Uses 'bracket' to safely start and stop a server, even if exceptions occur.
 withServer :: GRPC -> ServerConfig -> (Server -> IO a) -> IO a
@@ -238,16 +281,18 @@ withServer grpc cfg = bracket (startServer grpc cfg) stopServer
 -- 'serverRegisterMethodNormal', 'serverRegisterMethodServerStreaming',
 -- 'serverRegisterMethodClientStreaming', and
 -- 'serverRegisterMethodBiDiStreaming'.
-serverRegisterMethod :: C.Server
-                        -> MethodName
-                        -> Endpoint
-                        -> GRPCMethodType
-                        -> IO C.CallHandle
+serverRegisterMethod ::
+  C.Server ->
+  MethodName ->
+  Endpoint ->
+  GRPCMethodType ->
+  IO C.CallHandle
 serverRegisterMethod s nm e mty =
-  C.grpcServerRegisterMethod s
-                             (unMethodName nm)
-                             (unEndpoint e)
-                             (payloadHandling mty)
+  C.grpcServerRegisterMethod
+    s
+    (unMethodName nm)
+    (unEndpoint e)
+    (payloadHandling mty)
 
 {-
 TODO: Consolidate the register functions below.
@@ -269,82 +314,83 @@ constructor t the function was given.
 -- to wait for a request to arrive. Note: gRPC claims this must be called before
 -- the server is started, so we do it during startup according to the
 -- 'ServerConfig'.
-serverRegisterMethodNormal :: C.Server
-                     -> MethodName
-                     -- ^ method name, e.g. "/foo"
-                     -> Endpoint
-                     -- ^ Endpoint name name, e.g. "localhost:9999". I have no
-                     -- idea why this is needed since we have to provide these
-                     -- parameters to start a server in the first place. It
-                     -- doesn't seem to have any effect, even if it's filled
-                     -- with nonsense.
-                     -> IO (RegisteredMethod 'Normal)
+serverRegisterMethodNormal ::
+  C.Server ->
+  -- | method name, e.g. "/foo"
+  MethodName ->
+  -- | Endpoint name name, e.g. "localhost:9999". I have no
+  -- idea why this is needed since we have to provide these
+  -- parameters to start a server in the first place. It
+  -- doesn't seem to have any effect, even if it's filled
+  -- with nonsense.
+  Endpoint ->
+  IO (RegisteredMethod 'Normal)
 serverRegisterMethodNormal internalServer meth e = do
   h <- serverRegisterMethod internalServer meth e Normal
   return $ RegisteredMethodNormal meth e h
 
-serverRegisterMethodClientStreaming
-  :: C.Server
-     -> MethodName
-     -- ^ method name, e.g. "/foo"
-     -> Endpoint
-     -- ^ Endpoint name name, e.g. "localhost:9999". I have no
-     -- idea why this is needed since we have to provide these
-     -- parameters to start a server in the first place. It
-     -- doesn't seem to have any effect, even if it's filled
-     -- with nonsense.
-     -> IO (RegisteredMethod 'ClientStreaming)
+serverRegisterMethodClientStreaming ::
+  C.Server ->
+  -- | method name, e.g. "/foo"
+  MethodName ->
+  -- | Endpoint name name, e.g. "localhost:9999". I have no
+  -- idea why this is needed since we have to provide these
+  -- parameters to start a server in the first place. It
+  -- doesn't seem to have any effect, even if it's filled
+  -- with nonsense.
+  Endpoint ->
+  IO (RegisteredMethod 'ClientStreaming)
 serverRegisterMethodClientStreaming internalServer meth e = do
   h <- serverRegisterMethod internalServer meth e ClientStreaming
   return $ RegisteredMethodClientStreaming meth e h
 
-
-serverRegisterMethodServerStreaming
-  :: C.Server
-     -> MethodName
-     -- ^ method name, e.g. "/foo"
-     -> Endpoint
-     -- ^ Endpoint name name, e.g. "localhost:9999". I have no
-     -- idea why this is needed since we have to provide these
-     -- parameters to start a server in the first place. It
-     -- doesn't seem to have any effect, even if it's filled
-     -- with nonsense.
-     -> IO (RegisteredMethod 'ServerStreaming)
+serverRegisterMethodServerStreaming ::
+  C.Server ->
+  -- | method name, e.g. "/foo"
+  MethodName ->
+  -- | Endpoint name name, e.g. "localhost:9999". I have no
+  -- idea why this is needed since we have to provide these
+  -- parameters to start a server in the first place. It
+  -- doesn't seem to have any effect, even if it's filled
+  -- with nonsense.
+  Endpoint ->
+  IO (RegisteredMethod 'ServerStreaming)
 serverRegisterMethodServerStreaming internalServer meth e = do
   h <- serverRegisterMethod internalServer meth e ServerStreaming
   return $ RegisteredMethodServerStreaming meth e h
 
-
-serverRegisterMethodBiDiStreaming
-  :: C.Server
-     -> MethodName
-     -- ^ method name, e.g. "/foo"
-     -> Endpoint
-     -- ^ Endpoint name name, e.g. "localhost:9999". I have no
-     -- idea why this is needed since we have to provide these
-     -- parameters to start a server in the first place. It
-     -- doesn't seem to have any effect, even if it's filled
-     -- with nonsense.
-     -> IO (RegisteredMethod 'BiDiStreaming)
+serverRegisterMethodBiDiStreaming ::
+  C.Server ->
+  -- | method name, e.g. "/foo"
+  MethodName ->
+  -- | Endpoint name name, e.g. "localhost:9999". I have no
+  -- idea why this is needed since we have to provide these
+  -- parameters to start a server in the first place. It
+  -- doesn't seem to have any effect, even if it's filled
+  -- with nonsense.
+  Endpoint ->
+  IO (RegisteredMethod 'BiDiStreaming)
 serverRegisterMethodBiDiStreaming internalServer meth e = do
   h <- serverRegisterMethod internalServer meth e BiDiStreaming
   return $ RegisteredMethodBiDiStreaming meth e h
 
 -- | Create a 'Call' with which to wait for the invocation of a registered
 -- method.
-serverCreateCall :: Server
-                 -> RegisteredMethod mt
-                 -> IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
+serverCreateCall ::
+  Server ->
+  RegisteredMethod mt ->
+  IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
 serverCreateCall Server{..} rm =
   serverRequestCall rm unsafeServer serverCQ serverCallCQ
 
-withServerCall :: Server
-               -> RegisteredMethod mt
-               -> (ServerCall (MethodPayload mt) -> IO (Either GRPCIOError a))
-               -> IO (Either GRPCIOError a)
+withServerCall ::
+  Server ->
+  RegisteredMethod mt ->
+  (ServerCall (MethodPayload mt) -> IO (Either GRPCIOError a)) ->
+  IO (Either GRPCIOError a)
 withServerCall s rm f =
   bracket (serverCreateCall s rm) cleanup $ \case
-    Left e  -> return (Left e)
+    Left e -> return (Left e)
     Right c -> do
       debugServerCall c
       f c
@@ -357,55 +403,66 @@ withServerCall s rm f =
 --------------------------------------------------------------------------------
 -- serverReader (server side of client streaming mode)
 
-type ServerReaderHandlerLL
-  =  ServerCall (MethodPayload 'ClientStreaming)
-  -> StreamRecv ByteString
-  -> IO (Maybe ByteString, MetadataMap, C.StatusCode, StatusDetails)
+type ServerReaderHandlerLL =
+  ServerCall (MethodPayload 'ClientStreaming) ->
+  StreamRecv ByteString ->
+  IO (Maybe ByteString, MetadataMap, C.StatusCode, StatusDetails)
 
-serverReader :: Server
-             -> RegisteredMethod 'ClientStreaming
-             -> MetadataMap -- ^ Initial server metadata
-             -> ServerReaderHandlerLL
-             -> IO (Either GRPCIOError ())
+serverReader ::
+  Server ->
+  RegisteredMethod 'ClientStreaming ->
+  -- | Initial server metadata
+  MetadataMap ->
+  ServerReaderHandlerLL ->
+  IO (Either GRPCIOError ())
 serverReader s rm initMeta f =
   withServerCall s rm (\sc -> serverReader' s sc initMeta f)
 
-serverReader' :: Server
-              -> ServerCall (MethodPayload 'ClientStreaming)
-              -> MetadataMap -- ^ Initial server metadata
-              -> ServerReaderHandlerLL
-              -> IO (Either GRPCIOError ())
-serverReader' _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
+serverReader' ::
+  Server ->
+  ServerCall (MethodPayload 'ClientStreaming) ->
+  -- | Initial server metadata
+  MetadataMap ->
+  ServerReaderHandlerLL ->
+  IO (Either GRPCIOError ())
+serverReader' _ sc@ServerCall{unsafeSC = c, callCQ = ccq} initMeta f =
   runExceptT $ do
     (mmsg, trailMeta, st, ds) <- liftIO $ f sc (streamRecvPrim c ccq)
-    void $ runOps' c ccq ( OpSendInitialMetadata initMeta
-                         : OpSendStatusFromServer trailMeta st ds
-                         : maybe [] ((:[]) . OpSendMessage) mmsg
-                         )
+    void $
+      runOps'
+        c
+        ccq
+        ( OpSendInitialMetadata initMeta
+            : OpSendStatusFromServer trailMeta st ds
+            : maybe [] ((: []) . OpSendMessage) mmsg
+        )
 
 --------------------------------------------------------------------------------
 -- serverWriter (server side of server streaming mode)
 
-type ServerWriterHandlerLL
-  =  ServerCall (MethodPayload 'ServerStreaming)
-  -> StreamSend ByteString
-  -> IO (MetadataMap, C.StatusCode, StatusDetails)
+type ServerWriterHandlerLL =
+  ServerCall (MethodPayload 'ServerStreaming) ->
+  StreamSend ByteString ->
+  IO (MetadataMap, C.StatusCode, StatusDetails)
 
 -- | Wait for and then handle a registered, server-streaming call.
-serverWriter :: Server
-             -> RegisteredMethod 'ServerStreaming
-             -> MetadataMap -- ^ Initial server metadata
-             -> ServerWriterHandlerLL
-             -> IO (Either GRPCIOError ())
+serverWriter ::
+  Server ->
+  RegisteredMethod 'ServerStreaming ->
+  -- | Initial server metadata
+  MetadataMap ->
+  ServerWriterHandlerLL ->
+  IO (Either GRPCIOError ())
 serverWriter s rm initMeta f =
   withServerCall s rm (\sc -> serverWriter' s sc initMeta f)
 
-serverWriter' :: Server
-              -> ServerCall (MethodPayload 'ServerStreaming)
-              -> MetadataMap
-              -> ServerWriterHandlerLL
-              -> IO (Either GRPCIOError ())
-serverWriter' _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
+serverWriter' ::
+  Server ->
+  ServerCall (MethodPayload 'ServerStreaming) ->
+  MetadataMap ->
+  ServerWriterHandlerLL ->
+  IO (Either GRPCIOError ())
+serverWriter' _ sc@ServerCall{unsafeSC = c, callCQ = ccq} initMeta f =
   runExceptT $ do
     sendInitialMetadata c ccq initMeta
     st <- liftIO $ f sc (streamSendPrim c ccq)
@@ -414,26 +471,29 @@ serverWriter' _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
 --------------------------------------------------------------------------------
 -- serverRW (bidirectional streaming mode)
 
-type ServerRWHandlerLL
-  =  ServerCall (MethodPayload 'BiDiStreaming)
-  -> StreamRecv ByteString
-  -> StreamSend ByteString
-  -> IO (MetadataMap, C.StatusCode, StatusDetails)
+type ServerRWHandlerLL =
+  ServerCall (MethodPayload 'BiDiStreaming) ->
+  StreamRecv ByteString ->
+  StreamSend ByteString ->
+  IO (MetadataMap, C.StatusCode, StatusDetails)
 
-serverRW :: Server
-         -> RegisteredMethod 'BiDiStreaming
-         -> MetadataMap -- ^ initial server metadata
-         -> ServerRWHandlerLL
-         -> IO (Either GRPCIOError ())
+serverRW ::
+  Server ->
+  RegisteredMethod 'BiDiStreaming ->
+  -- | initial server metadata
+  MetadataMap ->
+  ServerRWHandlerLL ->
+  IO (Either GRPCIOError ())
 serverRW s rm initMeta f =
   withServerCall s rm (\sc -> serverRW' s sc initMeta f)
 
-serverRW' :: Server
-          -> ServerCall (MethodPayload 'BiDiStreaming)
-          -> MetadataMap
-          -> ServerRWHandlerLL
-          -> IO (Either GRPCIOError ())
-serverRW' _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
+serverRW' ::
+  Server ->
+  ServerCall (MethodPayload 'BiDiStreaming) ->
+  MetadataMap ->
+  ServerRWHandlerLL ->
+  IO (Either GRPCIOError ())
+serverRW' _ sc@ServerCall{unsafeSC = c, callCQ = ccq} initMeta f =
   runExceptT $ do
     sendInitialMetadata c ccq initMeta
     st <- liftIO $ f sc (streamRecvPrim c ccq) (streamSendPrim c ccq)
@@ -448,24 +508,29 @@ serverRW' _ sc@ServerCall{ unsafeSC = c, callCQ = ccq } initMeta f =
 -- values in the result tuple being the initial and trailing metadata
 -- respectively. We pass in the 'ServerCall' so that the server can call
 -- 'serverCallCancel' on it if needed.
-type ServerHandlerLL
-  =  ServerCall (MethodPayload 'Normal)
-  -> IO (ByteString, MetadataMap, C.StatusCode, StatusDetails)
+type ServerHandlerLL =
+  ServerCall (MethodPayload 'Normal) ->
+  IO (ByteString, MetadataMap, C.StatusCode, StatusDetails)
 
 -- | Wait for and then handle a normal (non-streaming) call.
-serverHandleNormalCall :: Server
-                       -> RegisteredMethod 'Normal
-                       -> MetadataMap
-                       -- ^ Initial server metadata
-                       -> ServerHandlerLL
-                       -> IO (Either GRPCIOError ())
+serverHandleNormalCall ::
+  Server ->
+  RegisteredMethod 'Normal ->
+  -- | Initial server metadata
+  MetadataMap ->
+  ServerHandlerLL ->
+  IO (Either GRPCIOError ())
 serverHandleNormalCall s rm initMeta f =
   withServerCall s rm go
   where
-    go sc@ServerCall{ unsafeSC = c, callCQ = ccq } = do
+    go sc@ServerCall{unsafeSC = c, callCQ = ccq} = do
       (rsp, trailMeta, st, ds) <- f sc
-      void <$> runOps c ccq [ OpSendInitialMetadata initMeta
-                            , OpRecvCloseOnServer
-                            , OpSendMessage rsp
-                            , OpSendStatusFromServer trailMeta st ds
-                            ]
+      void
+        <$> runOps
+          c
+          ccq
+          [ OpSendInitialMetadata initMeta
+          , OpRecvCloseOnServer
+          , OpSendMessage rsp
+          , OpSendStatusFromServer trailMeta st ds
+          ]

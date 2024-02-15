@@ -1,48 +1,49 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase                 #-}
-{-# LANGUAGE PatternSynonyms            #-}
-{-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Network.GRPC.LowLevel.Op where
 
-import           Control.Exception
-import           Control.Monad
-import           Control.Monad.Trans.Except
-import           Data.ByteString                       (ByteString)
-import qualified Data.ByteString                       as B
-import           Data.Maybe                            (catMaybes)
-import           Foreign.C.Types                       (CInt)
-import           Foreign.Marshal.Alloc                 (free, malloc)
-import           Foreign.Ptr                           (Ptr, nullPtr)
-import           Foreign.Storable                      (peek)
-import           Network.GRPC.LowLevel.CompletionQueue
-import           Network.GRPC.LowLevel.GRPC
-import qualified Network.GRPC.Unsafe                   as C (Call)
-import qualified Network.GRPC.Unsafe.ByteBuffer        as C
-import qualified Network.GRPC.Unsafe.Metadata          as C
-import qualified Network.GRPC.Unsafe.Op                as C
-import qualified Network.GRPC.Unsafe.Slice             as C
-import           Network.GRPC.Unsafe.Slice             (Slice)
+import Control.Exception
+import Control.Monad
+import Control.Monad.Trans.Except
+import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
+import Data.Maybe (catMaybes)
+import Foreign.C.Types (CInt)
+import Foreign.Marshal.Alloc (free, malloc)
+import Foreign.Ptr (Ptr, nullPtr)
+import Foreign.Storable (peek)
+import Network.GRPC.LowLevel.CompletionQueue
+import Network.GRPC.LowLevel.GRPC
+import qualified Network.GRPC.Unsafe as C (Call)
+import qualified Network.GRPC.Unsafe.ByteBuffer as C
+import qualified Network.GRPC.Unsafe.Metadata as C
+import qualified Network.GRPC.Unsafe.Op as C
+import Network.GRPC.Unsafe.Slice (Slice)
+import qualified Network.GRPC.Unsafe.Slice as C
 
 -- | Sum describing all possible send and receive operations that can be batched
 -- and executed by gRPC. Usually these are processed in a handful of
 -- combinations depending on the 'MethodType' of the call being run.
-data Op = OpSendInitialMetadata MetadataMap
-          | OpSendMessage B.ByteString
-          | OpSendCloseFromClient
-          | OpSendStatusFromServer MetadataMap C.StatusCode StatusDetails
-          | OpRecvInitialMetadata
-          | OpRecvMessage
-          | OpRecvStatusOnClient
-          | OpRecvCloseOnServer
-          deriving (Show)
+data Op
+  = OpSendInitialMetadata MetadataMap
+  | OpSendMessage B.ByteString
+  | OpSendCloseFromClient
+  | OpSendStatusFromServer MetadataMap C.StatusCode StatusDetails
+  | OpRecvInitialMetadata
+  | OpRecvMessage
+  | OpRecvStatusOnClient
+  | OpRecvCloseOnServer
+  deriving (Show)
 
 -- | Container holding the pointers to the C and gRPC data needed to execute the
 -- corresponding 'Op'. These are obviously unsafe, and should only be used with
 -- 'withOpContexts'.
-data OpContext =
-  OpSendInitialMetadataContext C.MetadataKeyValPtr Int
+data OpContext
+  = OpSendInitialMetadataContext C.MetadataKeyValPtr Int
   | OpSendMessageContext (C.ByteBuffer, C.Slice)
   | OpSendCloseFromClientContext
   | OpSendStatusFromServerContext C.MetadataKeyValPtr Int C.StatusCode Slice
@@ -50,7 +51,7 @@ data OpContext =
   | OpRecvMessageContext (Ptr C.ByteBuffer)
   | OpRecvStatusOnClientContext (Ptr C.MetadataArray) (Ptr C.StatusCode) Slice
   | OpRecvCloseOnServerContext (Ptr CInt)
-  deriving Show
+  deriving (Show)
 
 -- | Length we pass to gRPC for receiving status details
 -- when processing 'OpRecvStatusOnClient'. It appears that gRPC actually ignores
@@ -67,9 +68,9 @@ createOpContext (OpSendMessage bs) =
 createOpContext (OpSendCloseFromClient) = return OpSendCloseFromClientContext
 createOpContext (OpSendStatusFromServer m code (StatusDetails str)) =
   uncurry OpSendStatusFromServerContext
-  <$> C.createMetadata m
-  <*> return code
-  <*> C.byteStringToSlice str
+    <$> C.createMetadata m
+    <*> return code
+    <*> C.byteStringToSlice str
 createOpContext OpRecvInitialMetadata =
   fmap OpRecvInitialMetadataContext C.metadataArrayCreate
 createOpContext OpRecvMessage =
@@ -87,12 +88,12 @@ createOpContext OpRecvCloseOnServer =
 setOpArray :: C.OpArray -> Int -> OpContext -> IO ()
 setOpArray arr i (OpSendInitialMetadataContext kvs l) =
   C.opSendInitialMetadata arr i kvs l
-setOpArray arr i (OpSendMessageContext (bb,_)) =
+setOpArray arr i (OpSendMessageContext (bb, _)) =
   C.opSendMessage arr i bb
 setOpArray arr i OpSendCloseFromClientContext =
   C.opSendCloseClient arr i
 setOpArray arr i (OpSendStatusFromServerContext kvs l code details) =
-    C.opSendStatusServer arr i l kvs code details
+  C.opSendStatusServer arr i l kvs code details
 setOpArray arr i (OpRecvInitialMetadataContext pmetadata) =
   C.opRecvInitialMetadata arr i pmetadata
 setOpArray arr i (OpRecvMessageContext pbb) =
@@ -120,29 +121,33 @@ freeOpContext (OpRecvStatusOnClientContext metadata pcode slice) = do
   C.freeSlice slice
 freeOpContext (OpRecvCloseOnServerContext pcancelled) =
   grpcDebug ("freeOpContext: freeing pcancelled: " ++ show pcancelled)
-  >> free pcancelled
+    >> free pcancelled
 
 -- | Allocates an `OpArray` and a list of `OpContext`s from the given list of
 -- `Op`s.
 withOpArrayAndCtxts :: [Op] -> ((C.OpArray, [OpContext]) -> IO a) -> IO a
 withOpArrayAndCtxts ops = bracket setup teardown
-  where setup = do ctxts <- mapM createOpContext ops
-                   let l = length ops
-                   arr <- C.opArrayCreate l
-                   sequence_ $ zipWith (setOpArray arr) [0..l-1] ctxts
-                   return (arr, ctxts)
-        teardown (arr, ctxts) = do C.opArrayDestroy arr (length ctxts)
-                                   mapM_ freeOpContext ctxts
+  where
+    setup = do
+      ctxts <- mapM createOpContext ops
+      let l = length ops
+      arr <- C.opArrayCreate l
+      sequence_ $ zipWith (setOpArray arr) [0 .. l - 1] ctxts
+      return (arr, ctxts)
+    teardown (arr, ctxts) = do
+      C.opArrayDestroy arr (length ctxts)
+      mapM_ freeOpContext ctxts
 
 -- | Container holding GC-managed results for 'Op's which receive data.
-data OpRecvResult =
-  OpRecvInitialMetadataResult MetadataMap
-  | OpRecvMessageResult (Maybe B.ByteString)
-    -- ^ If a streaming call is in progress and the stream terminates normally,
+data OpRecvResult
+  = OpRecvInitialMetadataResult MetadataMap
+  | -- | If a streaming call is in progress and the stream terminates normally,
     -- or If the client or server dies, we might not receive a response body, in
     -- which case this will be 'Nothing'.
+    OpRecvMessageResult (Maybe B.ByteString)
   | OpRecvStatusOnClientResult MetadataMap C.StatusCode B.ByteString
-  | OpRecvCloseOnServerResult Bool -- ^ True if call was cancelled.
+  | -- | True if call was cancelled.
+    OpRecvCloseOnServerResult Bool
   deriving (Show)
 
 -- | For the given 'OpContext', if the 'Op' receives data, copies the data out
@@ -158,11 +163,13 @@ resultFromOpContext (OpRecvMessageContext pbb) = do
   grpcDebug "resultFromOpContext: OpRecvMessageContext"
   bb@(C.ByteBuffer bbptr) <- peek pbb
   if bbptr == nullPtr
-     then do grpcDebug "resultFromOpContext: WARNING: got empty message."
-             return $ Just $ OpRecvMessageResult Nothing
-     else do bs <- C.copyByteBufferToByteString bb
-             grpcDebug $ "resultFromOpContext: bb copied: " ++ show bs
-             return $ Just $ OpRecvMessageResult (Just bs)
+    then do
+      grpcDebug "resultFromOpContext: WARNING: got empty message."
+      return $ Just $ OpRecvMessageResult Nothing
+    else do
+      bs <- C.copyByteBufferToByteString bb
+      grpcDebug $ "resultFromOpContext: bb copied: " ++ show bs
+      return $ Just $ OpRecvMessageResult (Just bs)
 resultFromOpContext (OpRecvStatusOnClientContext pmetadata pcode pstr) = do
   grpcDebug "resultFromOpContext: OpRecvStatusOnClientContext"
   metadata <- peek pmetadata
@@ -172,8 +179,10 @@ resultFromOpContext (OpRecvStatusOnClientContext pmetadata pcode pstr) = do
   return $ Just $ OpRecvStatusOnClientResult metadataMap code statusInfo
 resultFromOpContext (OpRecvCloseOnServerContext pcancelled) = do
   grpcDebug "resultFromOpContext: OpRecvCloseOnServerContext"
-  cancelled <- fmap (\x -> if x > 0 then True else False)
-                    (peek pcancelled)
+  cancelled <-
+    fmap
+      (\x -> if x > 0 then True else False)
+      (peek pcancelled)
   return $ Just $ OpRecvCloseOnServerResult cancelled
 resultFromOpContext _ = do
   grpcDebug "resultFromOpContext: saw non-result op type."
@@ -197,70 +206,74 @@ resultFromOpContext _ = do
 -- GRPC_CALL_ERROR_TOO_MANY_OPERATIONS error if we use the same 'Op' twice in
 -- the same batch, so we might want to change the list to a set. I don't think
 -- order matters within a batch. Need to check.
-runOps :: C.Call
-          -- ^ 'Call' that this batch is associated with. One call can be
-          -- associated with many batches.
-       -> CompletionQueue
-          -- ^ Queue on which our tag will be placed once our ops are done
-          -- running.
-       -> [Op]
-          -- ^ The list of 'Op's to execute.
-       -> IO (Either GRPCIOError [OpRecvResult])
+runOps ::
+  -- | 'Call' that this batch is associated with. One call can be
+  -- associated with many batches.
+  C.Call ->
+  -- | Queue on which our tag will be placed once our ops are done
+  -- running.
+  CompletionQueue ->
+  -- | The list of 'Op's to execute.
+  [Op] ->
+  IO (Either GRPCIOError [OpRecvResult])
 runOps call cq ops =
-  let l = length ops in
-    -- It is crucial to mask exceptions here. If we don’t do this, we can
-    -- run into the following situation:
-    --
-    -- 1. We allocate an OpContext, e.g., OpRecvMessageContext and the corresponding ByteBuffer.
-    -- 2. We pass the buffer to gRPC in startBatch.
-    -- 3. If we now get an exception we will free the ByteBuffer.
-    -- 4. gRPC can now end up writing to the freed ByteBuffer and we get a heap corruption.
-    withOpArrayAndCtxts ops $ \(opArray, contexts) -> mask_ $ do
-      grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
-      tag <- newTag cq
-      grpcDebug $ "runOps: tag: " ++ show tag
-      callError <- startBatch cq call opArray l tag
-      grpcDebug $ "runOps: called start_batch. callError: "
-                   ++ (show callError)
-      case callError of
-        Left x -> return $ Left x
-        Right () -> do
-          ev <- pluck cq tag Nothing
-          grpcDebug $ "runOps: pluck returned " ++ show ev
-          case ev of
-            Right () -> do
-              grpcDebug "runOps: got good op; starting."
-              fmap (Right . catMaybes) $ mapM resultFromOpContext contexts
-            Left err -> return $ Left err
+  let l = length ops
+   in -- It is crucial to mask exceptions here. If we don’t do this, we can
+      -- run into the following situation:
+      --
+      -- 1. We allocate an OpContext, e.g., OpRecvMessageContext and the corresponding ByteBuffer.
+      -- 2. We pass the buffer to gRPC in startBatch.
+      -- 3. If we now get an exception we will free the ByteBuffer.
+      -- 4. gRPC can now end up writing to the freed ByteBuffer and we get a heap corruption.
+      withOpArrayAndCtxts ops $ \(opArray, contexts) -> mask_ $ do
+        grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
+        tag <- newTag cq
+        grpcDebug $ "runOps: tag: " ++ show tag
+        callError <- startBatch cq call opArray l tag
+        grpcDebug $
+          "runOps: called start_batch. callError: "
+            ++ (show callError)
+        case callError of
+          Left x -> return $ Left x
+          Right () -> do
+            ev <- pluck cq tag Nothing
+            grpcDebug $ "runOps: pluck returned " ++ show ev
+            case ev of
+              Right () -> do
+                grpcDebug "runOps: got good op; starting."
+                fmap (Right . catMaybes) $ mapM resultFromOpContext contexts
+              Left err -> return $ Left err
 
-runOps' :: C.Call
-        -> CompletionQueue
-        -> [Op]
-        -> ExceptT GRPCIOError IO [OpRecvResult]
+runOps' ::
+  C.Call ->
+  CompletionQueue ->
+  [Op] ->
+  ExceptT GRPCIOError IO [OpRecvResult]
 runOps' c cq = ExceptT . runOps c cq
 
 -- | If response status info is present in the given 'OpRecvResult's, returns
 -- a tuple of trailing metadata, status code, and status details.
-extractStatusInfo :: [OpRecvResult]
-                     -> Maybe (MetadataMap, C.StatusCode, B.ByteString)
+extractStatusInfo ::
+  [OpRecvResult] ->
+  Maybe (MetadataMap, C.StatusCode, B.ByteString)
 extractStatusInfo [] = Nothing
-extractStatusInfo (OpRecvStatusOnClientResult meta code details:_) =
+extractStatusInfo (OpRecvStatusOnClientResult meta code details : _) =
   Just (meta, code, details)
-extractStatusInfo (_:xs) = extractStatusInfo xs
+extractStatusInfo (_ : xs) = extractStatusInfo xs
 
 --------------------------------------------------------------------------------
 -- Types and helpers for common ops batches
 
-type SendSingle a
-  =  C.Call
-  -> CompletionQueue
-  -> a
-  -> ExceptT GRPCIOError IO ()
+type SendSingle a =
+  C.Call ->
+  CompletionQueue ->
+  a ->
+  ExceptT GRPCIOError IO ()
 
-type RecvSingle a
-  =  C.Call
-  -> CompletionQueue
-  -> ExceptT GRPCIOError IO a
+type RecvSingle a =
+  C.Call ->
+  CompletionQueue ->
+  ExceptT GRPCIOError IO a
 
 pattern RecvMsgRslt :: Maybe ByteString -> Either a [OpRecvResult]
 pattern RecvMsgRslt mmsg <- Right [OpRecvMessageResult mmsg]
@@ -276,28 +289,31 @@ sendStatusFromServer c cq (md, st, ds) =
   sendSingle c cq (OpSendStatusFromServer md st ds)
 
 recvInitialMessage :: RecvSingle ByteString
-recvInitialMessage c cq = ExceptT (streamRecvPrim c cq ) >>= \case
-  Nothing -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMessage: no message.")
-  Just bs -> return bs
+recvInitialMessage c cq =
+  ExceptT (streamRecvPrim c cq) >>= \case
+    Nothing -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMessage: no message.")
+    Just bs -> return bs
 
 recvInitialMetadata :: RecvSingle MetadataMap
-recvInitialMetadata c cq = runOps' c cq [OpRecvInitialMetadata] >>= \case
-  [OpRecvInitialMetadataResult md]
-    -> return md
-  _ -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMetadata")
+recvInitialMetadata c cq =
+  runOps' c cq [OpRecvInitialMetadata] >>= \case
+    [OpRecvInitialMetadataResult md] ->
+      return md
+    _ -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMetadata")
 
 recvInitialMsgMD :: RecvSingle (Maybe ByteString, MetadataMap)
-recvInitialMsgMD c cq = runOps' c cq [OpRecvInitialMetadata, OpRecvMessage] >>= \case
-  [ OpRecvInitialMetadataResult md, OpRecvMessageResult mmsg]
-    -> return (mmsg, md)
-  _ -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMsgMD")
+recvInitialMsgMD c cq =
+  runOps' c cq [OpRecvInitialMetadata, OpRecvMessage] >>= \case
+    [OpRecvInitialMetadataResult md, OpRecvMessageResult mmsg] ->
+      return (mmsg, md)
+    _ -> throwE (GRPCIOInternalUnexpectedRecv "recvInitialMsgMD")
 
 recvStatusOnClient :: RecvSingle (MetadataMap, C.StatusCode, StatusDetails)
-recvStatusOnClient c cq = runOps' c cq [OpRecvStatusOnClient] >>= \case
-  [OpRecvStatusOnClientResult md st ds]
-    -> return (md, st, StatusDetails ds)
-  _ -> throwE (GRPCIOInternalUnexpectedRecv "recvStatusOnClient")
-
+recvStatusOnClient c cq =
+  runOps' c cq [OpRecvStatusOnClient] >>= \case
+    [OpRecvStatusOnClientResult md st ds] ->
+      return (md, st, StatusDetails ds)
+    _ -> throwE (GRPCIOInternalUnexpectedRecv "recvStatusOnClient")
 
 --------------------------------------------------------------------------------
 -- Streaming types and helpers
@@ -307,21 +323,21 @@ streamRecvPrim :: C.Call -> CompletionQueue -> StreamRecv ByteString
 streamRecvPrim c cq = f <$> runOps c cq [OpRecvMessage]
   where
     f (RecvMsgRslt mmsg) = Right mmsg
-    f Right{}            = Left (GRPCIOInternalUnexpectedRecv "streamRecvPrim")
-    f (Left e)           = Left e
+    f Right{} = Left (GRPCIOInternalUnexpectedRecv "streamRecvPrim")
+    f (Left e) = Left e
 
 type StreamSend a = a -> IO (Either GRPCIOError ())
 streamSendPrim :: C.Call -> CompletionQueue -> StreamSend ByteString
 streamSendPrim c cq bs = f <$> runOps c cq [OpSendMessage bs]
   where
     f (Right []) = Right ()
-    f Right{}    = Left (GRPCIOInternalUnexpectedRecv "streamSendPrim")
-    f (Left e)   = Left e
+    f Right{} = Left (GRPCIOInternalUnexpectedRecv "streamSendPrim")
+    f (Left e) = Left e
 
 type WritesDone = IO (Either GRPCIOError ())
 writesDonePrim :: C.Call -> CompletionQueue -> WritesDone
 writesDonePrim c cq = f <$> runOps c cq [OpSendCloseFromClient]
   where
     f (Right []) = Right ()
-    f Right{}    = Left (GRPCIOInternalUnexpectedRecv "writesDonePrim")
-    f (Left e)   = Left e
+    f Right{} = Left (GRPCIOInternalUnexpectedRecv "writesDonePrim")
+    f (Left e) = Left e

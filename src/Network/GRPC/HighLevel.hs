@@ -1,54 +1,53 @@
 module Network.GRPC.HighLevel (
+  -- * Types
+  MetadataMap (..),
+  MethodName (..),
+  StatusDetails (..),
+  StatusCode (..),
+  GRPCIOError (..),
+  GRPCImpl (..),
+  MkHandler,
+  ServiceOptions (..),
 
--- * Types
-  MetadataMap(..)
-, MethodName(..)
-, StatusDetails(..)
-, StatusCode(..)
-, GRPCIOError(..)
-, GRPCImpl(..)
-, MkHandler
-, ServiceOptions(..)
+  -- * Server
+  Handler (..),
+  ServerOptions (..),
+  defaultOptions,
+  serverLoop,
+  ServerCall (..),
+  serverCallCancel,
+  serverCallIsExpired,
 
--- * Server
-, Handler(..)
-, ServerOptions(..)
-, defaultOptions
-, serverLoop
-, ServerCall(..)
-, serverCallCancel
-, serverCallIsExpired
+  -- * Client
+  NormalRequestResult (..),
+  ClientCall,
+  clientCallCancel,
 
--- * Client
-, NormalRequestResult(..)
-, ClientCall
-, clientCallCancel
+  -- * Client and Server Auth
+  AuthContext,
+  AuthProperty (..),
+  getAuthProperties,
+  addAuthProperty,
 
--- * Client and Server Auth
-, AuthContext
-, AuthProperty(..)
-, getAuthProperties
-, addAuthProperty
+  -- * Server Auth
+  ServerSSLConfig (..),
+  ProcessMeta,
+  AuthProcessorResult (..),
+  SslClientCertificateRequestType (..),
 
--- * Server Auth
-, ServerSSLConfig(..)
-, ProcessMeta
-, AuthProcessorResult(..)
-, SslClientCertificateRequestType(..)
+  -- * Client Auth
+  ClientSSLConfig (..),
+  ClientSSLKeyCertPair (..),
+  ClientMetadataCreate,
+  ClientMetadataCreateResult (..),
+  AuthMetadataContext (..),
 
--- * Client Auth
-, ClientSSLConfig(..)
-, ClientSSLKeyCertPair(..)
-, ClientMetadataCreate
-, ClientMetadataCreateResult(..)
-, AuthMetadataContext(..)
-
--- * Streaming utilities
-, StreamSend
-, StreamRecv
+  -- * Streaming utilities
+  StreamSend,
+  StreamRecv,
 )
- where
+where
 
-import           Network.GRPC.HighLevel.Server
-import           Network.GRPC.HighLevel.Generated
-import           Network.GRPC.LowLevel
+import Network.GRPC.HighLevel.Generated
+import Network.GRPC.HighLevel.Server
+import Network.GRPC.LowLevel
