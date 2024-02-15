@@ -116,7 +116,7 @@ forkServer Server{..} f = do
       tid <- myThreadId
       atomically $ modifyTVar' outstandingForks (S.delete tid)
 
-#ifdef (DEBUG)
+#ifdef DEBUG
     -- This is intentionally moved outside of the 'do' block so that this file
     -- can be auto-formatted by fourmolu. Fourmolu's support for formatting CPP
     -- fails inside of 'do' blocks.
