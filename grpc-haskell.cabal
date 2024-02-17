@@ -28,7 +28,7 @@ flag with-examples
 library
   build-depends:
       base >=4.8 && <5.0
-    , bytestring >= 0.10 && <0.12
+    , bytestring >= 0.10 && <0.16
     , proto3-suite >=0.4.3
     , proto3-wire >=1.2.2
     , grpc-haskell-core >=0.2.1
