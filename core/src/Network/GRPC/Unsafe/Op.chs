@@ -27,11 +27,12 @@ import Language.Haskell.TH.Syntax (Lift)
 
 -- StatusCode ------------------------------------------------------------------
 
--- | 'StatusCode' enumerates the set of gRPC status codes. See the 
+-- | 'StatusCode' enumerates the set of gRPC status codes. See the
 -- ["gRPC Core"](https://grpc.github.io/grpc/core/md_doc_statuscodes.html)
--- library reference for more information regarding the 'StatusCode' enum. 
-{#enum 
-  grpc_status_code as StatusCode {underscoreToCase} 
+-- library reference for more information regarding the 'StatusCode' enum.
+{#enum
+  grpc_status_code as StatusCode {underscoreToCase}
+    omit (GRPC_STATUS__DO_NOT_USE)
     deriving (Bounded, Data, Eq, Generic, Lift, Ord, Read, Show)
   #}
 
@@ -45,8 +46,8 @@ import Language.Haskell.TH.Syntax (Lift)
 
 --------------------------------------------------------------------------------
 
-{#enum 
-  grpc_op_type as OpType {underscoreToCase} 
+{#enum
+  grpc_op_type as OpType {underscoreToCase}
     deriving (Eq, Show)
   #}
 
@@ -60,9 +61,9 @@ import Language.Haskell.TH.Syntax (Lift)
 -- always the OpArray to mutate and the index in the array at which to create
 -- the new op. After processing the batch and getting out any results, call
 -- 'opArrayDestroy'.
-{#pointer 
+{#pointer
 
-  *grpc_op as OpArray newtype 
+  *grpc_op as OpArray newtype
   #}
 
 deriving instance Show OpArray
