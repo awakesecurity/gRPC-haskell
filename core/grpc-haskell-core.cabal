@@ -54,7 +54,6 @@ library
     Network.GRPC.LowLevel.GRPC.MetadataMap
     Network.GRPC.LowLevel.Op
     Network.GRPC.LowLevel.Server
-    -- Network.GRPC.LowLevel.StatusCode
     Network.GRPC.LowLevel.Call
     Network.GRPC.LowLevel.Call.Unregistered
     Network.GRPC.LowLevel.Client
