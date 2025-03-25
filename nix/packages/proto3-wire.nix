@@ -1,26 +1,26 @@
 { mkDerivation, base, bytestring, cereal, containers, criterion
-, deepseq, doctest, fetchgit, ghc-prim, hashable, lib
-, parameterized, primitive, QuickCheck, random, safe, tasty
-, tasty-hunit, tasty-quickcheck, template-haskell, text, text-short
+, deepseq, doctest, fetchgit, hashable, lib, parameterized
+, primitive, QuickCheck, random, safe, tasty, tasty-hunit
+, tasty-quickcheck, template-haskell, text, text-short
 , transformers, unordered-containers, vector, word-compat
 }:
 mkDerivation {
   pname = "proto3-wire";
-  version = "1.4.1";
+  version = "1.4.5";
   src = fetchgit {
-    url = "https://github.com/awakesecurity/proto3-wire.git";
-    sha256 = "sha256-g15oAYmhfv8DVgmQTZkcCgOYRFkxl2PQi30qXXXhBLs=";
-    rev = "ee6ca644eef86cc5f31da85fb48e10b20ab0e1a1";
+    url = "https://github.com/awakesecurity/proto3-wire/";
+    sha256 = "0nb8xy723jhybrfsyfcgpczgbv80hcndprc45h3zq9hliam07qqv";
+    rev = "d4376fb6f1c1ac03ee8ec5c5793700ca6508ea70";
     fetchSubmodules = true;
   };
   libraryHaskellDepends = [
-    base bytestring cereal containers deepseq ghc-prim hashable
-    parameterized primitive QuickCheck safe template-haskell text
-    text-short transformers unordered-containers vector word-compat
+    base bytestring cereal containers deepseq hashable parameterized
+    primitive QuickCheck safe template-haskell text text-short
+    transformers unordered-containers vector word-compat
   ];
   testHaskellDepends = [
-    base bytestring cereal doctest QuickCheck tasty tasty-hunit
-    tasty-quickcheck text text-short transformers vector
+    base bytestring cereal containers doctest QuickCheck tasty
+    tasty-hunit tasty-quickcheck text text-short transformers vector
   ];
   benchmarkHaskellDepends = [ base bytestring criterion random ];
   description = "A low-level implementation of the Protocol Buffers (version 3) wire format";

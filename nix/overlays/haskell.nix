@@ -6,22 +6,7 @@ final: prev: {
       "${ghc}" = prev.haskell.packages."${ghc}".override (old: {
         overrides = prev.lib.fold prev.lib.composeExtensions (old.overrides or (_: _: { })) [
           (hfinal: hprev: {
-            data-diverse =
-              final.haskell.lib.overrideCabal hprev.data-diverse (old: {
-                broken = assert !old.broken ->
-                  builtins.trace "remove the data-diverse override in release.nix" false;
-                  false;
-                doCheck = false;
-              });
-
-            dhall =
-              hfinal.callPackage ../packages/dhall.nix { };
-
-            large-generics =
-              hfinal.callPackage ../packages/large-generics.nix { };
-
-            large-records =
-              hfinal.callPackage ../packages/large-records.nix { };
+            large-records = final.haskell.lib.unmarkBroken hprev.large-records;
 
             proto3-wire =
               hfinal.callPackage ../packages/proto3-wire.nix { };
@@ -29,15 +14,6 @@ final: prev: {
             proto3-suite =
               final.haskell.lib.dontCheck
                 (hfinal.callPackage ../packages/proto3-suite.nix {});
-
-            range-set-list =
-              hfinal.callPackage ../packages/range-set-list.nix { };
-
-            record-dot-preprocessor =
-              hfinal.callPackage ../packages/record-dot-preprocessor.nix { };
-
-            word-compat =
-              hfinal.callPackage ../packages/word-compat.nix { };
 
             grpc-haskell-core =
               final.haskell.lib.buildFromSdist (final.usesGRPC

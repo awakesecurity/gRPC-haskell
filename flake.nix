@@ -53,7 +53,7 @@
 
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/ed3cc9672ad507ca4d00e15b35f3d24edd1dff6c";
+    nixpkgs.url = "github:NixOS/nixpkgs/24.05";
     flake-utils.url = "github:numtide/flake-utils";
     gitignore = {
       url = "github:hercules-ci/gitignore.nix";
@@ -64,7 +64,7 @@
   outputs = { self, nixpkgs, flake-utils, gitignore }:
     flake-utils.lib.eachSystem ["x86_64-linux" "x86_64-darwin" "aarch64-darwin"] (system:
       let
-        ghc = "ghc922";
+        ghc = "ghc94";
 
         haskellOverlay = import nix/overlays/haskell.nix {
           inherit gitignore ghc;
