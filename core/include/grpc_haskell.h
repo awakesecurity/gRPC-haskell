@@ -2,12 +2,19 @@
 #define GRPC_HASKELL
 
 #include <grpc/grpc.h>
-#include <grpc/credentials.h>
 #include <grpc/grpc_security.h>
 #include <grpc/impl/codegen/slice.h>
 #include <grpc/support/time.h>
 #include <grpc/byte_buffer.h>
 #include <grpc/byte_buffer_reader.h>
+
+// Some imports have been moved to credentials.h in grpc 1.64
+// See: https://github.com/grpc/grpc/pull/36216
+#if defined(__has_include)
+#  if __has_include(<grpc/credentials.h>)
+#    include <grpc/credentials.h>
+#  endif
+#endif
 
 grpc_event *grpc_completion_queue_next_(grpc_completion_queue *cq,
                                        gpr_timespec *deadline,
