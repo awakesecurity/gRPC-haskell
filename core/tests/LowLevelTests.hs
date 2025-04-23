@@ -681,6 +681,7 @@ testGoaway =
         Left (GRPCIOBadStatusCode StatusUnavailable _) -> True
         Left (GRPCIOBadStatusCode StatusDeadlineExceeded "Deadline Exceeded") -> True
         Left GRPCIOTimeout -> True
+        Left GRPCIOShutdown -> True
         _ -> False
 
     server s = do
