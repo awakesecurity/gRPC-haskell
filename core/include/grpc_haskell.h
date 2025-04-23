@@ -2,6 +2,7 @@
 #define GRPC_HASKELL
 
 #include <grpc/grpc.h>
+#include <grpc/credentials.h>
 #include <grpc/grpc_security.h>
 #include <grpc/impl/codegen/slice.h>
 #include <grpc/support/time.h>
