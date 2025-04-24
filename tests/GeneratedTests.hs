@@ -6,20 +6,21 @@ import Test.Tasty
 import Test.Tasty.HUnit (assertEqual, testCase, (@?=))
 
 import Data.String
+import Proto3.Suite.Haskell.Parser (Logger)
 import Proto3.Suite.DotProto.Generate
 
 import Turtle hiding (err)
 
-generatedTests :: TestTree
-generatedTests =
+generatedTests :: Logger -> TestTree
+generatedTests logger =
   testGroup
     "Code generator tests"
-    [ testServerGeneration
-    , testClientGeneration
+    [ testServerGeneration logger
+    , testClientGeneration logger
     ]
 
-testServerGeneration :: TestTree
-testServerGeneration = testCase "server generation" $ do
+testServerGeneration :: Logger -> TestTree
+testServerGeneration logger = testCase "server generation" $ do
   mktree hsTmpDir
   mktree pyTmpDir
 
@@ -32,7 +33,7 @@ testServerGeneration = testCase "server generation" $ do
           , stringType = StringType "Data.Text.Lazy" "Text"
           , recordStyle = LargeRecords
           }
-  compileDotProtoFileOrDie args
+  compileDotProtoFileOrDie logger args
 
   do
     exitCode <- proc "tests/simple-server.sh" [hsTmpDir] empty
@@ -58,8 +59,8 @@ testServerGeneration = testCase "server generation" $ do
   rmtree hsTmpDir
   rmtree pyTmpDir
 
-testClientGeneration :: TestTree
-testClientGeneration = testCase "client generation" $ do
+testClientGeneration :: Logger -> TestTree
+testClientGeneration logger = testCase "client generation" $ do
   mktree hsTmpDir
   mktree pyTmpDir
 
@@ -72,7 +73,7 @@ testClientGeneration = testCase "client generation" $ do
           , stringType = StringType "Data.Text.Lazy" "Text"
           , recordStyle = LargeRecords
           }
-  compileDotProtoFileOrDie args
+  compileDotProtoFileOrDie logger args
 
   do
     exitCode <- proc "tests/simple-client.sh" [hsTmpDir] empty

@@ -69,39 +69,13 @@ let
   overlay = pkgsNew: pkgsOld: {
 
     haskellPackages = pkgsOld.haskellPackages.override {
-      overrides = haskellPackagesNew: haskellPackagesOld: rec {
-        data-diverse =
-          pkgsNew.haskell.lib.overrideCabal haskellPackagesOld.data-diverse (old: {
-            broken = assert !old.broken ->
-              builtins.trace "remove the data-diverse override in release.nix" false;
-              false;
-            doCheck = false;
-          });
-
-        dhall =
-          haskellPackagesNew.callPackage ./nix/dhall.nix { };
-
-        large-generics =
-          haskellPackagesNew.callPackage ./nix/large-generics.nix { };
-
-        large-records =
-          haskellPackagesNew.callPackage ./nix/large-records.nix { };
-
+      overrides = haskellPackagesNew: haskellPackagesOld: {
         proto3-wire =
           haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
 
         proto3-suite =
           pkgsNew.haskell.lib.dontCheck
             (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
-
-        range-set-list =
-          haskellPackagesNew.callPackage ./nix/range-set-list.nix { };
-
-        record-dot-preprocessor =
-          haskellPackagesNew.callPackage ./nix/record-dot-preprocessor.nix { };
-
-        word-compat =
-          haskellPackagesNew.callPackage ./nix/word-compat.nix { };
 
         grpc-haskell-core =
           pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
@@ -133,7 +107,7 @@ let
                       pkgs.turtle
                     ]);
 
-                  python = pkgsNew.python310.withPackages (pkgs: [
+                  python = pkgsNew.python3.withPackages (pkgs: [
                     pkgs.grpcio-tools
                   ]);
 
