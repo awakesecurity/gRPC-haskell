@@ -68,7 +68,7 @@
 let
   overlay = pkgsNew: pkgsOld: {
 
-    haskellPackages = pkgsOld.haskellPackages.override {
+    haskellPackages = pkgsOld.haskell.packages.ghc98.override {
       overrides = haskellPackagesNew: haskellPackagesOld: {
         proto3-wire =
           haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
