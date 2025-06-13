@@ -18,6 +18,7 @@ jobs:
           name: awakesecurity
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - run: nix-build --attr grpc-haskell
+      - run: nix-build --attr grpc-haskell --argstr ghc ghc98
   build-macos:
     runs-on: macos-latest
     steps:
@@ -31,3 +32,4 @@ jobs:
           name: awakesecurity
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
       - run: nix-build --attr grpc-haskell-no-tests
+      - run: nix-build --attr grpc-haskell-no-tests --argstr ghc ghc98

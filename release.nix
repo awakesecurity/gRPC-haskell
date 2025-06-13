@@ -64,11 +64,11 @@
 #     haskellPackages = pkgs.haskellPackages.extend (self: super: {
 #       your-package = self.callCabal2nix "your-package" ./. { };
 #     };);
-
+{ ghc ? "ghc96" }:
 let
   overlay = pkgsNew: pkgsOld: {
 
-    haskellPackages = pkgsOld.haskell.packages.ghc98.override {
+    haskellPackages = pkgsOld.haskell.packages.${ghc}.override {
       overrides = haskellPackagesNew: haskellPackagesOld: {
         proto3-wire =
           haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
