@@ -31,7 +31,7 @@ testServerGeneration logger = testCase "server generation" $ do
           , inputProto = "simple.proto"
           , outputDir = hsTmpDir
           , stringType = StringType "Data.Text.Lazy" "Text"
-          , recordStyle = LargeRecords
+          , typeLevelFormat = True
           }
   compileDotProtoFileOrDie logger args
 
@@ -71,7 +71,7 @@ testClientGeneration logger = testCase "client generation" $ do
           , inputProto = "simple.proto"
           , outputDir = hsTmpDir
           , stringType = StringType "Data.Text.Lazy" "Text"
-          , recordStyle = LargeRecords
+          , typeLevelFormat = True
           }
   compileDotProtoFileOrDie logger args
 
