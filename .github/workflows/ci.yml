@@ -7,6 +7,9 @@ on:
 jobs:
   build-linux:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ghc: [ghc96, ghc98]
     steps:
       - uses: actions/checkout@v3.5.3
         name: Checkout
@@ -17,10 +20,12 @@ jobs:
         with:
           name: awakesecurity
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - run: nix-build --attr grpc-haskell
-      - run: nix-build --attr grpc-haskell --argstr ghc ghc98
+      - run: nix-build --attr grpc-haskell --argstr ghc ${{ matrix.ghc }}
   build-macos:
     runs-on: macos-latest
+    strategy:
+      matrix:
+        ghc: [ghc96, ghc98]
     steps:
       - uses: actions/checkout@v3.5.3
         name: Checkout
@@ -31,5 +36,4 @@ jobs:
         with:
           name: awakesecurity
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-      - run: nix-build --attr grpc-haskell-no-tests
-      - run: nix-build --attr grpc-haskell-no-tests --argstr ghc ghc98
+      - run: nix-build --attr grpc-haskell-no-tests --argstr ghc ${{ matrix.ghc }}
