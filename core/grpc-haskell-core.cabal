@@ -1,3 +1,5 @@
+cabal-version: 3.0
+
 name:                grpc-haskell-core
 version:             0.6.1
 synopsis:            Haskell implementation of gRPC layered on shared C library.
@@ -9,7 +11,6 @@ maintainer:          opensource@awakenetworks.com
 copyright:           Copyright 2016 Awake Networks
 category:            Network
 build-type:          Simple
-cabal-version:       >=1.10
 extra-source-files:  include/grpc_haskell.h
                      tests/ssl/localhost.crt
                      tests/ssl/localhost.key
@@ -77,7 +78,7 @@ library
     , grpc/impl/codegen/compression_types.h
     , grpc/slice_buffer.h
     , grpc/slice.h
-  build-tools:          c2hs
+  build-tool-depends:   c2hs:c2hs
   include-dirs:         include
   hs-source-dirs:       src
   default-extensions:   CPP
