@@ -1,3 +1,5 @@
+cabal-version: 3.0
+
 name:                grpc-haskell-core
 version:             0.6.1
 synopsis:            Haskell implementation of gRPC layered on shared C library.
@@ -9,7 +11,6 @@ maintainer:          opensource@awakenetworks.com
 copyright:           Copyright 2016 Awake Networks
 category:            Network
 build-type:          Simple
-cabal-version:       >=1.10
 extra-source-files:  include/grpc_haskell.h
                      tests/ssl/localhost.crt
                      tests/ssl/localhost.key
@@ -19,15 +20,22 @@ Flag Debug
   Manual:      True
   Default:     False
 
+common common
+  default-language:     Haskell2010
+  ghc-options:          -Wall -Werror -fwarn-incomplete-patterns -fno-warn-unused-do-bind -g -threaded -rtsopts
+  if impl(ghc >= 9.8)
+    ghc-options:        -Wno-x-partial
+
 library
+  import:               common
   build-depends:
       base             >= 4.8    && < 5.0
     , clock            >= 0.6.0  && < 0.9
-    , bytestring       >= 0.10 && <0.12
+    , bytestring       >= 0.10   && < 0.13
     , stm              >= 2.4    && < 2.6
     , containers       >= 0.5    && < 0.7
     , managed          >= 1.0.0  && < 1.1
-    , template-haskell >= 2.16.0 && < 2.21
+    , template-haskell >= 2.16.0 && < 2.24
     , transformers
 
   c-sources:
@@ -70,9 +78,7 @@ library
     , grpc/impl/codegen/compression_types.h
     , grpc/slice_buffer.h
     , grpc/slice.h
-  build-tools:          c2hs
-  default-language:     Haskell2010
-  ghc-options:          -Wall -Werror -fwarn-incomplete-patterns -fno-warn-unused-do-bind
+  build-tool-depends:   c2hs:c2hs
   include-dirs:         include
   hs-source-dirs:       src
   default-extensions:   CPP
@@ -82,10 +88,11 @@ library
     CC-Options:  -DGRPC_HASKELL_DEBUG -std=c99
 
 test-suite tests
+  import:               common
   build-depends:
       base >=4.8 && <5.0
     , grpc-haskell-core
-    , bytestring >= 0.10 && <0.12
+    , bytestring >= 0.10 && <0.13
     , unix
     , time
     , async >=2.1 && <2.3
@@ -106,8 +113,6 @@ test-suite tests
     LowLevelTests,
     LowLevelTests.Op,
     UnsafeTests
-  default-language:     Haskell2010
-  ghc-options:          -Wall -Werror -fwarn-incomplete-patterns -fno-warn-unused-do-bind -g -threaded -rtsopts
   hs-source-dirs:       tests
   main-is:              Properties.hs
   type:                 exitcode-stdio-1.0
