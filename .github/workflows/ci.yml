@@ -11,11 +11,11 @@ jobs:
       matrix:
         ghc: [ghc96, ghc98, ghc910]
     steps:
-      - uses: actions/checkout@v3.5.3
+      - uses: actions/checkout@v5
         name: Checkout
-      - uses: cachix/install-nix-action@v22
+      - uses: cachix/install-nix-action@v31
         name: Install Nix
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@v16
         name: Set up Cachix
         with:
           name: awakesecurity
@@ -27,11 +27,11 @@ jobs:
       matrix:
         ghc: [ghc96, ghc98, ghc910]
     steps:
-      - uses: actions/checkout@v3.5.3
+      - uses: actions/checkout@v5
         name: Checkout
-      - uses: cachix/install-nix-action@v22
+      - uses: cachix/install-nix-action@v31
         name: Install Nix
-      - uses: cachix/cachix-action@v12
+      - uses: cachix/cachix-action@v16
         name: Set up Cachix
         with:
           name: awakesecurity
