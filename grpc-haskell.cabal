@@ -56,7 +56,7 @@ executable hellos-server
       base >=4.8 && <5.0
       , async
       , bytestring >= 0.10 && <0.13
-      , containers >=0.5 && <0.7
+      , containers >=0.5 && <0.8
       , grpc-haskell
       , grpc-haskell-core >=0.2.0
       , proto3-suite
@@ -76,7 +76,7 @@ executable hellos-client
       base >=4.8 && <5.0
       , async
       , bytestring >= 0.10 && <0.13
-      , containers >=0.5 && <0.7
+      , containers >=0.5 && <0.8
       , grpc-haskell
       , grpc-haskell-core >=0.2.0
       , proto3-suite
@@ -96,7 +96,7 @@ executable echo-server
       base >=4.8 && <5.0
       , async
       , bytestring >= 0.10 && <0.13
-      , containers >=0.5 && <0.7
+      , containers >=0.5 && <0.8
       , deepseq
       , grpc-haskell
       , grpc-haskell-core >=0.2.0
@@ -121,7 +121,7 @@ executable arithmetic-server
       base >=4.8 && <5.0
       , async
       , bytestring >= 0.10 && <0.13
-      , containers >=0.5 && <0.7
+      , containers >=0.5 && <0.8
       , deepseq
       , grpc-haskell
       , grpc-haskell-core >=0.2.0
@@ -145,7 +145,7 @@ executable arithmetic-client
       base >=4.8 && <5.0
       , async
       , bytestring >= 0.10 && <0.13
-      , containers >=0.5 && <0.7
+      , containers >=0.5 && <0.8
       , deepseq
       , grpc-haskell
       , grpc-haskell-core >=0.2.0
@@ -169,7 +169,7 @@ executable echo-client
       base >=4.8 && <5.0
       , async
       , bytestring >= 0.10 && <0.13
-      , containers >=0.5 && <0.7
+      , containers >=0.5 && <0.8
       , deepseq
       , grpc-haskell
       , grpc-haskell-core >=0.2.0
@@ -198,7 +198,7 @@ test-suite tests
     , tasty >= 0.11
     , tasty-hunit >= 0.9
     , tasty-quickcheck >= 0.8.4
-    , containers >=0.5 && <0.7
+    , containers >=0.5 && <0.8
     , managed >= 1.0.0 && < 1.1
     , pipes >=4.1 && <=4.4
     , proto3-suite
