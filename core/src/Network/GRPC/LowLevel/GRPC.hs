@@ -1,3 +1,4 @@
+{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -19,10 +20,13 @@ module Network.GRPC.LowLevel.GRPC (
 import Control.Concurrent (myThreadId, threadDelay)
 import Control.Exception
 import Data.Functor (($>))
-import Data.Typeable
 import Network.GRPC.LowLevel.GRPC.MetadataMap (MetadataMap (..))
 import qualified Network.GRPC.Unsafe as C
 import qualified Network.GRPC.Unsafe.Op as C
+
+#if !MIN_VERSION_base(4,21,0)
+import Data.Typeable (Typeable)
+#endif
 
 -- | Functions as a proof that the gRPC core has been started. The gRPC core
 -- must be initialized to create any gRPC state, so this is a requirement for
@@ -68,7 +72,10 @@ data GRPCIOError
   | GRPCIODecodeError String
   | GRPCIOInternalUnexpectedRecv String -- debugging description
   | GRPCIOHandlerException String
-  deriving (Eq, Show, Typeable)
+  deriving (Eq, Show)
+#if !MIN_VERSION_base(4,21,0)
+  deriving stock (Typeable)
+#endif
 
 instance Exception GRPCIOError
 
