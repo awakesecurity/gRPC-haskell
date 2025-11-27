@@ -73,9 +73,10 @@ let
         proto3-wire =
           haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
 
-        proto3-suite =
+        proto3-suite = pkgsNew.lib.pipe (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {}) [
           pkgsNew.haskell.lib.dontCheck
-            (haskellPackagesNew.callPackage ./nix/proto3-suite.nix {});
+          pkgsNew.haskell.lib.doJailbreak
+        ];
 
         grpc-haskell-core =
           pkgsNew.haskell.lib.buildFromSdist (pkgsNew.usesGRPC
