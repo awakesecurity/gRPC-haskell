@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -13,10 +12,6 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as M
 import Data.Ord (comparing)
 import GHC.Exts (IsList (..))
-
-#if !MIN_VERSION_base(4,21,0)
-import Data.Typeable (Typeable)
-#endif
 
 -- | Represents metadata for a given RPC, consisting of key-value pairs (often
 --    referred to as "GRPC custom metadata headers").
@@ -37,9 +32,6 @@ import Data.Typeable (Typeable)
 newtype MetadataMap = MetadataMap
   {unMap :: M.Map ByteString [ByteString]}
   deriving (Data, Eq, Ord)
-#if !MIN_VERSION_base(4,21,0)
-  deriving (Typeable)
-#endif
 
 instance Show MetadataMap where
   show m = "fromList " ++ show (M.toList (unMap m))
