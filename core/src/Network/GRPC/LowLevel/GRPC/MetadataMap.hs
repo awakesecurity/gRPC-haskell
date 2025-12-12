@@ -11,7 +11,6 @@ import Data.List (groupBy, sortBy)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map.Strict as M
 import Data.Ord (comparing)
-import Data.Typeable (Typeable)
 import GHC.Exts (IsList (..))
 
 -- | Represents metadata for a given RPC, consisting of key-value pairs (often
@@ -32,7 +31,7 @@ import GHC.Exts (IsList (..))
 --    Just "y"
 newtype MetadataMap = MetadataMap
   {unMap :: M.Map ByteString [ByteString]}
-  deriving (Data, Eq, Ord, Typeable)
+  deriving (Data, Eq, Ord)
 
 instance Show MetadataMap where
   show m = "fromList " ++ show (M.toList (unMap m))

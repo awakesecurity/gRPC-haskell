@@ -19,7 +19,6 @@ module Network.GRPC.LowLevel.GRPC (
 import Control.Concurrent (myThreadId, threadDelay)
 import Control.Exception
 import Data.Functor (($>))
-import Data.Typeable
 import Network.GRPC.LowLevel.GRPC.MetadataMap (MetadataMap (..))
 import qualified Network.GRPC.Unsafe as C
 import qualified Network.GRPC.Unsafe.Op as C
@@ -68,7 +67,7 @@ data GRPCIOError
   | GRPCIODecodeError String
   | GRPCIOInternalUnexpectedRecv String -- debugging description
   | GRPCIOHandlerException String
-  deriving (Eq, Show, Typeable)
+  deriving (Eq, Show)
 
 instance Exception GRPCIOError
 
