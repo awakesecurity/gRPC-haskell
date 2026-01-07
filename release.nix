@@ -70,6 +70,10 @@ let
 
     haskellPackages = pkgsOld.haskell.packages.${ghc}.override {
       overrides = haskellPackagesNew: haskellPackagesOld: {
+        vcr = pkgsNew.lib.pipe haskellPackagesOld.vcr [
+          (pkgsNew.haskell.lib.compose.dontCheckIf pkgsNew.stdenv.hostPlatform.isDarwin)
+        ];
+
         proto3-wire =
           haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
 
@@ -211,7 +215,7 @@ let
 
    nixpkgs = import ./nixpkgs.nix;
    linuxPkgs = nixpkgs { inherit config overlays; system = "x86_64-linux" ; };
-  darwinPkgs = nixpkgs { inherit config overlays; system = "x86_64-darwin"; };
+  darwinPkgs = nixpkgs { inherit config overlays; system = "aarch64-darwin"; };
         pkgs = nixpkgs { inherit config overlays; };
 
 in
