@@ -68,6 +68,7 @@ void metadata_array_destroy(grpc_metadata_array **arr);
 grpc_metadata* metadata_alloc(size_t n);
 
 void metadata_free(grpc_metadata* m);
+void metadata_free_full(grpc_metadata* m, size_t n);
 
 void set_metadata_key_val(char *key, char *val, size_t val_len,
                           grpc_metadata *arr, size_t i);

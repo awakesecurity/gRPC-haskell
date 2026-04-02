@@ -104,12 +104,12 @@ setOpArray arr i (OpRecvCloseOnServerContext pcancelled) = do
 
 -- | Cleans up an 'OpContext'.
 freeOpContext :: OpContext -> IO ()
-freeOpContext (OpSendInitialMetadataContext m _) = C.metadataFree m
+freeOpContext (OpSendInitialMetadataContext m l) = C.metadataFreeFull m l
 freeOpContext (OpSendMessageContext (bb, s)) =
   C.grpcByteBufferDestroy bb >> C.freeSlice s
 freeOpContext OpSendCloseFromClientContext = return ()
-freeOpContext (OpSendStatusFromServerContext metadata _ _ s) =
-  C.metadataFree metadata >> C.freeSlice s
+freeOpContext (OpSendStatusFromServerContext metadata l _ s) =
+  C.metadataFreeFull metadata l >> C.freeSlice s
 freeOpContext (OpRecvInitialMetadataContext metadata) =
   C.metadataArrayDestroy metadata
 freeOpContext (OpRecvMessageContext pbb) =

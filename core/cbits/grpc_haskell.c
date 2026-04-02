@@ -183,6 +183,15 @@ void metadata_free(grpc_metadata* m){
   grpc_haskell_free("metadata_free", m);
 }
 
+void metadata_free_full(grpc_metadata* m, size_t n){
+  size_t i;
+  for(i = 0; i < n; i++){
+    grpc_slice_unref((m + i)->key);
+    grpc_slice_unref((m + i)->value);
+  }
+  grpc_haskell_free("metadata_free_full", m);
+}
+
 void set_metadata_key_val(char *key, char *val, size_t val_len,
                           grpc_metadata *arr, size_t i){
   grpc_metadata *p = arr + i;

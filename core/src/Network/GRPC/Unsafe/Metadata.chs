@@ -62,6 +62,7 @@ instance Storable MetadataArray where
 {#fun unsafe metadata_alloc as ^ {`Int'} -> `MetadataKeyValPtr'#}
 
 {#fun unsafe metadata_free as ^ {`MetadataKeyValPtr'} -> `()'#}
+{#fun unsafe metadata_free_full as ^ {`MetadataKeyValPtr', `Int'} -> `()'#}
 
 -- | Sets a metadata key/value pair at the given index in the
 -- 'MetadataKeyValPtr'. No error checking is performed to ensure the index is
@@ -88,7 +89,7 @@ withMetadataArrayPtr :: (Ptr MetadataArray -> IO a) -> IO a
 withMetadataArrayPtr = bracket metadataArrayCreate metadataArrayDestroy
 
 withMetadataKeyValPtr :: Int -> (MetadataKeyValPtr -> IO a) -> IO a
-withMetadataKeyValPtr i f = bracket (metadataAlloc i) metadataFree f
+withMetadataKeyValPtr i f = bracket (metadataAlloc i) (`metadataFreeFull` i) f
 
 getMetadataKey :: MetadataKeyValPtr -> Int -> IO ByteString
 getMetadataKey m = getMetadataKey' m >=> sliceToByteString
@@ -109,7 +110,7 @@ withPopulatedMetadataKeyValPtr :: MetadataMap
                                   -> ((MetadataKeyValPtr, Int) -> IO a)
                                   -> IO a
 withPopulatedMetadataKeyValPtr m = bracket (createMetadata m)
-                                           (metadataFree . fst)
+                                           (uncurry metadataFreeFull)
 
 getAllMetadataArray :: MetadataArray -> IO MetadataMap
 getAllMetadataArray m = do
