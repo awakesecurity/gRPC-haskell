@@ -145,6 +145,9 @@ castPeek p = do
 
 {#fun grpc_version_string as ^ {} -> `String' #}
 
+{#fun pure grpc_cpp_version_major as ^ {} -> `Int' #}
+{#fun pure grpc_cpp_version_minor as ^ {} -> `Int' #}
+
 -- | Create a new 'CompletionQueue' for GRPC_CQ_NEXT. See the docs for
 -- 'grpcCompletionQueueShutdown' for instructions on how to clean up afterwards.
 {#fun grpc_completion_queue_create_for_next as ^

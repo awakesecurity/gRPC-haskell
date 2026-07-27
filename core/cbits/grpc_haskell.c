@@ -5,10 +5,19 @@
 #include <grpc/impl/codegen/grpc_types.h>
 #include <grpc/impl/codegen/compression_types.h>
 #include <grpc/slice.h>
+#include <grpcpp/version_info.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <grpc_haskell.h>
+
+int grpc_cpp_version_major(void) {
+  return GRPC_CPP_VERSION_MAJOR;
+}
+
+int grpc_cpp_version_minor(void) {
+  return GRPC_CPP_VERSION_MINOR;
+}
 
 void grpc_haskell_free(char *debugMsg, void *ptr){
   #ifdef GRPC_HASKELL_DEBUG
