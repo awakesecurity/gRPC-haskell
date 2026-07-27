@@ -71,10 +71,6 @@ let
 
     haskellPackages = pkgsOld.haskell.packages.${ghc'}.override {
       overrides = haskellPackagesNew: haskellPackagesOld: {
-        vcr = pkgsNew.lib.pipe haskellPackagesOld.vcr [
-          (pkgsNew.haskell.lib.compose.dontCheckIf pkgsNew.stdenv.hostPlatform.isDarwin)
-        ];
-
         proto3-wire =
           haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
 
