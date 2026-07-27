@@ -678,7 +678,7 @@ testGoaway =
       clientRequest c rm 10 "" mempty
       clientRequest c rm 10 "" mempty
       eer <- clientRequest c rm 1 "" mempty
-      assertBool "Client handles server shutdown gracefully" $ case eer of
+      assertBool ("Client handles server shutdown gracefully, got: " ++ show eer) $ case eer of
         Left (GRPCIOBadStatusCode StatusUnavailable _) -> True
         Left (GRPCIOBadStatusCode StatusDeadlineExceeded "Deadline Exceeded") -> True
         Left GRPCIOTimeout -> True
