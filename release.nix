@@ -64,16 +64,13 @@
 #     haskellPackages = pkgs.haskellPackages.extend (self: super: {
 #       your-package = self.callCabal2nix "your-package" ./. { };
 #     };);
-{ ghc ? "ghc96" }:
+{ ghc ? null }:
 let
+  ghc' = if ghc == null then "ghc96" else ghc;
   overlay = pkgsNew: pkgsOld: {
 
-    haskellPackages = pkgsOld.haskell.packages.${ghc}.override {
+    haskellPackages = pkgsOld.haskell.packages.${ghc'}.override {
       overrides = haskellPackagesNew: haskellPackagesOld: {
-        vcr = pkgsNew.lib.pipe haskellPackagesOld.vcr [
-          (pkgsNew.haskell.lib.compose.dontCheckIf pkgsNew.stdenv.hostPlatform.isDarwin)
-        ];
-
         proto3-wire =
           haskellPackagesNew.callPackage ./nix/proto3-wire.nix { };
 

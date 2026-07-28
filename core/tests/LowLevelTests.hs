@@ -29,6 +29,7 @@ import qualified Network.GRPC.LowLevel.Call.Unregistered as U
 import qualified Network.GRPC.LowLevel.Client.Unregistered as U
 import Network.GRPC.LowLevel.GRPC (threadDelaySecs)
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
+import Network.GRPC.Unsafe (grpcCppVersionMajor, grpcCppVersionMinor)
 import qualified Pipes as P
 import Test.Tasty
 import Test.Tasty.HUnit as HU (
@@ -159,7 +160,7 @@ testPayload =
         checkReqRslt $ \NormalRequestResult{..} -> do
           rspCode @?= StatusOk
           rspBody @?= "reply test"
-          details @?= "details string"
+          details @?= okStatusDetails "details string"
           initMD @?= dummyMeta
           trailMD @?= dummyMeta
     server s = do
@@ -466,7 +467,7 @@ testServerStreaming =
         checkMD "Server initial metadata mismatch" serverInitMD initMD
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
-      eea @?= Right (dummyMeta, StatusOk, "dtls")
+      eea @?= Right (dummyMeta, StatusOk, okStatusDetails "dtls")
 
     server s = do
       let rm = head (sstreamingMethods s)
@@ -496,7 +497,7 @@ testServerStreamingUnregistered =
         checkMD "Server initial metadata mismatch" serverInitMD initMD
         forM_ pays $ \p -> recv `is` Right (Just p)
         recv `is` Right Nothing
-      eea @?= Right (dummyMeta, StatusOk, "dtls")
+      eea @?= Right (dummyMeta, StatusOk, okStatusDetails "dtls")
 
     server s = U.withServerCallAsync s $ \call -> do
       r <- U.serverWriter s call serverInitMD $ \sc send -> do
@@ -523,7 +524,7 @@ testClientStreaming =
       eea <- clientWriter c rm 10 clientInitMD $ \send -> do
         -- liftIO $ checkMD "Server initial metadata mismatch" serverInitMD initMD
         forM_ pays $ \p -> send p `is` Right ()
-      eea @?= Right (Just serverRsp, serverInitMD, trailMD, serverStatus, serverDtls)
+      eea @?= Right (Just serverRsp, serverInitMD, trailMD, serverStatus, okStatusDetails serverDtls)
 
     server s = do
       let rm = head (cstreamingMethods s)
@@ -551,7 +552,7 @@ testClientStreamingUnregistered =
       eea <- clientWriter c rm 10 clientInitMD $ \send -> do
         -- liftIO $ checkMD "Server initial metadata mismatch" serverInitMD initMD
         forM_ pays $ \p -> send p `is` Right ()
-      eea @?= Right (Just serverRsp, serverInitMD, trailMD, serverStatus, serverDtls)
+      eea @?= Right (Just serverRsp, serverInitMD, trailMD, serverStatus, okStatusDetails serverDtls)
 
     server s = U.withServerCallAsync s $ \call -> do
       eea <- U.serverReader s call serverInitMD $ \sc recv -> do
@@ -582,7 +583,7 @@ testBiDiStreaming =
         recv `is` Right (Just "sw2")
         writesDone `is` Right ()
         recv `is` Right Nothing
-      eea @?= Right (trailMD, serverStatus, serverDtls)
+      eea @?= Right (trailMD, serverStatus, okStatusDetails serverDtls)
 
     server s = do
       let rm = head (bidiStreamingMethods s)
@@ -618,7 +619,7 @@ testBiDiStreamingUnregistered =
         recv `is` Right (Just "sw2")
         writesDone `is` Right ()
         recv `is` Right Nothing
-      eea @?= Right (trailMD, serverStatus, serverDtls)
+      eea @?= Right (trailMD, serverStatus, okStatusDetails serverDtls)
 
     server s = U.withServerCallAsync s $ \call -> do
       eea <- U.serverRW s call serverInitMD $ \sc recv send -> do
@@ -656,7 +657,7 @@ testPayloadUnregistered =
         checkReqRslt $ \NormalRequestResult{..} -> do
           rspCode @?= StatusOk
           rspBody @?= "reply test"
-          details @?= "details string"
+          details @?= okStatusDetails "details string"
     server s = do
       r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{..} body -> do
         body @?= "Hello!"
@@ -677,8 +678,9 @@ testGoaway =
       clientRequest c rm 10 "" mempty
       clientRequest c rm 10 "" mempty
       eer <- clientRequest c rm 1 "" mempty
-      assertBool "Client handles server shutdown gracefully" $ case eer of
+      assertBool ("Client handles server shutdown gracefully, got: " ++ show eer) $ case eer of
         Left (GRPCIOBadStatusCode StatusUnavailable _) -> True
+        Left (GRPCIOBadStatusCode StatusCancelled _) -> True
         Left (GRPCIOBadStatusCode StatusDeadlineExceeded "Deadline Exceeded") -> True
         Left GRPCIOTimeout -> True
         Left GRPCIOShutdown -> True
@@ -889,6 +891,11 @@ is act x = act >>= liftIO . (@?= x)
 
 dummyMeta :: MetadataMap
 dummyMeta = [("foo", "bar")]
+
+okStatusDetails :: StatusDetails -> StatusDetails
+okStatusDetails x
+  | (grpcCppVersionMajor, grpcCppVersionMinor) >= (1, 82) = ""
+  | otherwise = x
 
 dummyResp :: (ByteString, MetadataMap, StatusCode, StatusDetails)
 dummyResp = ("", mempty, StatusOk, StatusDetails "")

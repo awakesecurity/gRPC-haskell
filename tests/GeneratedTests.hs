@@ -13,8 +13,9 @@ import Turtle hiding (err)
 
 generatedTests :: Logger -> TestTree
 generatedTests logger =
-  testGroup
+  dependentTestGroup
     "Code generator tests"
+    AllFinish
     [ testServerGeneration logger
     , testClientGeneration logger
     ]
