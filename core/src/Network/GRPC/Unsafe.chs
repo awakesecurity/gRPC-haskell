@@ -26,6 +26,7 @@ import Network.GRPC.Unsafe.Constants
 #include <grpc/status.h>
 #include <grpc/support/alloc.h>
 #include <grpc_haskell.h>
+#include <grpcpp/version_info.h>
 
 {#context prefix = "grpc" #}
 
@@ -145,8 +146,11 @@ castPeek p = do
 
 {#fun grpc_version_string as ^ {} -> `String' #}
 
-{#fun pure grpc_cpp_version_major as ^ {} -> `Int' #}
-{#fun pure grpc_cpp_version_minor as ^ {} -> `Int' #}
+grpcCppVersionMajor :: Int
+grpcCppVersionMajor = {#const GRPC_CPP_VERSION_MAJOR #}
+
+grpcCppVersionMinor :: Int
+grpcCppVersionMinor = {#const GRPC_CPP_VERSION_MINOR #}
 
 -- | Create a new 'CompletionQueue' for GRPC_CQ_NEXT. See the docs for
 -- 'grpcCompletionQueueShutdown' for instructions on how to clean up afterwards.

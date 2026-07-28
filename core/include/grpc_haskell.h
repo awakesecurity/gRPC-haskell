@@ -213,7 +213,4 @@ typedef void haskell_get_metadata(grpc_auth_metadata_context*,
 grpc_metadata_credentials_plugin* mk_metadata_client_plugin(
   haskell_get_metadata* f);
 
-int grpc_cpp_version_major(void);
-int grpc_cpp_version_minor(void);
-
 #endif //GRPC_HASKELL
