@@ -11,6 +11,7 @@ import qualified Data.ByteString as B
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import qualified Data.Map as M
 import Foreign.Marshal.Alloc
+import Foreign.Ptr (nullPtr)
 import Foreign.Storable
 import GHC.Exts
 import Network.GRPC.LowLevel.GRPC (MetadataMap (..), threadDelaySecs)
@@ -42,6 +43,7 @@ unsafeTests =
     , testNow
     , testCreateDestroyMetadata
     , testCreateDestroyMetadataKeyVals
+    , testCreateDestroyServerCallRequest
     , testCreateDestroyDeadline
     , testCreateDestroyChannelArgs
     , testCreateDestroyClientCreds
@@ -228,6 +230,19 @@ testNow = testCase "Create/destroy various clock types" $ do
 testCreateDestroyMetadata :: TestTree
 testCreateDestroyMetadata = testCase "Create/destroy metadataArrayPtr" $ do
   grpc $ withMetadataArrayPtr $ const $ return ()
+
+testCreateDestroyServerCallRequest :: TestTree
+testCreateDestroyServerCallRequest = testCase "Create/destroy server call request" $ do
+  grpc $ do
+    req <- serverCallRequestCreate
+    -- An unused request holds no call, no payload and no metadata.
+    Call call <- peek (serverCallRequestCall req)
+    ByteBuffer pay <- peek (serverCallRequestPayload req)
+    meta <- getAllMetadataArray (serverCallRequestMetadata req)
+    serverCallRequestDestroy req
+    call @?= nullPtr
+    pay @?= nullPtr
+    meta @?= mempty
 
 testCreateDestroyMetadataKeyVals :: TestTree
 testCreateDestroyMetadataKeyVals = testCase "Create/destroy metadata key/values" $ do

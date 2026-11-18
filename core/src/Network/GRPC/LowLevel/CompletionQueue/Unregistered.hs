@@ -8,8 +8,6 @@
 
 module Network.GRPC.LowLevel.CompletionQueue.Unregistered where
 
-import Foreign.Marshal.Alloc (free, malloc)
-import Foreign.Ptr (Ptr)
 import Foreign.Storable (peek)
 import Network.GRPC.LowLevel.Call
 import qualified Network.GRPC.LowLevel.Call.Unregistered as U
@@ -58,27 +56,24 @@ serverRequestCall ::
   CompletionQueue ->
   IO (Either GRPCIOError U.ServerCall)
 serverRequestCall s scq ccq = runCompletion $ do
-  -- NB: These are owned by the completion callback, not by this thread: gRPC
-  -- writes to them when a call arrives, however long that takes.
-  call <- malloc :: IO (Ptr C.Call)
-  meta <- C.metadataArrayCreate
-  cd <- C.createCallDetails
-  let release = do
-        free call
-        C.metadataArrayDestroy meta
-        C.destroyCallDetails cd
+  -- NB: This is owned by the completion callback, not by this thread: gRPC
+  -- writes to it when a call arrives, however long that takes.
+  req <- C.serverCallRequestCreate
+  let call = C.serverCallRequestCall req
+      meta = C.serverCallRequestMetadata req
+      cd = C.serverCallRequestDetails req
+      release = C.serverCallRequestDestroy req
       build =
         U.ServerCall
           <$> peek call
           <*> return ccq
-          <*> (peek meta >>= C.getAllMetadataArray)
+          <*> C.getAllMetadataArray meta
           <*> (C.timeSpec <$> C.callDetailsGetDeadline cd)
           <*> (MethodName <$> C.callDetailsGetMethod cd)
           <*> (Host <$> C.callDetailsGetHost cd)
       request tag = do
-        md <- peek meta
         dbug $ "registering call for tag=" ++ show tag
-        ce <- C.grpcServerRequestCall s call cd md (unsafeCQ ccq) (unsafeCQ scq) tag
+        ce <- C.grpcServerRequestCall s call cd meta (unsafeCQ ccq) (unsafeCQ scq) tag
         dbug $ "request returned: " ++ show ce
         return ce
   return (serverCallOperation scq U.unsafeSC release build request)

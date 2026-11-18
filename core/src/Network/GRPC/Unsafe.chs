@@ -10,6 +10,7 @@ import Data.ByteString (ByteString, useAsCString)
 
 import Foreign.C.String (CString, peekCString)
 import Foreign.Marshal.Alloc (free)
+import Foreign.Marshal.Error (throwIfNull)
 import Foreign.Ptr
 import Foreign.Storable
 import GHC.Exts (IsString(..))
@@ -294,6 +295,43 @@ getPeerPeek cstr = do
    `MetadataArray', id `Ptr ByteBuffer', `CompletionQueue',
    `CompletionQueue',unTag `Tag'}
   -> `CallError'#}
+
+-- | Everything gRPC fills in when a call arrives on a server, held in a single
+-- allocation: the call, its metadata, and either the call details (for
+-- 'grpcServerRequestCall') or the deadline and payload (for
+-- 'grpcServerRequestRegisteredCall'). The accessors below return pointers into
+-- it, which are valid until 'serverCallRequestDestroy'.
+{#pointer *server_call_request as ServerCallRequest newtype #}
+
+deriving instance Show ServerCallRequest
+
+-- | Throws an 'IOError' if the allocation fails.
+{#fun unsafe server_call_request_create as ^
+  {} -> `ServerCallRequest' checkServerCallRequest* #}
+
+checkServerCallRequest :: ServerCallRequest -> IO ServerCallRequest
+checkServerCallRequest (ServerCallRequest p) =
+  ServerCallRequest
+    <$> throwIfNull "server_call_request_create: out of memory" (return p)
+
+-- | Destroys the metadata array, call details and payload, and frees the
+-- request. The call itself is not affected.
+{#fun unsafe server_call_request_destroy as ^ {`ServerCallRequest'} -> `()'#}
+
+{#fun pure unsafe server_call_request_call as ^
+  {`ServerCallRequest'} -> `Ptr Call' id#}
+
+{#fun pure unsafe server_call_request_metadata as ^
+  {`ServerCallRequest'} -> `MetadataArray'#}
+
+{#fun pure unsafe server_call_request_details as ^
+  {`ServerCallRequest'} -> `CallDetails'#}
+
+{#fun pure unsafe server_call_request_deadline as ^
+  {`ServerCallRequest'} -> `CTimeSpecPtr'#}
+
+{#fun pure unsafe server_call_request_payload as ^
+  {`ServerCallRequest'} -> `Ptr ByteBuffer' id#}
 
 {#fun unsafe call_details_get_method as ^ {`CallDetails'} -> `ByteString' sliceToByteString* #}
 

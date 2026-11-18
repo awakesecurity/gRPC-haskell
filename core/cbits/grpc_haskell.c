@@ -330,6 +330,46 @@ void destroy_call_details(grpc_call_details* cd){
   grpc_haskell_free("destroy_call_details", cd);
 }
 
+server_call_request* server_call_request_create(){
+  server_call_request* req = malloc(sizeof(server_call_request));
+  if(req == NULL){
+    return NULL;
+  }
+  memset(req, 0, sizeof(server_call_request));
+  grpc_metadata_array_init(&req->metadata);
+  grpc_call_details_init(&req->details);
+  return req;
+}
+
+void server_call_request_destroy(server_call_request* req){
+  grpc_metadata_array_destroy(&req->metadata);
+  grpc_call_details_destroy(&req->details);
+  if(req->payload != NULL){
+    grpc_byte_buffer_destroy(req->payload);
+  }
+  grpc_haskell_free("server_call_request_destroy", req);
+}
+
+grpc_call** server_call_request_call(server_call_request* req){
+  return &req->call;
+}
+
+grpc_metadata_array* server_call_request_metadata(server_call_request* req){
+  return &req->metadata;
+}
+
+grpc_call_details* server_call_request_details(server_call_request* req){
+  return &req->details;
+}
+
+gpr_timespec* server_call_request_deadline(server_call_request* req){
+  return &req->deadline;
+}
+
+grpc_byte_buffer** server_call_request_payload(server_call_request* req){
+  return &req->payload;
+}
+
 void grpc_channel_watch_connectivity_state_(grpc_channel *channel,
                                             grpc_connectivity_state
                                             last_observed_state,

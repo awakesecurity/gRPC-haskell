@@ -36,16 +36,13 @@ where
 import Control.Concurrent.MVar (newEmptyMVar)
 import Control.Concurrent.STM.TVar (newTVarIO)
 import Control.Exception (bracket, mask_)
-import Control.Monad (unless)
 import Data.List (intersperse)
-import Foreign.Marshal.Alloc (free, malloc)
-import Foreign.Ptr (Ptr, nullPtr)
+import Foreign.Ptr (nullPtr)
 import Foreign.Storable (peek)
 import Network.GRPC.LowLevel.Call
 import Network.GRPC.LowLevel.CompletionQueue.Internal
 import Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe as C
-import qualified Network.GRPC.Unsafe.ByteBuffer as C
 import qualified Network.GRPC.Unsafe.Constants as C
 import qualified Network.GRPC.Unsafe.Metadata as C
 import qualified Network.GRPC.Unsafe.Time as C
@@ -124,32 +121,27 @@ serverRequestCall ::
   CompletionQueue ->
   IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
 serverRequestCall rm s scq ccq = runCompletion $ do
-  -- NB: These are owned by the completion callback, not by this thread: gRPC
-  -- writes to them when a call arrives, however long that takes.
-  dead <- malloc :: IO (Ptr C.CTimeSpec)
-  call <- malloc :: IO (Ptr C.Call)
-  -- NB: The method type dictates whether or not a payload is present, according
-  -- to the payloadHandling function. We do not allocate a buffer for the
-  -- payload when it is not present.
-  pay <-
-    if payloadHandling (methodType rm) == C.SrmPayloadNone
-      then return nullPtr
-      else C.createReceivingByteBuffer
-  meta <- C.metadataArrayCreate
-  let release = do
-        free dead
-        free call
-        unless (pay == nullPtr) $ C.destroyReceivingByteBuffer pay
-        C.metadataArrayDestroy meta
+  -- NB: This is owned by the completion callback, not by this thread: gRPC
+  -- writes to it when a call arrives, however long that takes.
+  req <- C.serverCallRequestCreate
+  let call = C.serverCallRequestCall req
+      dead = C.serverCallRequestDeadline req
+      md = C.serverCallRequestMetadata req
+      -- NB: The method type dictates whether or not a payload is present,
+      -- according to the payloadHandling function. gRPC is given no payload
+      -- buffer when it is not present.
+      pay
+        | payloadHandling (methodType rm) == C.SrmPayloadNone = nullPtr
+        | otherwise = C.serverCallRequestPayload req
+      release = C.serverCallRequestDestroy req
       build =
         ServerCall
           <$> peek call
           <*> return ccq
-          <*> (peek meta >>= C.getAllMetadataArray)
+          <*> C.getAllMetadataArray md
           <*> extractPayload rm pay
           <*> (C.timeSpec <$> peek dead)
       request tag = do
-        md <- peek meta
         dbug $ "registering call for tag=" ++ show tag
         ce <-
           C.grpcServerRequestRegisteredCall

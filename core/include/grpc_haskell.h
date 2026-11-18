@@ -125,6 +125,33 @@ grpc_call_details* create_call_details();
 
 void destroy_call_details(grpc_call_details* cd);
 
+//Everything gRPC fills in when a call arrives on a server, in one allocation.
+//Unregistered requests use call, metadata and details. Registered requests use
+//call, metadata, deadline and (if the method has one) payload.
+typedef struct server_call_request {
+  grpc_call *call;
+  grpc_metadata_array metadata;
+  grpc_call_details details;
+  gpr_timespec deadline;
+  grpc_byte_buffer *payload;
+} server_call_request;
+
+//Returns NULL if the allocation fails.
+server_call_request* server_call_request_create();
+
+//Destroys the fields and frees the struct. Does not touch the call itself.
+void server_call_request_destroy(server_call_request* req);
+
+grpc_call** server_call_request_call(server_call_request* req);
+
+grpc_metadata_array* server_call_request_metadata(server_call_request* req);
+
+grpc_call_details* server_call_request_details(server_call_request* req);
+
+gpr_timespec* server_call_request_deadline(server_call_request* req);
+
+grpc_byte_buffer** server_call_request_payload(server_call_request* req);
+
 void grpc_channel_watch_connectivity_state_(grpc_channel *channel,
                                             grpc_connectivity_state
                                             last_observed_state,
