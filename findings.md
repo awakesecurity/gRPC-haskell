@@ -14,6 +14,8 @@ The same change also addresses, by construction and without dedicated tests:
 - **#13:** `dispatchLoop` stops when the server begins shutting down.
 - **Uninterruptible waits (low severity):** blocked ops and waits for new calls can now be interrupted.
 
+Later changes on the same branch fix part of #5 (the unsafe import), two bullets of #10 (credentials and callback wrappers) and the low-severity `forkServer` race; each is marked below.
+
 Everything else below is unchanged.
 
 ## High severity
@@ -48,8 +50,8 @@ Everything else below is unchanged.
 
 - `metadata_dispatcher` (`core/cbits/grpc_haskell.c:509-519`) returns 0 (async), but `convertMetadataCreate` (`core/src/Network/GRPC/Unsafe/Security.chs:388-396`) invokes `cb` synchronously on the same thread.
 - `credentials.h` says `cb` "MUST be invoked in a different thread" in that case.
-- Separately, `grpc_call_start_batch` is imported `unsafe` (`core/src/Network/GRPC/Unsafe.chs:226`). If core runs the plugin inline on an already-connected channel (unverified), Haskell is re-entered from an unsafe call and the RTS aborts or deadlocks.
-- The tests only make one request per plugin client, so the second-call path is not exercised.
+- **Fixed:** `grpc_call_start_batch` was imported `unsafe`, and core runs the plugin from inside it on an already-connected channel, re-entering Haskell from an unsafe call. Reproduced before the fix: the second request on a plugin client hung. The import is now safe; the regression test is `testAuthMetadataRepeated` in `core/tests/LowLevelTests.hs`.
+- The callback-contract problem in the first two bullets is still open.
 
 ### 6. Possible NULL dereference from a remote client on registered methods
 
@@ -75,8 +77,8 @@ Everything else below is unchanged.
 
 - Metadata key and value slices are never unref'd; `metadata_free` frees only the array (`core/cbits/grpc_haskell.c:182-191`, used from `core/src/Network/GRPC/LowLevel/Op.hs:108,112` and `core/src/Network/GRPC/Unsafe/Metadata.chs:111`). This leaks every key or value over 23 bytes, per call, assuming core does not take ownership (unverified).
 - `grpc_channel_create_call_` never unrefs `method_slice` or `host_slice` (`core/cbits/grpc_haskell.c:42-46`); the header says they need only live through the call.
-- `addMetadataCreds` (`core/src/Network/GRPC/LowLevel/Client.hs:83-85`) never releases the call credentials or the composite credentials.
-- The plugin and processor structs and their `FunPtr` wrappers are never freed; the code already has a TODO for this.
+- **Fixed:** `addMetadataCreds` never released the call credentials or the composite credentials. It is replaced by `withMetadataCreds` (`core/src/Network/GRPC/LowLevel/Client.hs`), which releases both.
+- **Fixed:** the plugin and processor structs and their `FunPtr` wrappers were never freed. The structs are now freed once gRPC has copied them, and gRPC frees each wrapper through the struct's `destroy` callback (`core/cbits/grpc_haskell.c`). The tests are `testAuthPluginFreed` and `testAuthProcessorFreed`.
 
 ### 11. A client can trigger `error` in the unregistered unary handler
 
@@ -102,7 +104,7 @@ A call closed without a message yields `OpRecvMessageResult Nothing`, which hits
 - **Authority ignored:** the unregistered client path does not honour `clientAuthority`; the registered path does (`core/src/Network/GRPC/LowLevel/Client/Unregistered.hs:45` vs `core/src/Network/GRPC/LowLevel/Client.hs:151`).
 - **Uninterruptible waits:** `runOps` blocks under `mask_` in a foreign call, so `timeout` or `killThread` cannot interrupt a recv on a deadline-less stream. The registered `serverRequestCall` plucks with an infinite deadline and has the same problem.
 - **Shutdown result dropped:** `withCompletionQueue` discards the `Either` from `shutdownCompletionQueue`, and that function waits without a timeout for pluckers to reach zero.
-- **`forkServer` race:** a thread forked between the `serverShuttingDown` check and the set insert is missed by the kill sweep (`core/src/Network/GRPC/LowLevel/Server.hs:94-109`).
+- **`forkServer` race (fixed in `7ce9298`):** a thread forked between the `serverShuttingDown` check and the set insert was missed by the kill sweep. `forkServer` now checks and registers in one transaction (`core/src/Network/GRPC/LowLevel/Server.hs`).
 - **Empty-metadata leak:** `op_send_initial_metadata_empty` leaks its `malloc(0)`; it is unused.
 
 ## Suggested order

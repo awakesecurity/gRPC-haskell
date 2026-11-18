@@ -75,14 +75,24 @@ data ClientConfig = ClientConfig
   -- pseudo-header will be set to the supplied value.
   }
 
-addMetadataCreds ::
+-- | Runs an action with the given channel credentials, combined with call
+-- credentials for the metadata plugin if there is one. The combined
+-- credentials are released afterwards; anything created from them (such as a
+-- channel) holds its own reference.
+withMetadataCreds ::
   C.ChannelCredentials ->
   Maybe C.ClientMetadataCreate ->
-  IO C.ChannelCredentials
-addMetadataCreds c Nothing = return c
-addMetadataCreds c (Just create) = do
-  callCreds <- C.createCustomCallCredentials create
-  C.compositeChannelCredentialsCreate c callCreds C.reserved
+  (C.ChannelCredentials -> IO a) ->
+  IO a
+withMetadataCreds c Nothing f = f c
+withMetadataCreds c (Just create) f =
+  bracket composite C.channelCredentialsRelease f
+  where
+    -- The composite credentials hold their own reference to the call
+    -- credentials.
+    composite =
+      bracket (C.createCustomCallCredentials create) C.callCredentialsRelease $
+        \callCreds -> C.compositeChannelCredentialsCreate c callCreds C.reserved
 
 createChannel :: ClientConfig -> C.GrpcChannelArgs -> IO C.Channel
 createChannel ClientConfig{..} chanargs =
@@ -93,17 +103,17 @@ createChannel ClientConfig{..} chanargs =
     Just (ClientSSLConfig rootCertPath Nothing plugin) ->
       do
         rootCert <- mapM B.readFile rootCertPath
-        C.withChannelCredentials rootCert Nothing Nothing $ \creds -> do
-          creds' <- addMetadataCreds creds plugin
-          C.grpcChannelCreate e creds' chanargs
+        C.withChannelCredentials rootCert Nothing Nothing $ \creds ->
+          withMetadataCreds creds plugin $ \creds' ->
+            C.grpcChannelCreate e creds' chanargs
     Just (ClientSSLConfig x (Just (ClientSSLKeyCertPair y z)) plugin) ->
       do
         rootCert <- mapM B.readFile x
         privKey <- Just <$> B.readFile y
         clientCert <- Just <$> B.readFile z
-        C.withChannelCredentials rootCert privKey clientCert $ \creds -> do
-          creds' <- addMetadataCreds creds plugin
-          C.grpcChannelCreate e creds' chanargs
+        C.withChannelCredentials rootCert privKey clientCert $ \creds ->
+          withMetadataCreds creds plugin $ \creds' ->
+            C.grpcChannelCreate e creds' chanargs
   where
     (Endpoint e) = clientServerEndpoint
 

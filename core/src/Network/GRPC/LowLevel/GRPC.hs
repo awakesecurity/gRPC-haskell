@@ -16,7 +16,7 @@ module Network.GRPC.LowLevel.GRPC (
   C.StatusDetails (..),
 ) where
 
-import Control.Concurrent (myThreadId, threadDelay)
+import Control.Concurrent (myThreadId, rtsSupportsBoundThreads, threadDelay)
 import Control.Exception
 import Data.Functor (($>))
 import Network.GRPC.LowLevel.GRPC.MetadataMap (MetadataMap (..))
@@ -28,6 +28,8 @@ import qualified Network.GRPC.Unsafe.Op as C
 -- the server and client create/start functions.
 data GRPC = GRPC
 
+-- | Run an action with gRPC core started, shutting it down afterwards. See
+-- 'startGRPC' for the requirement on the runtime.
 withGRPC :: (GRPC -> IO a) -> IO a
 withGRPC = bracket startGRPC stopGRPC
 
@@ -36,8 +38,16 @@ withGRPC = bracket startGRPC stopGRPC
 --
 -- Where possible, consider using 'withGRPC' which handles shutdown of gRPC
 -- automatically with 'bracket'.
+--
+-- The program must be linked with @-threaded@; this throws an error otherwise.
+-- Each completion queue has a thread blocked in a foreign call, which would
+-- stop every other Haskell thread under the non-threaded runtime.
 startGRPC :: IO GRPC
-startGRPC = C.grpcInit $> GRPC
+startGRPC
+  | rtsSupportsBoundThreads = C.grpcInit $> GRPC
+  | otherwise =
+      error
+        "grpc-haskell requires the threaded runtime: link the program with -threaded."
 
 -- | Shutdown gRPC core given a 'GRPC' witnessing that gRPC core has been
 -- initialized.

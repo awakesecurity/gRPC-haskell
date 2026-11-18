@@ -28,7 +28,7 @@ import Data.ByteString (
   isPrefixOf,
   isSuffixOf,
  )
-import Data.IORef (atomicModifyIORef', newIORef, readIORef)
+import Data.IORef (IORef, atomicModifyIORef', mkWeakIORef, newIORef, readIORef)
 import Data.List (find)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
@@ -42,6 +42,8 @@ import qualified Network.GRPC.LowLevel.Server.Unregistered as U
 import Network.GRPC.Unsafe (grpcCppVersionMajor, grpcCppVersionMinor)
 import Network.GRPC.Unsafe.Constants (maxCompletionQueuePluckers)
 import qualified Pipes as P
+import System.Mem (performGC)
+import System.Mem.Weak (Weak, deRefWeak)
 import Test.Tasty
 import Test.Tasty.HUnit as HU (
   Assertion,
@@ -69,6 +71,9 @@ lowLevelTests =
     , testPayload
     , testSSL
     , testAuthMetadataTransfer
+    , testAuthMetadataRepeated
+    , testAuthPluginFreed
+    , testAuthProcessorFreed
     , testServerAuthProcessorCancel
     , testPayloadUnregistered
     , testServerCancel
@@ -402,6 +407,111 @@ testAuthMetadataTransfer =
         body @?= "hi"
         return ("reply test", mempty, StatusOk, "")
       r @?= Right ()
+
+-- | A client and server over SSL, where the client attaches metadata with the
+-- given plugin and the server checks requests with the given processor. The
+-- client makes the given number of requests.
+authPluginTest :: Int -> ClientMetadataCreate -> ProcessMeta -> IO ()
+authPluginTest n plugin processor =
+  void (runTestServer server `concurrently` (threadDelay 100000 >> runTestClient client))
+  where
+    clientConf =
+      stdClientConf
+        { clientSSLConfig =
+            Just
+              ( ClientSSLConfig
+                  (Just "tests/ssl/localhost.crt")
+                  Nothing
+                  (Just plugin)
+              )
+        }
+    client = TestClient clientConf $ \c -> do
+      rm <- clientRegisterMethodNormal c "/foo"
+      replicateM_ n $
+        clientRequest c rm 10 "hi" mempty >>= do
+          checkReqRslt $ \NormalRequestResult{..} -> do
+            rspCode @?= StatusOk
+            rspBody @?= "reply test"
+
+    serverConf' =
+      defServerConf
+        { sslConfig =
+            Just
+              ( ServerSSLConfig
+                  Nothing
+                  "tests/ssl/localhost.key"
+                  "tests/ssl/localhost.crt"
+                  SslDontRequestClientCertificate
+                  (Just processor)
+              )
+        }
+    server = TestServer serverConf' $ \s ->
+      replicateM_ n $ do
+        r <- U.serverHandleNormalCall s mempty $ \U.ServerCall{..} body -> do
+          body @?= "hi"
+          checkMD "handler sees the plugin's metadata" [("foo", "bar")] metadata
+          return ("reply test", mempty, StatusOk, "")
+        r @?= Right ()
+
+-- | The client metadata plugin runs for every call on a channel, not only the
+-- first. On an established connection gRPC may invoke it from inside
+-- @grpc_call_start_batch@ (findings.md #5).
+testAuthMetadataRepeated :: TestTree
+testAuthMetadataRepeated =
+  testCase "Client/Server - Auth metadata plugin on repeated calls" $ do
+    pluginCalls <- newIORef (0 :: Int)
+    processorCalls <- newIORef (0 :: Int)
+    authPluginTest n (countingPlugin pluginCalls) (countingProcessor processorCalls)
+    readIORef pluginCalls >>= (@?= n)
+    readIORef processorCalls >>= (@?= n)
+  where
+    n = 5
+
+countingPlugin :: IORef Int -> ClientMetadataCreate
+countingPlugin ref _ = do
+  atomicModifyIORef' ref (\x -> (x + 1, ()))
+  return $ ClientMetadataCreateResult [("foo", "bar")] StatusOk ""
+
+countingProcessor :: IORef Int -> ProcessMeta
+countingProcessor ref _ _ = do
+  atomicModifyIORef' ref (\x -> (x + 1, ()))
+  return $ AuthProcessorResult mempty mempty StatusOk ""
+
+-- | Once the client, the server and gRPC have been torn down, nothing may
+-- keep the callbacks passed to them alive. Each callback captures an 'IORef',
+-- so the 'IORef' being collected shows that the C wrapper around the callback
+-- was freed.
+testAuthPluginFreed :: TestTree
+testAuthPluginFreed =
+  testCase "Client/Server - Auth metadata plugin is freed with the client" $
+    authCallbacksFreed >>= assertCollected "client plugin" . fst
+
+testAuthProcessorFreed :: TestTree
+testAuthProcessorFreed =
+  testCase "Client/Server - Auth processor is freed with the server" $
+    authCallbacksFreed >>= assertCollected "server processor" . snd
+
+-- | Runs 'authPluginTest' and returns weak pointers to the state captured by
+-- the client plugin and by the server processor.
+authCallbacksFreed :: IO (Weak (IORef Int), Weak (IORef Int))
+authCallbacksFreed = do
+  pluginCalls <- newIORef 0
+  processorCalls <- newIORef 0
+  authPluginTest 1 (countingPlugin pluginCalls) (countingProcessor processorCalls)
+  (,) <$> mkWeakIORef pluginCalls (return ()) <*> mkWeakIORef processorCalls (return ())
+
+-- | Fails unless the target of the weak pointer is collected within a few
+-- seconds. gRPC may destroy credentials on its own threads after shutdown, so
+-- this polls rather than checking once.
+assertCollected :: String -> Weak a -> Assertion
+assertCollected what w = go (50 :: Int)
+  where
+    go 0 = assertFailure (what ++ " is still reachable after shutdown")
+    go k = do
+      performGC
+      deRefWeak w >>= \case
+        Nothing -> return ()
+        Just _ -> threadDelay 100000 >> go (k - 1)
 
 -- TODO: auth metadata doesn't propagate from parent calls to child calls.
 -- Once we implement our own system for doing so, update this test and add it

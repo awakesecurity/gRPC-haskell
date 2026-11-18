@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <HsFFI.h>
 #include <grpc_haskell.h>
 
 void grpc_haskell_free(char *debugMsg, void *ptr){
@@ -483,16 +484,26 @@ void grpc_server_credentials_set_auth_metadata_processor_(
   grpc_server_credentials_set_auth_metadata_processor(creds, *p);
 }
 
+//Frees a function pointer created by a Haskell "wrapper" import. Used as the
+//destroy callback of the plugin structs below, whose state is such a pointer.
+//gRPC calls it once nothing can invoke the plugin any more, possibly on one of
+//its own threads; hs_free_fun_ptr only takes RTS locks, so that is fine.
+static void free_haskell_fun_ptr(void *state){
+  hs_free_fun_ptr((HsFunPtr)state);
+}
+
 grpc_auth_metadata_processor* mk_auth_metadata_processor(
   void (*process)(void *state, grpc_auth_context *context,
                   const grpc_metadata *md, size_t num_md,
                   grpc_process_auth_metadata_done_cb cb, void *user_data)){
 
-  //TODO: figure out when to free this.
+  //gRPC copies this struct, so the caller frees it once it has been handed
+  //over. The Haskell wrapper is kept as the state so that gRPC frees it, via
+  //destroy, when the server credentials are destroyed.
   grpc_auth_metadata_processor* p = malloc(sizeof(grpc_auth_metadata_processor));
   p->process = process;
-  p->destroy = NULL;
-  p->state = NULL;
+  p->destroy = free_haskell_fun_ptr;
+  p->state = (void*)process;
   return p;
 }
 
@@ -521,12 +532,14 @@ int metadata_dispatcher(void *state,
 grpc_metadata_credentials_plugin* mk_metadata_client_plugin(
   haskell_get_metadata* f){
 
-  //TODO: figure out when to free this.
+  //gRPC copies this struct, so the caller frees it once it has been handed
+  //over. gRPC frees the Haskell wrapper (the state), via destroy, when the call
+  //credentials are destroyed.
   grpc_metadata_credentials_plugin* p =
     malloc(sizeof(grpc_metadata_credentials_plugin));
 
   p->get_metadata = metadata_dispatcher;
-  p->destroy = NULL;
+  p->destroy = free_haskell_fun_ptr;
   p->state = f;
   p->type = "grpc-haskell custom credentials";
 

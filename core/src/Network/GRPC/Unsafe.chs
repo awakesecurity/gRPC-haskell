@@ -223,7 +223,10 @@ grpcCppVersionMinor = {#const GRPC_CPP_VERSION_MINOR #}
 -- When complete, an event identified by the given 'Tag'
 -- will be pushed onto the 'CompletionQueue' that was associated with the given
 -- 'Call' when the 'Call' was created.
-{#fun unsafe grpc_call_start_batch as ^
+--
+-- NB: This must be a safe call. gRPC can invoke a client metadata plugin, which
+-- is a Haskell callback, from inside it.
+{#fun grpc_call_start_batch as ^
   {`Call', `OpArray', `Int', unTag `Tag',unReserved `Reserved'} -> `CallError'#}
 
 {#fun grpc_call_cancel as ^ {`Call',unReserved `Reserved'} -> `()'#}

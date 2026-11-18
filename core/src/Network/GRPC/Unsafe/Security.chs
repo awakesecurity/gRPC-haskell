@@ -346,9 +346,11 @@ convertProcessor f = \_state authCtx inMeta numMeta callBack userDataPtr -> do
 setMetadataProcessor :: ServerCredentials -> ProcessMeta -> IO ()
 setMetadataProcessor creds processor = do
   let rawProcessor = convertProcessor processor
+  -- gRPC frees the wrapper when the credentials are destroyed (see
+  -- @mk_auth_metadata_processor@). The struct itself is copied by gRPC.
   rawProcessorPtr <- mkAuthProcess rawProcessor
-  metaProcessor <- mkAuthMetadataProcessor rawProcessorPtr
-  serverCredentialsSetAuthMetadataProcessor creds metaProcessor
+  bracket (mkAuthMetadataProcessor rawProcessorPtr) (free . coerce) $
+    serverCredentialsSetAuthMetadataProcessor creds
 
 -- * Client-side metadata plugins
 
@@ -404,6 +406,8 @@ foreign import ccall "grpc_haskell.h mk_metadata_client_plugin"
 createCustomCallCredentials :: ClientMetadataCreate -> IO CallCredentials
 createCustomCallCredentials create = do
   let rawCreate = convertMetadataCreate create
+  -- gRPC frees the wrapper when the credentials are destroyed (see
+  -- @mk_metadata_client_plugin@). The struct itself is copied by gRPC.
   rawCreatePtr <- mkCGetMetadata rawCreate
-  plugin <- mkMetadataClientPlugin rawCreatePtr
-  metadataCredentialsCreateFromPlugin plugin
+  bracket (mkMetadataClientPlugin rawCreatePtr) (free . coerce) $
+    metadataCredentialsCreateFromPlugin
