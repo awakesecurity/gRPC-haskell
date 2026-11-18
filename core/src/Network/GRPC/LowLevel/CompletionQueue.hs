@@ -25,15 +25,16 @@ module Network.GRPC.LowLevel.CompletionQueue (
   startBatch,
   channelCreateCall,
   TimeoutSeconds,
-  isEventSuccessful,
   serverRegisterCompletionQueue,
   serverShutdownAndNotify,
   serverRequestCall,
+  Operation (..),
+  runCompletion,
 )
 where
 
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar)
-import Control.Concurrent.STM.TVar (newTVarIO, readTVarIO)
+import Control.Concurrent.STM.TVar (newTVarIO)
 import Control.Exception (bracket, mask_)
 import Control.Monad (unless)
 import Data.List (intersperse)
@@ -78,7 +79,7 @@ startBatch ::
   C.Tag ->
   IO (Either GRPCIOError ())
 startBatch cq call opArray opArraySize tag =
-  withPermission Push cq $ fmap throwIfCallError $ do
+  withPushPermission cq $ fmap throwIfCallError $ do
     grpcDebug $
       "startBatch: calling grpc_call_start_batch with pointers: "
         ++ show call
@@ -103,7 +104,7 @@ channelCreateCall
   cq@CompletionQueue{..}
   handle
   deadline =
-    withPermission Push cq $ do
+    withPushPermission cq $ do
       let parentPtr = maybe (C.Call nullPtr) unsafeSC parent
       grpcDebug $
         "channelCreateCall: call with "
@@ -144,7 +145,7 @@ serverRequestCall ::
   -- | call CQ
   CompletionQueue ->
   IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
-serverRequestCall rm s scq ccq = mask_ $ do
+serverRequestCall rm s scq ccq = runCompletion $ do
   -- NB: These are owned by the completion callback, not by this thread: gRPC
   -- writes to them when a call arrives, however long that takes.
   dead <- malloc :: IO (Ptr C.CTimeSpec)
@@ -162,16 +163,14 @@ serverRequestCall rm s scq ccq = mask_ $ do
         free call
         unless (pay == nullPtr) $ C.destroyReceivingByteBuffer pay
         C.metadataArrayDestroy meta
-      finish False = return (Left GRPCIOShutdown)
-      finish True =
-        fmap Right $
-          ServerCall
-            <$> peek call
-            <*> return ccq
-            <*> (peek meta >>= C.getAllMetadataArray)
-            <*> extractPayload rm pay
-            <*> (C.timeSpec <$> peek dead)
-      start tag = withPermission Push scq $ do
+      build =
+        ServerCall
+          <$> peek call
+          <*> return ccq
+          <*> (peek meta >>= C.getAllMetadataArray)
+          <*> extractPayload rm pay
+          <*> (C.timeSpec <$> peek dead)
+      request tag = do
         md <- peek meta
         dbug $ "registering call for tag=" ++ show tag
         ce <-
@@ -186,11 +185,8 @@ serverRequestCall rm s scq ccq = mask_ $ do
             (unsafeCQ scq)
             tag
         dbug $ "request returned: " ++ show ce
-        return (throwIfCallError ce)
-      discard sc = do
-        C.grpcCallCancel (unsafeSC sc) C.reserved
-        C.grpcCallUnref (unsafeSC sc)
-  runCompletion release finish start discard
+        return ce
+  return (serverCallOperation scq unsafeSC release build request)
   where
     dbug = grpcDebug . ("serverRequestCall(R): " ++)
 
@@ -207,12 +203,8 @@ serverShutdownAndNotify ::
   C.Server ->
   CompletionQueue ->
   IO (Either GRPCIOError (MVar ()))
-serverShutdownAndNotify server CompletionQueue{..} = mask_ $ do
-  isShuttingDown <- readTVarIO shuttingDown
-  if isShuttingDown
-    then return (Left GRPCIOShutdown)
-    else do
-      done <- newEmptyMVar
-      tag <- newCompletionTag (\_ -> putMVar done ())
-      C.grpcServerShutdownAndNotify server unsafeCQ tag
-      return (Right done)
+serverShutdownAndNotify server cq = mask_ . withPushPermission cq $ do
+  done <- newEmptyMVar
+  tag <- newCompletionTag (\_ -> putMVar done ())
+  C.grpcServerShutdownAndNotify server (unsafeCQ cq) tag
+  return (Right done)

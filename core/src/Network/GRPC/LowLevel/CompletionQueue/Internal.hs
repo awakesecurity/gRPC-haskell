@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -25,9 +26,11 @@ import Control.Exception (
   finally,
   mask_,
   onException,
+  throwIO,
   try,
  )
 import Control.Monad
+import Data.Foldable (for_)
 import Foreign.StablePtr (
   StablePtr,
   castPtrToStablePtr,
@@ -53,7 +56,7 @@ import System.Timeout (timeout)
 -- event for a tag arrives, the dispatcher runs the callback, which typically
 -- copies results out of C buffers, frees those buffers, and fills an 'MVar'
 -- that the thread which started the operation is waiting on. See
--- 'runCompletion'.
+-- 'Operation' and 'runCompletion'.
 --
 -- Two rules follow from this design:
 --
@@ -80,8 +83,9 @@ import System.Timeout (timeout)
 -- checking to see if we've been disconnected, and so forth.
 data CompletionQueue = CompletionQueue
   { unsafeCQ :: C.CompletionQueue
-  -- ^ All access to this field must be
-  -- guarded by a check of 'shuttingDown'.
+  -- ^ Work may only be pushed onto this queue
+  -- under 'withPushPermission'. Only the
+  -- dispatcher thread may read from it.
   , currentPushers :: TVar Int
   -- ^ Used to prevent new work from
   -- being pushed onto the queue when
@@ -99,8 +103,6 @@ data CompletionQueue = CompletionQueue
 instance Show CompletionQueue where show = show . unsafeCQ
 
 type TimeoutSeconds = Int
-
-data CQOpType = Push deriving (Show, Eq, Enum)
 
 --------------------------------------------------------------------------------
 -- Completion tags
@@ -132,54 +134,93 @@ dropCompletionTag :: C.Tag -> IO ()
 dropCompletionTag (C.Tag p) =
   freeStablePtr (castPtrToStablePtr p :: StablePtr Completion)
 
+-- | An asynchronous gRPC operation, as run by 'runCompletion'.
+data Operation a = Operation
+  { opStart :: C.Tag -> IO (Either GRPCIOError ())
+  -- ^ Hands the tag to gRPC. Must return 'Left' iff gRPC did not accept the
+  -- operation (in which case no event will be delivered). It is responsible
+  -- for obtaining permission to push work onto the queue; see
+  -- 'withPushPermission'.
+  , opFinish :: Bool -> IO (Either GRPCIOError a)
+  -- ^ Runs on the dispatcher thread when the operation completes, before
+  -- 'opRelease', and receives the event's success flag. It should copy
+  -- whatever is needed out of the C resources, and must not block.
+  , opRelease :: IO ()
+  -- ^ Frees the C resources handed to gRPC for the operation. Run exactly
+  -- once: by the dispatcher after the operation completes, or immediately if
+  -- the operation could not be started.
+  , opDiscard :: Maybe (a -> IO ())
+  -- ^ Disposes of a successful result nobody is waiting for any more.
+  -- 'Nothing' if such a result needs no disposal.
+  }
+
 -- | Runs an asynchronous gRPC operation to completion on a 'CompletionQueue'.
---
--- * @release@ frees the C resources handed to gRPC for the operation. It is
---   run exactly once: by the dispatcher after the operation completes, or
---   immediately if the operation could not be started.
--- * @finish@ runs on the dispatcher thread when the operation completes, before
---   @release@, and receives the event's success flag. It should copy whatever
---   is needed out of the C resources.
--- * @start@ hands the tag to gRPC. It must not block, and must return 'Left'
---   iff gRPC did not accept the operation (in which case no event will be
---   delivered). It is responsible for obtaining permission to push work onto
---   the queue; see 'withPermission'.
--- * @discard@ disposes of a successful result nobody is waiting for any more.
+-- The given action allocates the operation's C resources and describes the
+-- operation; it is run with asynchronous exceptions masked.
 --
 -- The calling thread waits interruptibly. If it receives an asynchronous
 -- exception while waiting, the operation itself is not cancelled (gRPC offers
 -- no way to withdraw a started operation): it stays in flight, its resources
--- are released when it completes, and its result is passed to @discard@.
-runCompletion ::
-  -- | release
-  IO () ->
-  -- | finish
-  (Bool -> IO (Either GRPCIOError a)) ->
-  -- | start
-  (C.Tag -> IO (Either GRPCIOError ())) ->
-  -- | discard
-  (a -> IO ()) ->
-  IO (Either GRPCIOError a)
-runCompletion release finish start discard = mask_ $ do
-  done <- newEmptyMVar
+-- are released when it completes, and its result is passed to 'opDiscard'.
+--
+-- An exception thrown by 'opFinish' or 'opRelease' is rethrown in the calling
+-- thread.
+runCompletion :: forall a. IO (Operation a) -> IO (Either GRPCIOError a)
+runCompletion acquire = mask_ $ do
+  Operation{..} <- acquire
+  done <- newEmptyMVar :: IO (MVar (Either SomeException (Either GRPCIOError a)))
   let complete ok = do
-        r <- try (finish ok)
-        release
-        putMVar done $ case r of
-          Left (e :: SomeException) -> Left (GRPCIOHandlerException (show e))
-          Right x -> x
-      abandon tag = dropCompletionTag tag >> release
+        -- NB: 'done' must be filled whatever happens, or the waiter hangs.
+        r <- try (opFinish ok `finally` opRelease)
+        putMVar done r
+      abandon tag = dropCompletionTag tag >> opRelease
+      -- Waits for a result that the caller has given up on.
+      reap = for_ opDiscard $ \discard ->
+        forkIO $
+          takeMVar done >>= \case
+            Right (Right x) -> discard x
+            _ -> return ()
   tag <- newCompletionTag complete
-  -- 'start' can only be interrupted before it hands the tag to gRPC (while
+  -- 'opStart' can only be interrupted before it hands the tag to gRPC (while
   -- waiting for permission to push), so it is safe to clean up here.
-  started <- start tag `onException` abandon tag
+  started <- opStart tag `onException` abandon tag
   case started of
     Left e -> do
       abandon tag
       return (Left e)
-    Right () ->
-      takeMVar done
-        `onException` forkIO (takeMVar done >>= either (const (return ())) discard)
+    Right () -> do
+      r <- takeMVar done `onException` reap
+      either throwIO return r
+
+-- | The 'Operation' of waiting for a new call on a server. @release@ frees the
+-- buffers gRPC fills in for the call, @build@ reads the call out of them, and
+-- @request@ is the gRPC function that registers the request.
+--
+-- The operation fails with 'GRPCIOShutdown' when the server shuts down. If the
+-- waiter is interrupted, the request stays registered with gRPC (it cannot be
+-- withdrawn), and the call that eventually satisfies it is cancelled.
+serverCallOperation ::
+  -- | The server's notification queue.
+  CompletionQueue ->
+  -- | The underlying call, for cancelling an unwanted one.
+  (sc -> C.Call) ->
+  -- | release
+  IO () ->
+  -- | build
+  IO sc ->
+  -- | request
+  (C.Tag -> IO C.CallError) ->
+  Operation sc
+serverCallOperation scq unsafeCall release build request =
+  Operation
+    { opStart = \tag -> withPushPermission scq (throwIfCallError <$> request tag)
+    , opFinish = \ok ->
+        if ok then Right <$> build else return (Left GRPCIOShutdown)
+    , opRelease = release
+    , opDiscard = Just $ \sc -> do
+        C.grpcCallCancel (unsafeCall sc) C.reserved
+        C.grpcCallUnref (unsafeCall sc)
+    }
 
 --------------------------------------------------------------------------------
 -- Permission to push work
@@ -187,49 +228,28 @@ runCompletion release finish start discard = mask_ $ do
 -- | Safely brackets an operation that pushes work onto the given
 -- 'CompletionQueue'. Returns 'GRPCIOShutdown' without running the operation if
 -- the queue is shutting down.
-withPermission ::
-  CQOpType ->
+withPushPermission ::
   CompletionQueue ->
   IO (Either GRPCIOError a) ->
   IO (Either GRPCIOError a)
-withPermission op cq act = bracket acquire release $ \gotResource ->
+withPushPermission cq act = bracket acquire release $ \gotResource ->
   if gotResource then act else return (Left GRPCIOShutdown)
   where
     acquire = atomically $ do
       isShuttingDown <- readTVar (shuttingDown cq)
       unless isShuttingDown $ do
-        currCount <- readTVar (getCount op cq)
-        if currCount < getLimit op
-          then writeTVar (getCount op cq) (currCount + 1)
+        currCount <- readTVar (currentPushers cq)
+        if currCount < maxWorkPushers
+          then writeTVar (currentPushers cq) (currCount + 1)
           else retry
       return (not isShuttingDown)
     release gotResource =
       when gotResource $
         atomically $
-          modifyTVar' (getCount op cq) (subtract 1)
-
--- | Translate 'C.Event' to an error. The caller is responsible for ensuring
--- that the event actually corresponds to an error condition; a successful event
--- will be translated to a 'GRPCIOUnknownError'.
-eventToError :: C.Event -> (Either GRPCIOError a)
-eventToError (C.Event C.QueueShutdown _ _) = Left GRPCIOShutdown
-eventToError (C.Event C.QueueTimeout _ _) = Left GRPCIOTimeout
-eventToError (C.Event C.OpComplete False _) = Left GRPCIOTimeout
-eventToError _ = Left GRPCIOUnknownError
-
--- | Returns true iff the given grpc_event was a success.
-isEventSuccessful :: C.Event -> Bool
-isEventSuccessful (C.Event C.OpComplete True _) = True
-isEventSuccessful _ = False
+          modifyTVar' (currentPushers cq) (subtract 1)
 
 maxWorkPushers :: Int
 maxWorkPushers = 100 -- TODO: figure out what this should be.
-
-getCount :: CQOpType -> CompletionQueue -> TVar Int
-getCount Push = currentPushers
-
-getLimit :: CQOpType -> Int
-getLimit Push = maxWorkPushers
 
 --------------------------------------------------------------------------------
 -- Dispatcher
@@ -239,9 +259,8 @@ getLimit Push = maxWorkPushers
 -- given 'MVar'.
 startDispatcher :: C.CompletionQueue -> MVar () -> IO ()
 startDispatcher cq done =
-  -- Masked so that nothing can kill the dispatcher: it only ever blocks inside
-  -- the foreign call to grpc_completion_queue_next.
-  void . mask_ . forkIO $
+  -- Nothing can kill the dispatcher, because its 'ThreadId' is never exposed.
+  void . forkIO $
     (dispatcher cq >> C.grpcCompletionQueueDestroy cq)
       `finally` putMVar done ()
 

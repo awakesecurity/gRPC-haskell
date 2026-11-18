@@ -85,26 +85,16 @@ dispatchLoop s logger md hN hC hS hB = go
 
 serverLoop :: ServerOptions -> IO ()
 serverLoop ServerOptions{..} =
-  -- In the GRPC library, "doc/core/epoll-polling-engine.md" seems
-  -- to indicate that the thread which actually awakens from sleep
-  -- on file descriptor events may differ from the one which seeks
-  -- to "pluck" the resulting event.
+  -- "dispatchLoop" runs in its own thread, registered with the server
+  -- via "forkServer", while the "serverLoop" thread sleeps in "takeMVar".
   --
-  -- Thus it seems possible that "dispatchLoop" may be waiting on
-  -- a condition variable when the "serverLoop" thread is killed.
+  -- This structure dates from when "dispatchLoop" waited for calls in an
+  -- uninterruptible foreign call, so that only a GRPC shutdown could
+  -- wake it. Waiting for a call is now an interruptible "takeMVar" (see
+  -- "Network.GRPC.LowLevel.CompletionQueue.Internal"), and "dispatchLoop"
+  -- also returns by itself once the shutdown begins.
   --
-  -- Note that "pthread_cond_timedwait" never returns EINTR; see:
-  -- <https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_cond_wait.html>
-  --
-  -- Therefore to awaken "dispatchLoop" we must initiate a GRPC
-  -- shutdown; it would not suffice to kill its Haskell thread.
-  -- (Presumably a GRPC shutdown broadcasts on relvant condition
-  -- variables; regardless, we do see it awaken "dispatchLoop".)
-  --
-  -- The "withServer" cleanup code will initiate a GRPC shutdown.
-  -- We arrange to trigger it by leaving the "serverLoop" thread
-  -- in an interruptible sleep ("takeMVar") while "dispatchLoop"
-  -- runs in its own thread.
+  -- The "withServer" cleanup code initiates the GRPC shutdown.
   withGRPC $ \grpc ->
     withServer grpc config $ \server -> do
       -- Killing the "serverLoop" thread triggers the "withServer"

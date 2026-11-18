@@ -6,7 +6,6 @@
 
 module Network.GRPC.LowLevel.Op where
 
-import Control.Exception
 import Control.Monad
 import Control.Monad.Trans.Except
 import Data.ByteString (ByteString)
@@ -17,7 +16,6 @@ import Foreign.Marshal.Alloc (free, malloc)
 import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (peek)
 import Network.GRPC.LowLevel.CompletionQueue
-import Network.GRPC.LowLevel.CompletionQueue.Internal (runCompletion)
 import Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe as C (Call)
 import qualified Network.GRPC.Unsafe.ByteBuffer as C
@@ -125,12 +123,6 @@ freeOpContext (OpRecvCloseOnServerContext pcancelled) =
     >> free pcancelled
 
 -- | Allocates an `OpArray` and a list of `OpContext`s from the given list of
--- `Op`s.
-withOpArrayAndCtxts :: [Op] -> ((C.OpArray, [OpContext]) -> IO a) -> IO a
-withOpArrayAndCtxts ops =
-  bracket (createOpArrayAndCtxts ops) destroyOpArrayAndCtxts
-
--- | Allocates an `OpArray` and a list of `OpContext`s from the given list of
 -- `Op`s. Must be freed with 'destroyOpArrayAndCtxts'.
 createOpArrayAndCtxts :: [Op] -> IO (C.OpArray, [OpContext])
 createOpArrayAndCtxts ops = do
@@ -228,7 +220,7 @@ runOps ::
   -- | The list of 'Op's to execute.
   [Op] ->
   IO (Either GRPCIOError [OpRecvResult])
-runOps call cq ops = mask_ $ do
+runOps call cq ops = runCompletion $ do
   -- The op contexts are buffers that gRPC reads from and writes to until the
   -- batch completes. They are therefore owned by the batch's completion
   -- callback, which runs on the queue's dispatcher thread, and not by this
@@ -237,21 +229,27 @@ runOps call cq ops = mask_ $ do
   -- memory.
   opsAndCtxts@(opArray, contexts) <- createOpArrayAndCtxts ops
   grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
-  let release = destroyOpArrayAndCtxts opsAndCtxts
-      -- A batch that completes unsuccessfully is reported as a timeout, since
-      -- the usual cause is the call's deadline expiring.
-      finish False = return (Left GRPCIOTimeout)
-      finish True = do
-        grpcDebug "runOps: got good op; starting."
-        Right . catMaybes <$> mapM resultFromOpContext contexts
-      start tag = do
-        grpcDebug $ "runOps: tag: " ++ show tag
-        callError <- startBatch cq call opArray (length ops) tag
-        grpcDebug $
-          "runOps: called start_batch. callError: "
-            ++ (show callError)
-        return callError
-  runCompletion release finish start (const (return ()))
+  return
+    Operation
+      { opStart = \tag -> do
+          grpcDebug $ "runOps: tag: " ++ show tag
+          callError <- startBatch cq call opArray (length ops) tag
+          grpcDebug $
+            "runOps: called start_batch. callError: "
+              ++ (show callError)
+          return callError
+      , -- A batch that completes unsuccessfully is reported as a timeout,
+        -- since the usual cause is the call's deadline expiring.
+        opFinish = \ok ->
+          if ok
+            then do
+              grpcDebug "runOps: got good op; starting."
+              Right . catMaybes <$> mapM resultFromOpContext contexts
+            else return (Left GRPCIOTimeout)
+      , opRelease = destroyOpArrayAndCtxts opsAndCtxts
+      , -- An abandoned batch has nothing left to dispose of.
+        opDiscard = Nothing
+      }
 
 runOps' ::
   C.Call ->

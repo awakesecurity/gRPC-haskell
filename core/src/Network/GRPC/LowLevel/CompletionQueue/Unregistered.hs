@@ -8,7 +8,6 @@
 
 module Network.GRPC.LowLevel.CompletionQueue.Unregistered where
 
-import Control.Exception (mask_)
 import Foreign.Marshal.Alloc (free, malloc)
 import Foreign.Ptr (Ptr)
 import Foreign.Storable (peek)
@@ -31,7 +30,7 @@ channelCreateCall ::
   C.CTimeSpecPtr ->
   IO (Either GRPCIOError ClientCall)
 channelCreateCall chan parent mask cq@CompletionQueue{..} meth endpt deadline =
-  withPermission Push cq $ do
+  withPushPermission cq $ do
     call <-
       C.grpcChannelCreateCall
         chan
@@ -57,7 +56,7 @@ serverRequestCall ::
   -- | call CQ
   CompletionQueue ->
   IO (Either GRPCIOError U.ServerCall)
-serverRequestCall s scq ccq = mask_ $ do
+serverRequestCall s scq ccq = runCompletion $ do
   -- NB: These are owned by the completion callback, not by this thread: gRPC
   -- writes to them when a call arrives, however long that takes.
   call <- malloc :: IO (Ptr C.Call)
@@ -67,25 +66,20 @@ serverRequestCall s scq ccq = mask_ $ do
         free call
         C.metadataArrayDestroy meta
         C.destroyCallDetails cd
-      finish False = return (Left GRPCIOShutdown)
-      finish True =
-        fmap Right $
-          U.ServerCall
-            <$> peek call
-            <*> return ccq
-            <*> (peek meta >>= C.getAllMetadataArray)
-            <*> (C.timeSpec <$> C.callDetailsGetDeadline cd)
-            <*> (MethodName <$> C.callDetailsGetMethod cd)
-            <*> (Host <$> C.callDetailsGetHost cd)
-      start tag = withPermission Push scq $ do
+      build =
+        U.ServerCall
+          <$> peek call
+          <*> return ccq
+          <*> (peek meta >>= C.getAllMetadataArray)
+          <*> (C.timeSpec <$> C.callDetailsGetDeadline cd)
+          <*> (MethodName <$> C.callDetailsGetMethod cd)
+          <*> (Host <$> C.callDetailsGetHost cd)
+      request tag = do
         md <- peek meta
         dbug $ "registering call for tag=" ++ show tag
         ce <- C.grpcServerRequestCall s call cd md (unsafeCQ ccq) (unsafeCQ scq) tag
         dbug $ "request returned: " ++ show ce
-        return (throwIfCallError ce)
-      discard sc = do
-        C.grpcCallCancel (U.unsafeSC sc) C.reserved
-        C.grpcCallUnref (U.unsafeSC sc)
-  runCompletion release finish start discard
+        return ce
+  return (serverCallOperation scq U.unsafeSC release build request)
   where
     dbug = grpcDebug . ("serverRequestCall(U): " ++)

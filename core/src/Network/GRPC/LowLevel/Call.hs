@@ -16,14 +16,12 @@
 module Network.GRPC.LowLevel.Call where
 
 import Control.Exception (bracket)
-import Control.Monad.Managed (Managed, managed)
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 (pack)
 import Data.List (intersperse)
 import Data.String (IsString)
-import Foreign.Marshal.Alloc (free, malloc)
-import Foreign.Ptr (Ptr, nullPtr)
-import Foreign.Storable (Storable, peek)
+import Foreign.Ptr (Ptr)
+import Foreign.Storable (peek)
 import Network.GRPC.LowLevel.CompletionQueue.Internal
 import Network.GRPC.LowLevel.GRPC (MetadataMap, grpcDebug)
 import qualified Network.GRPC.Unsafe as C
@@ -173,16 +171,6 @@ payloadHandling Normal = C.SrmPayloadReadInitialByteBuffer
 payloadHandling ClientStreaming = C.SrmPayloadNone
 payloadHandling ServerStreaming = C.SrmPayloadReadInitialByteBuffer
 payloadHandling BiDiStreaming = C.SrmPayloadNone
-
--- | Optionally allocate a managed byte buffer for a payload, depending on the
--- given method type. If no payload is needed, the returned pointer is null
-mgdPayload :: GRPCMethodType -> Managed (Ptr C.ByteBuffer)
-mgdPayload mt
-  | payloadHandling mt == C.SrmPayloadNone = return nullPtr
-  | otherwise = managed C.withByteBufferPtr
-
-mgdPtr :: forall a. (Storable a) => Managed (Ptr a)
-mgdPtr = managed (bracket malloc free)
 
 serverCallIsExpired :: ServerCall a -> IO Bool
 serverCallIsExpired sc = do

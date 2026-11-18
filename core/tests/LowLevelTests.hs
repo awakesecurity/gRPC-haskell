@@ -82,8 +82,7 @@ lowLevelTests =
     , -- Idle streams must not stall other calls (findings.md #1). The counts
       -- are relative to gRPC's limit on concurrent pluckers, which used to cap
       -- the number of blocked operations per completion queue.
-      testIdleStreams ServerRecv (maxCompletionQueuePluckers - 1)
-    , testIdleStreams ServerRecv maxCompletionQueuePluckers
+      testIdleStreams ServerRecv maxCompletionQueuePluckers
     , testIdleStreams ServerRecv (4 * maxCompletionQueuePluckers)
     , testIdleStreams ClientRecv maxCompletionQueuePluckers
     , testIdleStreams ClientRecv (4 * maxCompletionQueuePluckers)
