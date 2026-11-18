@@ -52,14 +52,24 @@ withServerCallAsync ::
   Server ->
   (ServerCall -> IO ()) ->
   IO ()
-withServerCallAsync s f = mask $ \unmask ->
+withServerCallAsync s f = void (withServerCallAsync' s f)
+
+-- | Like 'withServerCallAsync', but reports why no call could be obtained.
+-- In particular, the result is @Left GRPCIOShutdown@ once the server has begun
+-- shutting down, at which point there is no use in asking for further calls.
+withServerCallAsync' ::
+  Server ->
+  (ServerCall -> IO ()) ->
+  IO (Either GRPCIOError ())
+withServerCallAsync' s f = mask $ \unmask ->
   unmask (serverCreateCall s) >>= \case
     Left e -> do
       grpcDebug $ "withServerCallAsync: call error: " ++ show e
-      return ()
+      return (Left e)
     Right c -> do
       wasForkSuccess <- forkServer s handler
       unless wasForkSuccess destroy
+      return (Right ())
       where
         handler = unmask (f c) `finally` destroy
         -- TODO: We sometimes never finish cleanup if the server

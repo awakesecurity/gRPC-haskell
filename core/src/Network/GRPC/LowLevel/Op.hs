@@ -17,6 +17,7 @@ import Foreign.Marshal.Alloc (free, malloc)
 import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (peek)
 import Network.GRPC.LowLevel.CompletionQueue
+import Network.GRPC.LowLevel.CompletionQueue.Internal (runCompletion)
 import Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe as C (Call)
 import qualified Network.GRPC.Unsafe.ByteBuffer as C
@@ -126,17 +127,23 @@ freeOpContext (OpRecvCloseOnServerContext pcancelled) =
 -- | Allocates an `OpArray` and a list of `OpContext`s from the given list of
 -- `Op`s.
 withOpArrayAndCtxts :: [Op] -> ((C.OpArray, [OpContext]) -> IO a) -> IO a
-withOpArrayAndCtxts ops = bracket setup teardown
-  where
-    setup = do
-      ctxts <- mapM createOpContext ops
-      let l = length ops
-      arr <- C.opArrayCreate l
-      sequence_ $ zipWith (setOpArray arr) [0 .. l - 1] ctxts
-      return (arr, ctxts)
-    teardown (arr, ctxts) = do
-      C.opArrayDestroy arr (length ctxts)
-      mapM_ freeOpContext ctxts
+withOpArrayAndCtxts ops =
+  bracket (createOpArrayAndCtxts ops) destroyOpArrayAndCtxts
+
+-- | Allocates an `OpArray` and a list of `OpContext`s from the given list of
+-- `Op`s. Must be freed with 'destroyOpArrayAndCtxts'.
+createOpArrayAndCtxts :: [Op] -> IO (C.OpArray, [OpContext])
+createOpArrayAndCtxts ops = do
+  ctxts <- mapM createOpContext ops
+  let l = length ops
+  arr <- C.opArrayCreate l
+  sequence_ $ zipWith (setOpArray arr) [0 .. l - 1] ctxts
+  return (arr, ctxts)
+
+destroyOpArrayAndCtxts :: (C.OpArray, [OpContext]) -> IO ()
+destroyOpArrayAndCtxts (arr, ctxts) = do
+  C.opArrayDestroy arr (length ctxts)
+  mapM_ freeOpContext ctxts
 
 -- | Container holding GC-managed results for 'Op's which receive data.
 data OpRecvResult
@@ -188,9 +195,14 @@ resultFromOpContext _ = do
   grpcDebug "resultFromOpContext: saw non-result op type."
   return Nothing
 
--- | For a given call, run the given 'Op's on the given completion queue with
--- the given tag. Blocks until the ops are complete or the deadline on the
--- associated call has been reached.
+-- | For a given call, run the given 'Op's on the given completion queue.
+-- Blocks until the ops are complete or the deadline on the associated call has
+-- been reached.
+--
+-- The wait is interruptible. Interrupting it does not cancel the batch (gRPC
+-- has no way to withdraw one): the batch stays in flight until it completes or
+-- the call ends, and until then gRPC rejects another batch containing the same
+-- kind of op on this call.
 -- TODO: now that we distinguish between different types
 -- of calls at the type level, we could try to limit the input 'Op's more
 -- appropriately. E.g., we don't use an 'OpRecvInitialMetadata' when receiving a
@@ -216,33 +228,30 @@ runOps ::
   -- | The list of 'Op's to execute.
   [Op] ->
   IO (Either GRPCIOError [OpRecvResult])
-runOps call cq ops =
-  let l = length ops
-   in -- It is crucial to mask exceptions here. If we don’t do this, we can
-      -- run into the following situation:
-      --
-      -- 1. We allocate an OpContext, e.g., OpRecvMessageContext and the corresponding ByteBuffer.
-      -- 2. We pass the buffer to gRPC in startBatch.
-      -- 3. If we now get an exception we will free the ByteBuffer.
-      -- 4. gRPC can now end up writing to the freed ByteBuffer and we get a heap corruption.
-      withOpArrayAndCtxts ops $ \(opArray, contexts) -> mask_ $ do
-        grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
-        tag <- newTag cq
+runOps call cq ops = mask_ $ do
+  -- The op contexts are buffers that gRPC reads from and writes to until the
+  -- batch completes. They are therefore owned by the batch's completion
+  -- callback, which runs on the queue's dispatcher thread, and not by this
+  -- thread: if this thread is interrupted while waiting, the batch is still in
+  -- flight, and freeing the contexts here would let gRPC write to freed
+  -- memory.
+  opsAndCtxts@(opArray, contexts) <- createOpArrayAndCtxts ops
+  grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
+  let release = destroyOpArrayAndCtxts opsAndCtxts
+      -- A batch that completes unsuccessfully is reported as a timeout, since
+      -- the usual cause is the call's deadline expiring.
+      finish False = return (Left GRPCIOTimeout)
+      finish True = do
+        grpcDebug "runOps: got good op; starting."
+        Right . catMaybes <$> mapM resultFromOpContext contexts
+      start tag = do
         grpcDebug $ "runOps: tag: " ++ show tag
-        callError <- startBatch cq call opArray l tag
+        callError <- startBatch cq call opArray (length ops) tag
         grpcDebug $
           "runOps: called start_batch. callError: "
             ++ (show callError)
-        case callError of
-          Left x -> return $ Left x
-          Right () -> do
-            ev <- pluck cq tag Nothing
-            grpcDebug $ "runOps: pluck returned " ++ show ev
-            case ev of
-              Right () -> do
-                grpcDebug "runOps: got good op; starting."
-                fmap (Right . catMaybes) $ mapM resultFromOpContext contexts
-              Left err -> return $ Left err
+        return callError
+  runCompletion release finish start (const (return ()))
 
 runOps' ::
   C.Call ->

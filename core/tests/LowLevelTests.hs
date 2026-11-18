@@ -11,8 +11,15 @@
 
 module LowLevelTests where
 
-import Control.Concurrent (threadDelay)
+import Control.Concurrent (
+  newEmptyMVar,
+  putMVar,
+  readMVar,
+  takeMVar,
+  threadDelay,
+ )
 import Control.Concurrent.Async
+import Control.Exception (finally)
 import Control.Monad
 import Control.Monad.Managed
 import Data.ByteString (
@@ -30,6 +37,7 @@ import qualified Network.GRPC.LowLevel.Client.Unregistered as U
 import Network.GRPC.LowLevel.GRPC (threadDelaySecs)
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
 import Network.GRPC.Unsafe (grpcCppVersionMajor, grpcCppVersionMinor)
+import Network.GRPC.Unsafe.Constants (maxCompletionQueuePluckers)
 import qualified Pipes as P
 import Test.Tasty
 import Test.Tasty.HUnit as HU (
@@ -71,6 +79,14 @@ lowLevelTests =
     , testServerStreamingUnregistered
     , testBiDiStreaming
     , testBiDiStreamingUnregistered
+    , -- Idle streams must not stall other calls (findings.md #1). The counts
+      -- are relative to gRPC's limit on concurrent pluckers, which used to cap
+      -- the number of blocked operations per completion queue.
+      testIdleStreams ServerRecv (maxCompletionQueuePluckers - 1)
+    , testIdleStreams ServerRecv maxCompletionQueuePluckers
+    , testIdleStreams ServerRecv (4 * maxCompletionQueuePluckers)
+    , testIdleStreams ClientRecv maxCompletionQueuePluckers
+    , testIdleStreams ClientRecv (4 * maxCompletionQueuePluckers)
     ]
 
 testGRPCBracket :: TestTree
@@ -632,6 +648,80 @@ testBiDiStreamingUnregistered =
         recv `is` Right Nothing
         return (trailMD, serverStatus, serverDtls)
       eea @?= Right ()
+
+-- | Which end of an idle stream is blocked in a gRPC receive.
+data IdleSide = ServerRecv | ClientRecv
+
+-- | Regression test for findings.md #1.
+--
+-- @nIdle@ bidirectional streams are opened and left idle, with one end of each
+-- blocked in 'recv'. An unrelated unary call must still be answered.
+--
+-- When completion queues were read with pluck, each blocked 'recv' held one of
+-- the 'maxCompletionQueuePluckers' pluck slots on a queue shared by every call
+-- of the server (or client), so that many idle streams stalled all other
+-- calls.
+testIdleStreams :: IdleSide -> Int -> TestTree
+testIdleStreams side nIdle =
+  testCase ("Client/Server - unary call succeeds with " ++ show nIdle ++ " streams idle in " ++ sideName) $ do
+    -- One put per stream that is about to block in recv.
+    parked <- newEmptyMVar
+    -- Filled to let the idle streams finish.
+    release <- newEmptyMVar
+    clientDone <- newEmptyMVar
+    void $
+      runTestServer (TestServer defServerConf (server parked release clientDone))
+        `concurrently` ( threadDelay 100000
+                           >> runTestClient (stdTestClient (client parked release clientDone))
+                       )
+  where
+    sideName = case side of
+      ServerRecv -> "server recv"
+      ClientRecv -> "client recv"
+
+    server parked release clientDone s = do
+      replicateM_ (nIdle + 1) $ U.withServerCallAsync s $ \call ->
+        if U.callMethod call == "/idle"
+          then void $ U.serverRW s call mempty $ \_sc recv _send -> do
+            case side of
+              ServerRecv -> do
+                putMVar parked ()
+                -- Blocks until the client half-closes.
+                void recv
+              -- Not in a gRPC op: the client is the one blocked in recv.
+              ClientRecv -> readMVar release
+            return (mempty, StatusOk, "")
+          else void $ U.serverHandleNormalCall' s call mempty $ \_ _ ->
+            return ("pong", mempty, StatusOk, "")
+      -- Keep the server up until the client is done.
+      takeMVar clientDone
+
+    client parked release clientDone c = do
+      rmIdle <- clientRegisterMethodBiDiStreaming c "/idle"
+      rmPing <- clientRegisterMethodNormal c "/ping"
+      streams <- replicateM nIdle $ async $
+        clientRW c rmIdle 30 mempty $ \_cc _getMD recv _send writesDone ->
+          case side of
+            -- Not in a gRPC op: the server is the one blocked in recv.
+            ServerRecv -> do
+              readMVar release
+              void writesDone
+            ClientRecv -> do
+              putMVar parked ()
+              -- Blocks until the server finishes the call.
+              void recv
+      replicateM_ nIdle (takeMVar parked)
+      -- Let the streams enter recv.
+      threadDelay 200000
+      -- Always unblock the streams, so a stalled ping still shuts down cleanly.
+      r <-
+        clientRequest c rmPing 5 "ping" mempty
+          `finally` putMVar release ()
+      mapM_ wait streams
+      putMVar clientDone ()
+      case r of
+        Right rsp -> rspBody rsp @?= "pong"
+        Left e -> assertFailure ("ping stalled behind idle streams: " ++ show e)
 
 --------------------------------------------------------------------------------
 -- Unregistered tests

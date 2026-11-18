@@ -8,9 +8,9 @@
 
 module Network.GRPC.LowLevel.CompletionQueue.Unregistered where
 
-import Control.Monad.Managed
-import Control.Monad.Trans.Class (MonadTrans (lift))
-import Control.Monad.Trans.Except
+import Control.Exception (mask_)
+import Foreign.Marshal.Alloc (free, malloc)
+import Foreign.Ptr (Ptr)
 import Foreign.Storable (peek)
 import Network.GRPC.LowLevel.Call
 import qualified Network.GRPC.LowLevel.Call.Unregistered as U
@@ -44,6 +44,12 @@ channelCreateCall chan parent mask cq@CompletionQueue{..} meth endpt deadline =
         C.reserved
     return $ Right $ ClientCall call
 
+-- | Wait for an unregistered call. Blocks until a call arrives or the server
+-- shuts down, in which case the result is 'GRPCIOShutdown'.
+--
+-- If the calling thread is interrupted while waiting, the request stays
+-- registered with gRPC (it cannot be withdrawn); the call that eventually
+-- satisfies it is cancelled.
 serverRequestCall ::
   C.Server ->
   -- | server CQ / notification CQ
@@ -51,41 +57,35 @@ serverRequestCall ::
   -- | call CQ
   CompletionQueue ->
   IO (Either GRPCIOError U.ServerCall)
-serverRequestCall s scq ccq =
-  withPermission Push scq . with allocs $ \(call, meta, cd) ->
-    withPermission Pluck scq $ do
-      md <- peek meta
-      tag <- newTag scq
-      dbug $ "got pluck permission, registering call for tag=" ++ show tag
-      ce <- C.grpcServerRequestCall s call cd md (unsafeCQ ccq) (unsafeCQ scq) tag
-      runExceptT $ case ce of
-        C.CallOk -> do
-          ExceptT $ do
-            let
-              rec = do
-                -- yield every second, for interruptibility
-                r <- pluck' scq tag (Just 1)
-                case r of
-                  Left GRPCIOTimeout -> rec
-                  _ -> return r
-            r <- rec
-            dbug $ "pluck' finished: " ++ show r
-            return r
-          lift $
-            U.ServerCall
-              <$> peek call
-              <*> return ccq
-              <*> C.getAllMetadataArray md
-              <*> (C.timeSpec <$> C.callDetailsGetDeadline cd)
-              <*> (MethodName <$> C.callDetailsGetMethod cd)
-              <*> (Host <$> C.callDetailsGetHost cd)
-        _ -> do
-          lift $ dbug $ "Throwing callError: " ++ show ce
-          throwE $ GRPCIOCallError ce
+serverRequestCall s scq ccq = mask_ $ do
+  -- NB: These are owned by the completion callback, not by this thread: gRPC
+  -- writes to them when a call arrives, however long that takes.
+  call <- malloc :: IO (Ptr C.Call)
+  meta <- C.metadataArrayCreate
+  cd <- C.createCallDetails
+  let release = do
+        free call
+        C.metadataArrayDestroy meta
+        C.destroyCallDetails cd
+      finish False = return (Left GRPCIOShutdown)
+      finish True =
+        fmap Right $
+          U.ServerCall
+            <$> peek call
+            <*> return ccq
+            <*> (peek meta >>= C.getAllMetadataArray)
+            <*> (C.timeSpec <$> C.callDetailsGetDeadline cd)
+            <*> (MethodName <$> C.callDetailsGetMethod cd)
+            <*> (Host <$> C.callDetailsGetHost cd)
+      start tag = withPermission Push scq $ do
+        md <- peek meta
+        dbug $ "registering call for tag=" ++ show tag
+        ce <- C.grpcServerRequestCall s call cd md (unsafeCQ ccq) (unsafeCQ scq) tag
+        dbug $ "request returned: " ++ show ce
+        return (throwIfCallError ce)
+      discard sc = do
+        C.grpcCallCancel (U.unsafeSC sc) C.reserved
+        C.grpcCallUnref (U.unsafeSC sc)
+  runCompletion release finish start discard
   where
-    allocs =
-      (,,)
-        <$> mgdPtr
-        <*> managed C.withMetadataArrayPtr
-        <*> managed C.withCallDetails
     dbug = grpcDebug . ("serverRequestCall(U): " ++)

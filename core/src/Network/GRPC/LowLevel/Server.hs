@@ -21,6 +21,7 @@ import Control.Concurrent (
   killThread,
   myThreadId,
  )
+import Control.Concurrent.MVar (takeMVar)
 import Control.Concurrent.STM (
   atomically,
   check,
@@ -44,7 +45,6 @@ import Network.GRPC.LowLevel.Call
 import Network.GRPC.LowLevel.CompletionQueue (
   CompletionQueue,
   createCompletionQueue,
-  pluck,
   serverRegisterCompletionQueue,
   serverRequestCall,
   serverShutdownAndNotify,
@@ -56,6 +56,7 @@ import qualified Network.GRPC.Unsafe as C
 import qualified Network.GRPC.Unsafe.ChannelArgs as C
 import qualified Network.GRPC.Unsafe.Op as C
 import qualified Network.GRPC.Unsafe.Security as C
+import System.Timeout (timeout)
 
 -- | Wraps various gRPC state needed to run a server.
 data Server = Server
@@ -251,18 +252,18 @@ stopServer Server{unsafeServer = s, ..} = do
           putStrLn "Warning: completion queue didn't shut down."
           putStrLn "Trying to stop server anyway."
         Right _ -> return ()
-    shutdownNotify scq = do
-      let shutdownTag = C.tag 0
-      serverShutdownAndNotify s scq shutdownTag
-      grpcDebug "called serverShutdownAndNotify; plucking."
-      shutdownEvent <- pluck scq shutdownTag (Just 30)
-      grpcDebug $ "shutdownNotify: got shutdown event" ++ show shutdownEvent
-      case shutdownEvent of
-        -- This case occurs when we pluck but the queue is already in the
-        -- 'shuttingDown' state, implying we already tried to shut down.
-        Left GRPCIOShutdown -> error "Called stopServer twice!"
-        Left _ -> error "Failed to stop server."
-        Right _ -> return ()
+    shutdownNotify scq =
+      serverShutdownAndNotify s scq >>= \case
+        -- This case occurs when the queue is already in the 'shuttingDown'
+        -- state, implying we already tried to shut down.
+        Left _ -> error "Called stopServer twice!"
+        Right done -> do
+          grpcDebug "called serverShutdownAndNotify; waiting."
+          shutdownEvent <- timeout (30 * 10 ^ (6 :: Int)) (takeMVar done)
+          grpcDebug $ "shutdownNotify: got shutdown event" ++ show shutdownEvent
+          case shutdownEvent of
+            Nothing -> error "Failed to stop server."
+            Just () -> return ()
     cleanupForks = do
       atomically $ writeTVar serverShuttingDown True
       liveForks <- readTVarIO outstandingForks

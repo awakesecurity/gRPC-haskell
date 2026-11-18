@@ -33,16 +33,24 @@ dispatchLoop ::
   [Handler 'ServerStreaming] ->
   [Handler 'BiDiStreaming] ->
   IO ()
-dispatchLoop s logger md hN hC hS hB =
-  forever $ U.withServerCallAsync s $ \sc ->
-    case findHandler sc allHandlers of
-      Just (AnyHandler ah) -> case ah of
-        UnaryHandler _ h -> unaryHandler sc h
-        ClientStreamHandler _ h -> csHandler sc h
-        ServerStreamHandler _ h -> ssHandler sc h
-        BiDiStreamHandler _ h -> bdHandler sc h
-      Nothing -> unknownHandler sc
+dispatchLoop s logger md hN hC hS hB = go
   where
+    -- Once the server begins shutting down, every request for a new call fails
+    -- immediately, so stop asking rather than spin.
+    go =
+      U.withServerCallAsync' s dispatch >>= \case
+        Left GRPCIOShutdown -> return ()
+        _ -> go
+
+    dispatch sc =
+      case findHandler sc allHandlers of
+        Just (AnyHandler ah) -> case ah of
+          UnaryHandler _ h -> unaryHandler sc h
+          ClientStreamHandler _ h -> csHandler sc h
+          ServerStreamHandler _ h -> ssHandler sc h
+          BiDiStreamHandler _ h -> bdHandler sc h
+        Nothing -> unknownHandler sc
+
     allHandlers =
       map AnyHandler hN
         ++ map AnyHandler hC
