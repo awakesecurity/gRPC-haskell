@@ -121,10 +121,6 @@ grpc_status_code deref_status_code_ptr(grpc_status_code* p);
 
 void destroy_status_code_ptr(grpc_status_code* p);
 
-grpc_call_details* create_call_details();
-
-void destroy_call_details(grpc_call_details* cd);
-
 //Everything gRPC fills in when a call arrives on a server, in one allocation.
 //Unregistered requests use call, metadata and details. Registered requests use
 //call, metadata, deadline and (if the method has one) payload.

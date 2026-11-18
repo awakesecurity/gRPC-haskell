@@ -319,17 +319,6 @@ void destroy_status_code_ptr(grpc_status_code* p){
   grpc_haskell_free("destroy_status_code_ptr", p);
 }
 
-grpc_call_details* create_call_details(){
-  grpc_call_details* retval = malloc(sizeof(grpc_call_details));
-  grpc_call_details_init(retval);
-  return retval;
-}
-
-void destroy_call_details(grpc_call_details* cd){
-  grpc_call_details_destroy(cd);
-  grpc_haskell_free("destroy_call_details", cd);
-}
-
 server_call_request* server_call_request_create(){
   server_call_request* req = malloc(sizeof(server_call_request));
   if(req == NULL){

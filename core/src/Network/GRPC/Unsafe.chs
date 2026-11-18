@@ -3,7 +3,6 @@
 
 module Network.GRPC.Unsafe where
 
-import Control.Exception (bracket)
 import Control.Monad
 
 import Data.ByteString (ByteString, useAsCString)
@@ -55,12 +54,6 @@ deriving instance Show Call
 {#pointer *grpc_call_details as CallDetails newtype #}
 
 deriving instance Show CallDetails
-
-{#fun unsafe create_call_details as ^ {} -> `CallDetails'#}
-{#fun unsafe destroy_call_details as ^ {`CallDetails'} -> `()'#}
-
-withCallDetails :: (CallDetails -> IO a) -> IO a
-withCallDetails = bracket createCallDetails destroyCallDetails
 
 -- instance def adapted from
 -- https://mail.haskell.org/pipermail/c2hs/2007-June/000800.html
