@@ -17,9 +17,10 @@ import Control.Concurrent (
   readMVar,
   takeMVar,
   threadDelay,
+  tryReadMVar,
  )
 import Control.Concurrent.Async
-import Control.Exception (finally)
+import Control.Exception (finally, mask)
 import Control.Monad
 import Control.Monad.Managed
 import Data.ByteString (
@@ -27,6 +28,7 @@ import Data.ByteString (
   isPrefixOf,
   isSuffixOf,
  )
+import Data.IORef (atomicModifyIORef', newIORef, readIORef)
 import Data.List (find)
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
@@ -35,6 +37,7 @@ import Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Call.Unregistered as U
 import qualified Network.GRPC.LowLevel.Client.Unregistered as U
 import Network.GRPC.LowLevel.GRPC (threadDelaySecs)
+import Network.GRPC.LowLevel.Server (forkServer)
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
 import Network.GRPC.Unsafe (grpcCppVersionMajor, grpcCppVersionMinor)
 import Network.GRPC.Unsafe.Constants (maxCompletionQueuePluckers)
@@ -59,6 +62,9 @@ lowLevelTests =
     , testClientCall
     , testClientTimeoutNoServer
     , testServerCreateDestroy
+    , testForkServerKilledOnShutdown
+    , testForkServerAfterShutdown
+    , testForkServerRacingShutdown
     , testMixRegisteredUnregistered
     , testPayload
     , testSSL
@@ -112,6 +118,60 @@ testClientTimeoutNoServer =
 testServerCreateDestroy :: TestTree
 testServerCreateDestroy =
   serverOnlyTest "start/stop" (["/foo"], [], [], []) nop
+
+testForkServerKilledOnShutdown :: TestTree
+testForkServerKilledOnShutdown =
+  testCase "Server - shutdown kills a blocked forkServer thread" $ do
+    started <- newEmptyMVar
+    died <- newEmptyMVar
+    runTestServer . TestServer defServerConf $ \s -> do
+      forked <-
+        forkServer s $
+          (putMVar started () >> forever (threadDelay 1000000))
+            `finally` putMVar died ()
+      forked @?= True
+      takeMVar started
+    -- The server does not finish stopping until its threads are dead.
+    r <- tryReadMVar died
+    r @?= Just ()
+
+testForkServerAfterShutdown :: TestTree
+testForkServerAfterShutdown =
+  testCase "Server - forkServer refuses to fork after shutdown" $ do
+    ran <- newEmptyMVar
+    s <- withGRPC $ \grpc -> withServer grpc defServerConf return
+    forked <- forkServer s (putMVar ran ())
+    forked @?= False
+    threadDelay 100000
+    r <- tryReadMVar ran
+    r @?= Nothing
+
+-- | Forks threads as fast as possible while the server shuts down. Every
+-- thread that 'forkServer' accepted must have been entered and must be dead by
+-- the time the server has stopped. This is a race, so a pass does not prove
+-- the absence of a bug.
+testForkServerRacingShutdown :: TestTree
+testForkServerRacingShutdown =
+  testCase "Server - forkServer racing shutdown loses no threads" $
+    replicateM_ 10 $ do
+      finished <- newIORef (0 :: Int)
+      let bump = atomicModifyIORef' finished (\n -> (n + 1, ()))
+          -- Like 'U.withServerCallAsync', the thread installs its cleanup
+          -- with exceptions masked.
+          forkOne s = mask $ \unmask ->
+            forkServer s (unmask (forever (threadDelay 1000000)) `finally` bump)
+          forkUntilRefused s n =
+            forkOne s >>= \forked ->
+              if forked then forkUntilRefused s (n + 1) else return (n :: Int)
+      forker <- withGRPC $ \grpc ->
+        withServer grpc defServerConf $ \s -> do
+          forker <- async (forkUntilRefused s 0)
+          threadDelay 2000
+          return forker
+      nFinished <- readIORef finished
+      nAccepted <- wait forker
+      assertBool "no threads were forked" (nAccepted > 0)
+      nFinished @?= nAccepted
 
 testMixRegisteredUnregistered :: TestTree
 testMixRegisteredUnregistered =

@@ -15,25 +15,19 @@
 -- `Network.GRPC.LowLevel.Server.Unregistered`.
 module Network.GRPC.LowLevel.Server where
 
-import Control.Concurrent (
-  ThreadId,
-  forkFinally,
-  killThread,
-  myThreadId,
- )
-import Control.Concurrent.STM (
-  atomically,
-  check,
- )
+import Control.Concurrent (killThread)
+import Control.Concurrent.Async (Async, async, asyncThreadId, waitCatch)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar)
+import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TVar (
   TVar,
   modifyTVar',
   newTVarIO,
   readTVar,
-  readTVarIO,
+  swapTVar,
   writeTVar,
  )
-import Control.Exception (bracket)
+import Control.Exception (bracket, finally, mask, uninterruptibleMask_)
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Except
@@ -71,8 +65,9 @@ data Server = Server
   , cstreamingMethods :: [RegisteredMethod 'ClientStreaming]
   , bidiStreamingMethods :: [RegisteredMethod 'BiDiStreaming]
   , serverConfig :: ServerConfig
-  , outstandingForks :: TVar (S.Set ThreadId)
-  , serverShuttingDown :: TVar Bool
+  , serverHandlers :: TVar (Maybe (S.Set (Async ())))
+  -- ^ The live threads forked with 'forkServer'. 'Nothing' once the server
+  -- has begun shutting down.
   }
 
 -- TODO: should we make a forkGRPC function instead? I am not sure if it would
@@ -90,39 +85,41 @@ data Server = Server
 -- errors at the C level of the library, not to ensure that application layer
 -- operations in user code complete successfully.
 forkServer :: Server -> IO () -> IO Bool
-forkServer Server{..} f = do
-  shutdown <- readTVarIO serverShuttingDown
-  case shutdown of
-    True -> return False
-    False -> do
-      -- NB: The spawned thread waits on 'ready' before running 'f' to ensure
-      -- that its ThreadId is inserted into outstandingForks before the cleanup
-      -- function deletes it from there. Not doing this can lead to stale thread
-      -- ids in the set when handlers cleanup ahead of the insertion, and a
-      -- subsequent deadlock in stopServer. We can use a dead-list instead if we
-      -- need something more performant.
-      ready <- newTVarIO False
-      tid <- forkFinally (atomically (check =<< readTVar ready) >> f) cleanup
-
-      atomically $ do
-        modifyTVar' outstandingForks (S.insert tid)
-        modifyTVar' ready (const True)
-
-      debug
-
-      return True
+forkServer Server{..} f = mask $ \restore -> do
+  go <- newEmptyMVar
+  a <- async $
+    -- NB: The thread waits to be told whether it was registered, so that it
+    -- cannot remove itself from 'serverHandlers' before it has been added.
+    -- The parent fills 'go' straight away, so the wait is short; it is
+    -- uninterruptible so that once 'forkServer' has returned 'True', 'f' is
+    -- certain to be entered (in the caller's masking state) and can rely on
+    -- its own cleanup running.
+    uninterruptibleMask_ (readMVar go) >>= \case
+      Nothing -> return ()
+      Just self -> restore f `finally` unregister self
+  -- Checking for shutdown and registering the thread must be one transaction:
+  -- 'stopServer' only kills the threads it finds registered.
+  registered <-
+    atomically $
+      readTVar serverHandlers >>= \case
+        Nothing -> return False
+        Just hs -> True <$ writeTVar serverHandlers (Just (S.insert a hs))
+  putMVar go (if registered then Just a else Nothing)
+  debug
+  return registered
   where
-    cleanup _ = do
-      tid <- myThreadId
-      atomically $ modifyTVar' outstandingForks (S.delete tid)
+    unregister self =
+      atomically $ modifyTVar' serverHandlers (fmap (S.delete self))
 
 #ifdef DEBUG
     -- This is intentionally moved outside of the 'do' block so that this file
     -- can be auto-formatted by fourmolu. Fourmolu's support for formatting CPP
     -- fails inside of 'do' blocks.
     debug = do
-      tids <- readTVarIO outstandingForks
-      grpcDebug ("after fork and bookkeeping: outstandingForks=" ++ show tids)
+      hs <- atomically (readTVar serverHandlers)
+      grpcDebug $
+        "after fork and bookkeeping: serverHandlers="
+          ++ show (fmap (map asyncThreadId . S.toList) hs)
 # else
     debug = pure ()
 #endif
@@ -212,8 +209,7 @@ startServer grpc conf@ServerConfig{..} =
         (\nm -> serverRegisterMethodBiDiStreaming server nm e)
         methodsToRegisterBiDiStreaming
     C.grpcServerStart server
-    forks <- newTVarIO S.empty
-    shutdown <- newTVarIO False
+    handlers <- newTVarIO (Just S.empty)
     ccq <- createCompletionQueue grpc
     return $
       Server
@@ -227,8 +223,7 @@ startServer grpc conf@ServerConfig{..} =
         cs
         bs
         conf
-        forks
-        shutdown
+        handlers
 
 stopServer :: Server -> IO ()
 -- TODO: Do method handles need to be freed?
@@ -263,13 +258,14 @@ stopServer Server{unsafeServer = s, ..} = do
         Just (Left GRPCIOShutdown) -> error "Called stopServer twice!"
         _ -> error "Failed to stop server."
     cleanupForks = do
-      atomically $ writeTVar serverShuttingDown True
-      liveForks <- readTVarIO outstandingForks
-      grpcDebug $ "Server shutdown: killing threads: " ++ show liveForks
-      mapM_ killThread liveForks
-      -- wait for threads to shut down
+      -- From here on, 'forkServer' refuses to fork.
+      liveForks <-
+        maybe [] S.toList <$> atomically (swapTVar serverHandlers Nothing)
+      grpcDebug $
+        "Server shutdown: killing threads: " ++ show (map asyncThreadId liveForks)
+      mapM_ (killThread . asyncThreadId) liveForks
       grpcDebug "Server shutdown: waiting until all threads are dead."
-      atomically $ check . (== 0) . S.size =<< readTVar outstandingForks
+      mapM_ waitCatch liveForks
       grpcDebug "Server shutdown: All forks cleaned up."
 
 -- Uses 'bracket' to safely start and stop a server, even if exceptions occur.

@@ -32,6 +32,7 @@ library
       base             >= 4.8    && < 5.0
     , clock            >= 0.6.0  && < 0.9
     , bytestring       >= 0.10   && < 0.13
+    , async            >= 2.1    && < 2.3
     , stm              >= 2.4    && < 2.6
     , containers       >= 0.5    && < 0.8
     , template-haskell >= 2.16.0 && < 2.24
