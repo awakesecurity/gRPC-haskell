@@ -13,6 +13,7 @@ import Foreign.Ptr (Ptr)
 import Foreign.Storable (peek)
 import Network.GRPC.LowLevel.Call
 import qualified Network.GRPC.LowLevel.Call.Unregistered as U
+import Network.GRPC.LowLevel.CompletionQueue (serverCallOperation)
 import Network.GRPC.LowLevel.CompletionQueue.Internal
 import Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe as C

@@ -31,6 +31,7 @@ import Control.Exception (
  )
 import Control.Monad
 import Data.Foldable (for_)
+import Data.Function (fix)
 import Foreign.StablePtr (
   StablePtr,
   castPtrToStablePtr,
@@ -136,15 +137,18 @@ dropCompletionTag (C.Tag p) =
 
 -- | An asynchronous gRPC operation, as run by 'runCompletion'.
 data Operation a = Operation
-  { opStart :: C.Tag -> IO (Either GRPCIOError ())
-  -- ^ Hands the tag to gRPC. Must return 'Left' iff gRPC did not accept the
-  -- operation (in which case no event will be delivered). It is responsible
-  -- for obtaining permission to push work onto the queue; see
-  -- 'withPushPermission'.
-  , opFinish :: Bool -> IO (Either GRPCIOError a)
-  -- ^ Runs on the dispatcher thread when the operation completes, before
-  -- 'opRelease', and receives the event's success flag. It should copy
-  -- whatever is needed out of the C resources, and must not block.
+  { opQueue :: CompletionQueue
+  -- ^ The queue the operation is pushed onto. 'runCompletion' starts the
+  -- operation under this queue's 'withPushPermission'.
+  , opStart :: C.Tag -> IO C.CallError
+  -- ^ Hands the tag to gRPC. Must return 'C.CallOk' iff gRPC accepted the
+  -- operation; otherwise no event will be delivered. Must not block.
+  , opResult :: IO a
+  -- ^ Runs on the dispatcher thread when the operation completes
+  -- successfully, before 'opRelease'. It should copy whatever is needed out
+  -- of the C resources, and must not block.
+  , opFailure :: GRPCIOError
+  -- ^ The error to report when the operation completes unsuccessfully.
   , opRelease :: IO ()
   -- ^ Frees the C resources handed to gRPC for the operation. Run exactly
   -- once: by the dispatcher after the operation completes, or immediately if
@@ -158,21 +162,26 @@ data Operation a = Operation
 -- The given action allocates the operation's C resources and describes the
 -- operation; it is run with asynchronous exceptions masked.
 --
+-- The result is 'GRPCIOShutdown' if the operation's queue is shutting down,
+-- and a 'GRPCIOCallError' if gRPC refuses to start the operation.
+--
 -- The calling thread waits interruptibly. If it receives an asynchronous
 -- exception while waiting, the operation itself is not cancelled (gRPC offers
 -- no way to withdraw a started operation): it stays in flight, its resources
 -- are released when it completes, and its result is passed to 'opDiscard'.
 --
--- An exception thrown by 'opFinish' or 'opRelease' is rethrown in the calling
+-- An exception thrown by 'opResult' or 'opRelease' is rethrown in the calling
 -- thread.
 runCompletion :: forall a. IO (Operation a) -> IO (Either GRPCIOError a)
 runCompletion acquire = mask_ $ do
   Operation{..} <- acquire
   done <- newEmptyMVar :: IO (MVar (Either SomeException (Either GRPCIOError a)))
-  let complete ok = do
+  let finish ok = if ok then Right <$> opResult else return (Left opFailure)
+      complete ok = do
         -- NB: 'done' must be filled whatever happens, or the waiter hangs.
-        r <- try (opFinish ok `finally` opRelease)
+        r <- try (finish ok `finally` opRelease)
         putMVar done r
+      start tag = withPushPermission opQueue (throwIfCallError <$> opStart tag)
       abandon tag = dropCompletionTag tag >> opRelease
       -- Waits for a result that the caller has given up on.
       reap = for_ opDiscard $ \discard ->
@@ -181,9 +190,9 @@ runCompletion acquire = mask_ $ do
             Right (Right x) -> discard x
             _ -> return ()
   tag <- newCompletionTag complete
-  -- 'opStart' can only be interrupted before it hands the tag to gRPC (while
+  -- 'start' can only be interrupted before it hands the tag to gRPC (while
   -- waiting for permission to push), so it is safe to clean up here.
-  started <- opStart tag `onException` abandon tag
+  started <- start tag `onException` abandon tag
   case started of
     Left e -> do
       abandon tag
@@ -191,36 +200,6 @@ runCompletion acquire = mask_ $ do
     Right () -> do
       r <- takeMVar done `onException` reap
       either throwIO return r
-
--- | The 'Operation' of waiting for a new call on a server. @release@ frees the
--- buffers gRPC fills in for the call, @build@ reads the call out of them, and
--- @request@ is the gRPC function that registers the request.
---
--- The operation fails with 'GRPCIOShutdown' when the server shuts down. If the
--- waiter is interrupted, the request stays registered with gRPC (it cannot be
--- withdrawn), and the call that eventually satisfies it is cancelled.
-serverCallOperation ::
-  -- | The server's notification queue.
-  CompletionQueue ->
-  -- | The underlying call, for cancelling an unwanted one.
-  (sc -> C.Call) ->
-  -- | release
-  IO () ->
-  -- | build
-  IO sc ->
-  -- | request
-  (C.Tag -> IO C.CallError) ->
-  Operation sc
-serverCallOperation scq unsafeCall release build request =
-  Operation
-    { opStart = \tag -> withPushPermission scq (throwIfCallError <$> request tag)
-    , opFinish = \ok ->
-        if ok then Right <$> build else return (Left GRPCIOShutdown)
-    , opRelease = release
-    , opDiscard = Just $ \sc -> do
-        C.grpcCallCancel (unsafeCall sc) C.reserved
-        C.grpcCallUnref (unsafeCall sc)
-    }
 
 --------------------------------------------------------------------------------
 -- Permission to push work
@@ -267,21 +246,19 @@ startDispatcher cq done =
 -- | Reads events from the queue and runs their completion callbacks until the
 -- queue reports that it has shut down. Must be the only reader of the queue.
 dispatcher :: C.CompletionQueue -> IO ()
-dispatcher cq = C.withInfiniteDeadline loop
-  where
-    loop deadline = do
-      ev <- C.grpcCompletionQueueNext cq deadline C.reserved
-      grpcDebug $ "dispatcher: next() returned " ++ show ev
-      case C.eventCompletionType ev of
-        C.QueueShutdown -> return ()
-        C.QueueTimeout -> loop deadline
-        C.OpComplete -> do
-          r <- try (runCompletionTag (C.eventTag ev) (C.eventSuccess ev))
-          case r of
-            Left (e :: SomeException) ->
-              grpcDebug $ "dispatcher: completion callback threw: " ++ show e
-            Right () -> return ()
-          loop deadline
+dispatcher cq = C.withInfiniteDeadline $ \deadline -> fix $ \loop -> do
+  ev <- C.grpcCompletionQueueNext cq deadline C.reserved
+  grpcDebug $ "dispatcher: next() returned " ++ show ev
+  case C.eventCompletionType ev of
+    C.QueueShutdown -> return ()
+    C.QueueTimeout -> loop
+    C.OpComplete -> do
+      r <- try (runCompletionTag (C.eventTag ev) (C.eventSuccess ev))
+      case r of
+        Left (e :: SomeException) ->
+          grpcDebug $ "dispatcher: completion callback threw: " ++ show e
+        Right () -> return ()
+      loop
 
 -- | Shuts down the completion queue. No new work can be started on the queue
 -- after this is called. The dispatcher destroys the queue once every operation

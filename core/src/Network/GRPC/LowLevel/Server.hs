@@ -21,7 +21,6 @@ import Control.Concurrent (
   killThread,
   myThreadId,
  )
-import Control.Concurrent.MVar (takeMVar)
 import Control.Concurrent.STM (
   atomically,
   check,
@@ -252,18 +251,17 @@ stopServer Server{unsafeServer = s, ..} = do
           putStrLn "Warning: completion queue didn't shut down."
           putStrLn "Trying to stop server anyway."
         Right _ -> return ()
-    shutdownNotify scq =
-      serverShutdownAndNotify s scq >>= \case
+    shutdownNotify scq = do
+      grpcDebug "calling serverShutdownAndNotify; waiting."
+      shutdownEvent <-
+        timeout (30 * 10 ^ (6 :: Int)) (serverShutdownAndNotify s scq)
+      grpcDebug $ "shutdownNotify: got shutdown event" ++ show shutdownEvent
+      case shutdownEvent of
+        Just (Right ()) -> return ()
         -- This case occurs when the queue is already in the 'shuttingDown'
         -- state, implying we already tried to shut down.
-        Left _ -> error "Called stopServer twice!"
-        Right done -> do
-          grpcDebug "called serverShutdownAndNotify; waiting."
-          shutdownEvent <- timeout (30 * 10 ^ (6 :: Int)) (takeMVar done)
-          grpcDebug $ "shutdownNotify: got shutdown event" ++ show shutdownEvent
-          case shutdownEvent of
-            Nothing -> error "Failed to stop server."
-            Just () -> return ()
+        Just (Left GRPCIOShutdown) -> error "Called stopServer twice!"
+        _ -> error "Failed to stop server."
     cleanupForks = do
       atomically $ writeTVar serverShuttingDown True
       liveForks <- readTVarIO outstandingForks

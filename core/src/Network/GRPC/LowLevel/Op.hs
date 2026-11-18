@@ -17,7 +17,7 @@ import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (peek)
 import Network.GRPC.LowLevel.CompletionQueue
 import Network.GRPC.LowLevel.GRPC
-import qualified Network.GRPC.Unsafe as C (Call)
+import qualified Network.GRPC.Unsafe as C (Call, grpcCallStartBatch, reserved)
 import qualified Network.GRPC.Unsafe.ByteBuffer as C
 import qualified Network.GRPC.Unsafe.Metadata as C
 import qualified Network.GRPC.Unsafe.Op as C
@@ -231,21 +231,18 @@ runOps call cq ops = runCompletion $ do
   grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
   return
     Operation
-      { opStart = \tag -> do
-          grpcDebug $ "runOps: tag: " ++ show tag
-          callError <- startBatch cq call opArray (length ops) tag
-          grpcDebug $
-            "runOps: called start_batch. callError: "
-              ++ (show callError)
+      { opQueue = cq
+      , opStart = \tag -> do
+          grpcDebug $ "runOps: starting batch with tag: " ++ show tag
+          callError <- C.grpcCallStartBatch call opArray (length ops) tag C.reserved
+          grpcDebug $ "runOps: called start_batch. callError: " ++ show callError
           return callError
+      , opResult = do
+          grpcDebug "runOps: got good op; starting."
+          catMaybes <$> mapM resultFromOpContext contexts
       , -- A batch that completes unsuccessfully is reported as a timeout,
         -- since the usual cause is the call's deadline expiring.
-        opFinish = \ok ->
-          if ok
-            then do
-              grpcDebug "runOps: got good op; starting."
-              Right . catMaybes <$> mapM resultFromOpContext contexts
-            else return (Left GRPCIOTimeout)
+        opFailure = GRPCIOTimeout
       , opRelease = destroyOpArrayAndCtxts opsAndCtxts
       , -- An abandoned batch has nothing left to dispose of.
         opDiscard = Nothing

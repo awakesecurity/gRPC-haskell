@@ -22,18 +22,18 @@ module Network.GRPC.LowLevel.CompletionQueue (
   withCompletionQueue,
   createCompletionQueue,
   shutdownCompletionQueue,
-  startBatch,
   channelCreateCall,
   TimeoutSeconds,
   serverRegisterCompletionQueue,
   serverShutdownAndNotify,
   serverRequestCall,
+  serverCallOperation,
   Operation (..),
   runCompletion,
 )
 where
 
-import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar)
+import Control.Concurrent.MVar (newEmptyMVar)
 import Control.Concurrent.STM.TVar (newTVarIO)
 import Control.Exception (bracket, mask_)
 import Control.Monad (unless)
@@ -48,7 +48,6 @@ import qualified Network.GRPC.Unsafe as C
 import qualified Network.GRPC.Unsafe.ByteBuffer as C
 import qualified Network.GRPC.Unsafe.Constants as C
 import qualified Network.GRPC.Unsafe.Metadata as C
-import qualified Network.GRPC.Unsafe.Op as C
 import qualified Network.GRPC.Unsafe.Time as C
 
 withCompletionQueue :: GRPC -> (CompletionQueue -> IO a) -> IO a
@@ -67,27 +66,6 @@ createCompletionQueue _ = mask_ $ do
   dispatcherDone <- newEmptyMVar
   startDispatcher unsafeCQ dispatcherDone
   return CompletionQueue{..}
-
--- | Very simple wrapper around 'grpcCallStartBatch'. Throws 'GRPCIOShutdown'
--- without calling 'grpcCallStartBatch' if the queue is shutting down.
--- Throws 'CallError' if 'grpcCallStartBatch' returns a non-OK code.
-startBatch ::
-  CompletionQueue ->
-  C.Call ->
-  C.OpArray ->
-  Int ->
-  C.Tag ->
-  IO (Either GRPCIOError ())
-startBatch cq call opArray opArraySize tag =
-  withPushPermission cq $ fmap throwIfCallError $ do
-    grpcDebug $
-      "startBatch: calling grpc_call_start_batch with pointers: "
-        ++ show call
-        ++ " "
-        ++ show opArray
-    res <- C.grpcCallStartBatch call opArray opArraySize tag C.reserved
-    grpcDebug "startBatch: grpc_call_start_batch call returned."
-    return res
 
 channelCreateCall ::
   C.Channel ->
@@ -196,15 +174,56 @@ serverRegisterCompletionQueue :: C.Server -> CompletionQueue -> IO ()
 serverRegisterCompletionQueue server CompletionQueue{..} =
   C.grpcServerRegisterCompletionQueue server unsafeCQ C.reserved
 
--- | Begins shutting down the server. The returned 'MVar' is filled once the
--- server has no more calls in progress. Returns 'GRPCIOShutdown' if the given
--- queue is already shutting down.
+-- | Shuts down the server, and blocks until it has no more calls in progress.
+-- Returns 'GRPCIOShutdown' if the given queue is already shutting down.
+--
+-- The wait can be interrupted (e.g. with 'System.Timeout.timeout'); the
+-- shutdown itself then carries on regardless.
 serverShutdownAndNotify ::
   C.Server ->
   CompletionQueue ->
-  IO (Either GRPCIOError (MVar ()))
-serverShutdownAndNotify server cq = mask_ . withPushPermission cq $ do
-  done <- newEmptyMVar
-  tag <- newCompletionTag (\_ -> putMVar done ())
-  C.grpcServerShutdownAndNotify server (unsafeCQ cq) tag
-  return (Right done)
+  IO (Either GRPCIOError ())
+serverShutdownAndNotify server cq =
+  runCompletion . return $
+    Operation
+      { opQueue = cq
+      , opStart = \tag -> do
+          C.grpcServerShutdownAndNotify server (unsafeCQ cq) tag
+          return C.CallOk
+      , opResult = return ()
+      , -- gRPC is not expected to deliver this event unsuccessfully.
+        opFailure = GRPCIOUnknownError
+      , opRelease = return ()
+      , opDiscard = Nothing
+      }
+
+-- | The 'Operation' of waiting for a new call on a server. @release@ frees the
+-- buffers gRPC fills in for the call, @build@ reads the call out of them, and
+-- @request@ is the gRPC function that registers the request.
+--
+-- The operation fails with 'GRPCIOShutdown' when the server shuts down. If the
+-- waiter is interrupted, the request stays registered with gRPC (it cannot be
+-- withdrawn), and the call that eventually satisfies it is cancelled.
+serverCallOperation ::
+  -- | The server's notification queue.
+  CompletionQueue ->
+  -- | The underlying call, for cancelling an unwanted one.
+  (sc -> C.Call) ->
+  -- | release
+  IO () ->
+  -- | build
+  IO sc ->
+  -- | request
+  (C.Tag -> IO C.CallError) ->
+  Operation sc
+serverCallOperation scq unsafeCall release build request =
+  Operation
+    { opQueue = scq
+    , opStart = request
+    , opResult = build
+    , opFailure = GRPCIOShutdown
+    , opRelease = release
+    , opDiscard = Just $ \sc -> do
+        C.grpcCallCancel (unsafeCall sc) C.reserved
+        C.grpcCallUnref (unsafeCall sc)
+    }

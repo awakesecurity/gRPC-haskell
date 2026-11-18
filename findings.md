@@ -6,7 +6,7 @@ This began as a static review. gRPC API contracts were checked against the 1.82.
 
 ## Status
 
-Finding #1 is fixed in the working tree: each completion queue is now read by a single dispatcher thread using `next`, and waiters block on an `MVar` (`core/src/Network/GRPC/LowLevel/CompletionQueue/Internal.hs`). The regression tests are `testIdleStreams` in `core/tests/LowLevelTests.hs`.
+Finding #1 is fixed on branch `riz0id/completion-queue`: each completion queue is now read by a single dispatcher thread using `next`, and waiters block on an `MVar` (`core/src/Network/GRPC/LowLevel/CompletionQueue/Internal.hs`). The regression tests are `testIdleStreams` in `core/tests/LowLevelTests.hs`.
 
 The same change also addresses, by construction and without dedicated tests:
 
@@ -69,7 +69,7 @@ Everything else below is unchanged.
 
 ### 9. Batch failures are reported as timeouts and then swallowed
 
-`eventToError` maps `OpComplete False` to `GRPCIOTimeout` (`core/src/Network/GRPC/LowLevel/CompletionQueue/Internal.hs:141`), and `handleCallError` ignores `GRPCIOTimeout` (`src/Network/GRPC/HighLevel/Server.hs:192`), so real failures are never logged.
+`runOps` reports any unsuccessful batch as `GRPCIOTimeout` (its `opFailure`, in `core/src/Network/GRPC/LowLevel/Op.hs`), and `handleCallError` ignores `GRPCIOTimeout` (`src/Network/GRPC/HighLevel/Server.hs:192`), so real failures are never logged.
 
 ### 10. Memory leaks on hot paths
 

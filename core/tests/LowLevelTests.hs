@@ -80,8 +80,8 @@ lowLevelTests =
     , testBiDiStreaming
     , testBiDiStreamingUnregistered
     , -- Idle streams must not stall other calls (findings.md #1). The counts
-      -- are relative to gRPC's limit on concurrent pluckers, which used to cap
-      -- the number of blocked operations per completion queue.
+      -- are the number of blocked operations at which a completion queue used
+      -- to stall (gRPC's limit on concurrent pluckers), and four times that.
       testIdleStreams ServerRecv maxCompletionQueuePluckers
     , testIdleStreams ServerRecv (4 * maxCompletionQueuePluckers)
     , testIdleStreams ClientRecv maxCompletionQueuePluckers
