@@ -227,17 +227,15 @@ runOps call cq ops =
       -- 4. gRPC can now end up writing to the freed ByteBuffer and we get a heap corruption.
       withOpArrayAndCtxts ops $ \(opArray, contexts) -> mask_ $ do
         grpcDebug $ "runOps: allocated op contexts: " ++ show contexts
-        tag <- newTag cq
-        grpcDebug $ "runOps: tag: " ++ show tag
-        callError <- startBatch cq call opArray l tag
+        ec <- startCompletion (startBatch cq call opArray l)
         grpcDebug $
           "runOps: called start_batch. callError: "
-            ++ (show callError)
-        case callError of
+            ++ either show (const "none") ec
+        case ec of
           Left x -> return $ Left x
-          Right () -> do
-            ev <- pluck cq tag Nothing
-            grpcDebug $ "runOps: pluck returned " ++ show ev
+          Right c -> do
+            ev <- awaitCompletion c Nothing
+            grpcDebug $ "runOps: awaitCompletion returned " ++ show ev
             case ev of
               Right () -> do
                 grpcDebug "runOps: got good op; starting."

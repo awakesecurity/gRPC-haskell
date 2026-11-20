@@ -144,6 +144,10 @@ castPeek p = do
 
 {#fun grpc_shutdown_blocking as ^ {} -> `()'#}
 
+-- | Whether gRPC is currently initialized, i.e. 'grpcInit' has been called more
+-- times than 'grpcShutdown'.
+{#fun grpc_is_initialized as ^ {} -> `Bool'#}
+
 {#fun grpc_version_string as ^ {} -> `String' #}
 
 grpcCppVersionMajor :: Int

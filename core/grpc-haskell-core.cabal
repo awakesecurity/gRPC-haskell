@@ -1,7 +1,7 @@
 cabal-version: 3.0
 
 name:                grpc-haskell-core
-version:             0.6.1
+version:             0.7.0
 synopsis:            Haskell implementation of gRPC layered on shared C library.
 homepage:            https://github.com/awakenetworks/gRPC-haskell
 license:             Apache-2.0
@@ -30,11 +30,11 @@ library
   import:               common
   build-depends:
       base             >= 4.8    && < 5.0
+    , async            >= 2.1    && < 2.3
     , clock            >= 0.6.0  && < 0.9
     , bytestring       >= 0.10   && < 0.13
     , stm              >= 2.4    && < 2.6
     , containers       >= 0.5    && < 0.8
-    , managed          >= 1.0.0  && < 1.1
     , template-haskell >= 2.16.0 && < 2.24
     , transformers
 

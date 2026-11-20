@@ -22,7 +22,9 @@ module Network.GRPC.LowLevel.CompletionQueue (
   withCompletionQueue,
   createCompletionQueue,
   shutdownCompletionQueue,
-  pluck,
+  Completion,
+  startCompletion,
+  awaitCompletion,
   startBatch,
   channelCreateCall,
   TimeoutSeconds,
@@ -30,23 +32,22 @@ module Network.GRPC.LowLevel.CompletionQueue (
   serverRegisterCompletionQueue,
   serverShutdownAndNotify,
   serverRequestCall,
-  newTag,
 )
 where
 
+import Control.Concurrent (rtsSupportsBoundThreads)
 import Control.Concurrent.STM.TVar (newTVarIO)
-import Control.Exception (bracket)
-import Control.Monad.Managed
-import Control.Monad.Trans.Class (MonadTrans (lift))
-import Control.Monad.Trans.Except
-import Data.IORef (newIORef)
+import Control.Exception (bracket, mask_, onException, throwIO)
+import Control.Monad (unless)
 import Data.List (intersperse)
+import Foreign.Marshal.Alloc (free, malloc)
 import Foreign.Ptr (nullPtr)
 import Foreign.Storable (peek)
 import Network.GRPC.LowLevel.Call
 import Network.GRPC.LowLevel.CompletionQueue.Internal
 import Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe as C
+import qualified Network.GRPC.Unsafe.ByteBuffer as C
 import qualified Network.GRPC.Unsafe.Constants as C
 import qualified Network.GRPC.Unsafe.Metadata as C
 import qualified Network.GRPC.Unsafe.Op as C
@@ -60,12 +61,19 @@ withCompletionQueue grpc =
 
 createCompletionQueue :: GRPC -> IO CompletionQueue
 createCompletionQueue _ = do
-  unsafeCQ <- C.grpcCompletionQueueCreateForPluck C.reserved
-  currentPluckers <- newTVarIO 0
-  currentPushers <- newTVarIO 0
-  shuttingDown <- newTVarIO False
-  nextTag <- newIORef minBound
-  return CompletionQueue{..}
+  unless rtsSupportsBoundThreads $
+    throwIO (userError "createCompletionQueue: grpc-haskell requires the threaded RTS (-threaded)")
+  mask_ $ do
+    -- A gRPC reference owned by the dispatcher, taken before the queue exists
+    -- and released only after the dispatcher destroys it. See 'startDispatcher'.
+    C.grpcInit
+    unsafeCQ <-
+      C.grpcCompletionQueueCreateForNext C.reserved
+        `onException` C.grpcShutdown
+    currentPushers <- newTVarIO 0
+    shuttingDown <- newTVarIO False
+    dispatcherThread <- startDispatcher unsafeCQ
+    return CompletionQueue{..}
 
 -- | Very simple wrapper around 'grpcCallStartBatch'. Throws 'GRPCIOShutdown'
 -- without calling 'grpcCallStartBatch' if the queue is shutting down.
@@ -78,15 +86,13 @@ startBatch ::
   C.Tag ->
   IO (Either GRPCIOError ())
 startBatch cq call opArray opArraySize tag =
-  withPermission Push cq $ fmap throwIfCallError $ do
+  withPermission cq $ fmap throwIfCallError $ do
     grpcDebug $
       "startBatch: calling grpc_call_start_batch with pointers: "
         ++ show call
         ++ " "
         ++ show opArray
-    res <- C.grpcCallStartBatch call opArray opArraySize tag C.reserved
-    grpcDebug "startBatch: grpc_call_start_batch call returned."
-    return res
+    C.grpcCallStartBatch call opArray opArraySize tag C.reserved
 
 channelCreateCall ::
   C.Channel ->
@@ -103,7 +109,7 @@ channelCreateCall
   cq@CompletionQueue{..}
   handle
   deadline =
-    withPermission Push cq $ do
+    withPermission cq $ do
       let parentPtr = maybe (C.Call nullPtr) unsafeSC parent
       grpcDebug $
         "channelCreateCall: call with "
@@ -138,16 +144,36 @@ serverRequestCall ::
   -- | call CQ
   CompletionQueue ->
   IO (Either GRPCIOError (ServerCall (MethodPayload mt)))
-serverRequestCall rm s scq ccq =
+serverRequestCall rm s scq ccq = mask_ $ do
   -- NB: The method type dictates whether or not a payload is present, according
   -- to the payloadHandling function. We do not allocate a buffer for the
   -- payload when it is not present.
-  withPermission Push scq . with allocs $ \(dead, call, pay, meta) ->
-    withPermission Pluck scq $ do
-      md <- peek meta
-      tag <- newTag scq
-      dbug $ "got pluck permission, registering call for tag=" ++ show tag
-      ce <-
+  dead <- malloc
+  call <- malloc
+  pay <-
+    if payloadHandling (methodType rm) == C.SrmPayloadNone
+      then return nullPtr
+      else C.createReceivingByteBuffer
+  meta <- C.metadataArrayCreate
+  md <- peek meta
+  let release = do
+        free call
+        free dead
+        C.metadataArrayDestroy meta
+        unless (pay == nullPtr) (C.destroyReceivingByteBuffer pay)
+      build =
+        ServerCall
+          <$> peek call
+          <*> return ccq
+          <*> C.getAllMetadataArray md
+          <*> extractPayload rm pay
+          <*> convertDeadline dead
+  requestCall
+    scq
+    call
+    release
+    ( \tag -> do
+        dbug $ "registering call for tag=" ++ show tag
         C.grpcServerRequestRegisteredCall
           s
           (methodHandle rm)
@@ -158,29 +184,9 @@ serverRequestCall rm s scq ccq =
           (unsafeCQ ccq)
           (unsafeCQ scq)
           tag
-      runExceptT $ case ce of
-        C.CallOk -> do
-          ExceptT $ do
-            r <- pluck' scq tag Nothing
-            dbug $ "pluck' finished:" ++ show r
-            return r
-          lift $
-            ServerCall
-              <$> peek call
-              <*> return ccq
-              <*> C.getAllMetadataArray md
-              <*> extractPayload rm pay
-              <*> convertDeadline dead
-        _ -> do
-          lift $ dbug $ "Throwing callError: " ++ show ce
-          throwE (GRPCIOCallError ce)
+    )
+    build
   where
-    allocs =
-      (,,,)
-        <$> mgdPtr
-        <*> mgdPtr
-        <*> mgdPayload (methodType rm)
-        <*> managed C.withMetadataArrayPtr
     dbug = grpcDebug . ("serverRequestCall(R): " ++)
     convertDeadline timeSpecPtr = C.timeSpec <$> peek timeSpecPtr
 
@@ -190,6 +196,14 @@ serverRegisterCompletionQueue :: C.Server -> CompletionQueue -> IO ()
 serverRegisterCompletionQueue server CompletionQueue{..} =
   C.grpcServerRegisterCompletionQueue server unsafeCQ C.reserved
 
-serverShutdownAndNotify :: C.Server -> CompletionQueue -> C.Tag -> IO ()
-serverShutdownAndNotify server CompletionQueue{..} tag =
-  C.grpcServerShutdownAndNotify server unsafeCQ tag
+-- | Starts shutting down the server. The returned 'Completion' is notified
+-- once there are no more calls being serviced. Errors with 'GRPCIOShutdown'
+-- without calling into gRPC if the queue is already shutting down.
+serverShutdownAndNotify ::
+  C.Server ->
+  CompletionQueue ->
+  IO (Either GRPCIOError Completion)
+serverShutdownAndNotify server cq@CompletionQueue{..} =
+  startCompletion $ \tag ->
+    withPermission cq $
+      Right () <$ C.grpcServerShutdownAndNotify server unsafeCQ tag

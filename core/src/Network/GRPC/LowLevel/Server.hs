@@ -33,7 +33,7 @@ import Control.Concurrent.STM.TVar (
   readTVarIO,
   writeTVar,
  )
-import Control.Exception (bracket)
+import Control.Exception (bracket, mask_, onException)
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Except
@@ -43,8 +43,8 @@ import qualified Data.Set as S
 import Network.GRPC.LowLevel.Call
 import Network.GRPC.LowLevel.CompletionQueue (
   CompletionQueue,
+  awaitCompletion,
   createCompletionQueue,
-  pluck,
   serverRegisterCompletionQueue,
   serverRequestCall,
   serverShutdownAndNotify,
@@ -180,7 +180,7 @@ addPort server conf@ServerConfig{..} =
 
 startServer :: GRPC -> ServerConfig -> IO Server
 startServer grpc conf@ServerConfig{..} =
-  C.withChannelArgs serverArgs $ \args -> do
+  mask_ . C.withChannelArgs serverArgs $ \args -> do
     let e = serverEndpoint conf
     server <- C.grpcServerCreate args C.reserved
     actualPort <- addPort server conf
@@ -188,33 +188,38 @@ startServer grpc conf@ServerConfig{..} =
       error $
         "Unable to bind port: " ++ show port
     cq <- createCompletionQueue grpc
+    ccq <- createCompletionQueue grpc `onException` shutdownCompletionQueue cq
     grpcDebug $ "startServer: server CQ: " ++ show cq
-    serverRegisterCompletionQueue server cq
+    (ns, ss, cs, bs) <-
+      ( do
+          serverRegisterCompletionQueue server cq
 
-    -- Register methods according to their GRPCMethodType kind. It's a bit ugly
-    -- to partition them this way, but we get very convenient phantom typing
-    -- elsewhere by doing so.
-    -- TODO: change order of args so we can eta reduce.
-    ns <-
-      mapM
-        (\nm -> serverRegisterMethodNormal server nm e)
-        methodsToRegisterNormal
-    ss <-
-      mapM
-        (\nm -> serverRegisterMethodServerStreaming server nm e)
-        methodsToRegisterServerStreaming
-    cs <-
-      mapM
-        (\nm -> serverRegisterMethodClientStreaming server nm e)
-        methodsToRegisterClientStreaming
-    bs <-
-      mapM
-        (\nm -> serverRegisterMethodBiDiStreaming server nm e)
-        methodsToRegisterBiDiStreaming
-    C.grpcServerStart server
+          -- Register methods according to their GRPCMethodType kind. It's a bit ugly
+          -- to partition them this way, but we get very convenient phantom typing
+          -- elsewhere by doing so.
+          -- TODO: change order of args so we can eta reduce.
+          ns <-
+            mapM
+              (\nm -> serverRegisterMethodNormal server nm e)
+              methodsToRegisterNormal
+          ss <-
+            mapM
+              (\nm -> serverRegisterMethodServerStreaming server nm e)
+              methodsToRegisterServerStreaming
+          cs <-
+            mapM
+              (\nm -> serverRegisterMethodClientStreaming server nm e)
+              methodsToRegisterClientStreaming
+          bs <-
+            mapM
+              (\nm -> serverRegisterMethodBiDiStreaming server nm e)
+              methodsToRegisterBiDiStreaming
+          C.grpcServerStart server
+          return (ns, ss, cs, bs)
+      )
+        `onException` (shutdownCompletionQueue cq >> shutdownCompletionQueue ccq)
     forks <- newTVarIO S.empty
     shutdown <- newTVarIO False
-    ccq <- createCompletionQueue grpc
     return $
       Server
         grpc
@@ -252,14 +257,15 @@ stopServer Server{unsafeServer = s, ..} = do
           putStrLn "Trying to stop server anyway."
         Right _ -> return ()
     shutdownNotify scq = do
-      let shutdownTag = C.tag 0
-      serverShutdownAndNotify s scq shutdownTag
-      grpcDebug "called serverShutdownAndNotify; plucking."
-      shutdownEvent <- pluck scq shutdownTag (Just 30)
+      started <- serverShutdownAndNotify s scq
+      grpcDebug "called serverShutdownAndNotify; waiting."
+      shutdownEvent <- case started of
+        Left err -> return (Left err)
+        Right c -> awaitCompletion c (Just 30)
       grpcDebug $ "shutdownNotify: got shutdown event" ++ show shutdownEvent
       case shutdownEvent of
-        -- This case occurs when we pluck but the queue is already in the
-        -- 'shuttingDown' state, implying we already tried to shut down.
+        -- This case occurs when the queue is already in the 'shuttingDown'
+        -- state, implying we already tried to shut down.
         Left GRPCIOShutdown -> error "Called stopServer twice!"
         Left _ -> error "Failed to stop server."
         Right _ -> return ()

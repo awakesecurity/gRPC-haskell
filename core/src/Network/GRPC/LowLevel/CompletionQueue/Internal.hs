@@ -2,38 +2,67 @@
 
 module Network.GRPC.LowLevel.CompletionQueue.Internal where
 
+import Control.Concurrent.Async (Async, async, waitCatch)
+import Control.Concurrent.MVar (
+  MVar,
+  newEmptyMVar,
+  readMVar,
+  tryPutMVar,
+ )
 import Control.Concurrent.STM (atomically, check, retry)
 import Control.Concurrent.STM.TVar (
   TVar,
   modifyTVar',
   readTVar,
+  swapTVar,
   writeTVar,
  )
-import Control.Exception (bracket)
+import Control.Exception (
+  SomeException,
+  bracket,
+  catch,
+  finally,
+  mask_,
+  onException,
+  try,
+  uninterruptibleMask_,
+ )
 import Control.Monad
-import Data.IORef (IORef, atomicModifyIORef')
-import Foreign.Ptr (nullPtr, plusPtr)
+import Data.Function (fix)
+import Foreign.Ptr (Ptr, nullPtr)
+import Foreign.StablePtr (
+  StablePtr,
+  castPtrToStablePtr,
+  castStablePtrToPtr,
+  deRefStablePtr,
+  freeStablePtr,
+  newStablePtr,
+ )
+import Foreign.Storable (peek)
 import Network.GRPC.LowLevel.GRPC
 import qualified Network.GRPC.Unsafe as C
-import qualified Network.GRPC.Unsafe.Constants as C
 import qualified Network.GRPC.Unsafe.Time as C
 import System.Timeout (timeout)
 
--- NOTE: the concurrency requirements for a CompletionQueue are a little
--- complicated. There are two read operations: next and pluck. We can either
--- call next on a CQ or call pluck up to 'maxCompletionQueuePluckers' times
--- concurrently, but we can't mix next and pluck calls. Fortunately, we only
--- need to use next when we are shutting down the queue. Thus, we do two things
--- to shut down:
--- 1. Set the shuttingDown 'TVar' to 'True'. When this is set, no new pluck
---    calls will be allowed to start.
--- 2. Wait until no threads are plucking, as counted by 'currentPluckers'.
--- This logic can be seen in 'pluck' and 'shutdownCompletionQueue'.
-
--- NOTE: There is one more possible race condition: pushing work onto the queue
--- after we begin to shut down.
--- Solution: another counter, which must reach zero before the shutdown
--- can start.
+-- NOTE: each 'CompletionQueue' is read by exactly one thread, its dispatcher
+-- (see 'startDispatcher'), which loops on grpc_completion_queue_next.
+--
+-- Every operation is tagged with a 'StablePtr' to a fresh 'MVar' (see
+-- 'startCompletion'). When the operation completes, the dispatcher puts the
+-- event into the 'MVar' and frees the 'StablePtr'. The thread that started the
+-- operation waits for the event in the 'MVar' (see 'awaitCompletion'). Any
+-- number of threads can wait at once.
+--
+-- To shut down (see 'shutdownCompletionQueue'):
+-- 1. Set the shuttingDown 'TVar' to 'True'. When this is set, no new work can
+--    be pushed onto the queue.
+-- 2. Wait until no threads are pushing, as counted by 'currentPushers', then
+--    call grpc_completion_queue_shutdown.
+-- 3. gRPC delivers every outstanding event before next reports that the queue
+--    has shut down. The dispatcher then destroys the queue, releases the gRPC
+--    reference it holds (taken with grpc_init in 'createCompletionQueue'), and
+--    completes 'dispatcherThread'. Holding that reference keeps gRPC alive for
+--    as long as the dispatcher can call into it, even if shutdown timed out.
 
 -- TODO: 'currentPushers' currently imposes an arbitrary limit on the number of
 -- concurrent pushers to the CQ, but I don't know what the limit should be set
@@ -48,89 +77,148 @@ data CompletionQueue = CompletionQueue
   { unsafeCQ :: C.CompletionQueue
   -- ^ All access to this field must be
   -- guarded by a check of 'shuttingDown'.
-  , currentPluckers :: TVar Int
-  -- ^ Used to limit the number of
-  -- concurrent calls to pluck on this
-  -- queue.
-  -- The max value is set by gRPC in
-  -- 'C.maxCompletionQueuePluckers'
   , currentPushers :: TVar Int
   -- ^ Used to prevent new work from
   -- being pushed onto the queue when
   -- the queue begins to shut down.
   , shuttingDown :: TVar Bool
-  -- ^ Used to prevent new pluck calls on
-  -- the queue when the queue begins to
-  -- shut down.
-  , nextTag :: IORef Int
-  -- ^ Used to supply unique tags for work
-  -- items pushed onto the queue.
+  -- ^ Used to prevent new work from
+  -- being pushed onto the queue when
+  -- the queue begins to shut down.
+  , dispatcherThread :: Async ()
+  -- ^ The dispatcher, which completes once the
+  -- queue has been drained and destroyed.
   }
 
 instance Show CompletionQueue where show = show . unsafeCQ
 
 type TimeoutSeconds = Int
 
-data CQOpType = Push | Pluck deriving (Show, Eq, Enum)
-
--- | Create a new 'C.Tag' for identifying work items on the 'CompletionQueue'.
--- This will eventually wrap around after reaching @maxBound :: Int@, but from a
--- practical perspective, that should be safe.
-newTag :: CompletionQueue -> IO C.Tag
-newTag CompletionQueue{..} = do
-  i <- atomicModifyIORef' nextTag (\i -> (i + 1, i))
-  return $ C.Tag $ plusPtr nullPtr i
-
--- | Safely brackets an operation that pushes work onto or plucks results from
--- the given 'CompletionQueue'.
+-- | Safely brackets an operation that pushes work onto the given
+-- 'CompletionQueue'.
 withPermission ::
-  CQOpType ->
   CompletionQueue ->
   IO (Either GRPCIOError a) ->
   IO (Either GRPCIOError a)
-withPermission op cq act = bracket acquire release $ \gotResource ->
+withPermission cq act = bracket acquire release $ \gotResource ->
   if gotResource then act else return (Left GRPCIOShutdown)
   where
     acquire = atomically $ do
       isShuttingDown <- readTVar (shuttingDown cq)
       unless isShuttingDown $ do
-        currCount <- readTVar (getCount op cq)
-        if currCount < getLimit op
-          then writeTVar (getCount op cq) (currCount + 1)
+        currCount <- readTVar (currentPushers cq)
+        if currCount < maxWorkPushers
+          then writeTVar (currentPushers cq) (currCount + 1)
           else retry
       return (not isShuttingDown)
     release gotResource =
       when gotResource $
         atomically $
-          modifyTVar' (getCount op cq) (subtract 1)
+          modifyTVar' (currentPushers cq) (subtract 1)
 
--- | Waits for the given number of seconds for the given tag to appear on the
--- completion queue. Throws 'GRPCIOShutdown' if the completion queue is shutting
--- down and cannot handle new requests. Note that the timeout is optional. When
--- doing client ops, provide @Nothing@ and the pluck will automatically fail if
--- the deadline associated with the 'ClientCall' expires. If plucking
--- 'serverRequestCall', this will block forever unless a timeout is given.
-pluck ::
-  CompletionQueue ->
-  C.Tag ->
+type CompletionVar = MVar (Either (C.Event -> IO ()) C.Event)
+
+-- | A tag handed to gRPC, plus the variable the dispatcher fills with its
+-- event.
+data Completion = Completion
+  { completionTag :: C.Tag
+  , completionVar :: CompletionVar
+  }
+
+readEvent :: Completion -> IO C.Event
+readEvent Completion{..} =
+  either (const (error "readEvent: abandoned")) id <$> readMVar completionVar
+
+-- | Creates a fresh tag and starts an operation with it. The tag is a
+-- 'StablePtr' to a fresh 'MVar', which the dispatcher fills with the
+-- operation's event (and frees the 'StablePtr') once gRPC posts the tag.
+--
+-- If @start@ returns 'Left' or throws, gRPC never saw the tag, so no event will
+-- come and the 'StablePtr' is freed here.
+--
+-- This runs under 'mask_'. The only interruptible point in the callers'
+-- @start@ actions is the STM 'retry' in 'withPermission', which happens before
+-- gRPC sees the tag; once the foreign call has accepted it, nothing
+-- interruptible runs before this returns.
+startCompletion ::
+  (C.Tag -> IO (Either GRPCIOError ())) ->
+  IO (Either GRPCIOError Completion)
+startCompletion start = mask_ $ do
+  var <- newEmptyMVar
+  sp <- newStablePtr var
+  let tag = C.Tag (castStablePtrToPtr sp)
+  grpcDebug $ "startCompletion: starting operation with tag=" ++ show tag
+  r <- start tag `onException` freeStablePtr sp
+  case r of
+    Left err -> do
+      freeStablePtr sp
+      return (Left err)
+    Right () -> return (Right (Completion tag var))
+
+-- | Waits for the event of an operation started with 'startCompletion'.
+--
+-- With @Nothing@, blocks uninterruptibly until the event arrives. Callers such
+-- as 'Network.GRPC.LowLevel.Op.runOps' rely on this to keep buffers alive
+-- while gRPC can still write to them. When doing client ops, the wait will end
+-- when the deadline associated with the 'ClientCall' expires.
+--
+-- With @Just n@, waits at most @n@ seconds and returns 'GRPCIOTimeout' if the
+-- event has not arrived; the same 'Completion' can then be awaited again.
+awaitCompletion ::
+  Completion ->
   Maybe TimeoutSeconds ->
   IO (Either GRPCIOError ())
-pluck cq tag mwait = do
-  grpcDebug $ "pluck: called with tag=" ++ show tag ++ ",mwait=" ++ show mwait
-  withPermission Pluck cq $ pluck' cq tag mwait
+awaitCompletion c@Completion{..} mwait = do
+  grpcDebug $
+    "awaitCompletion: waiting for tag="
+      ++ show completionTag
+      ++ ",mwait="
+      ++ show mwait
+  mev <- case mwait of
+    Nothing -> Just <$> uninterruptibleMask_ (readEvent c)
+    Just n -> timeout (n * 10 ^ (6 :: Int)) (readEvent c)
+  grpcDebug $ "awaitCompletion finished: " ++ show mev
+  pure (maybe (Left GRPCIOTimeout) eventResult mev)
 
--- Variant of pluck' which assumes pluck permission has been granted.
-pluck' ::
+awaitCompletionOr :: Completion -> (C.Event -> IO ()) -> IO (Either GRPCIOError ())
+awaitCompletionOr c@Completion{..} abandon = do
+  ev <- readEvent c `onException` do
+    gaveUp <- tryPutMVar completionVar (Left abandon)
+    unless gaveUp (readEvent c >>= abandon)
+  pure (eventResult ev)
+
+eventResult :: C.Event -> Either GRPCIOError ()
+eventResult ev
+  | isEventSuccessful ev = Right ()
+  | otherwise = eventToError ev
+
+requestCall ::
   CompletionQueue ->
-  C.Tag ->
-  Maybe TimeoutSeconds ->
-  IO (Either GRPCIOError ())
-pluck' CompletionQueue{..} tag mwait =
-  maybe C.withInfiniteDeadline C.withDeadlineSeconds mwait $ \dead -> do
-    grpcDebug $ "pluck: blocking on grpc_completion_queue_pluck for tag=" ++ show tag
-    ev <- C.grpcCompletionQueuePluck unsafeCQ tag dead C.reserved
-    grpcDebug $ "pluck finished: " ++ show ev
-    return $ if isEventSuccessful ev then Right () else eventToError ev
+  Ptr C.Call ->
+  IO () ->
+  (C.Tag -> IO C.CallError) ->
+  IO a ->
+  IO (Either GRPCIOError a)
+requestCall scq call release request build = do
+  started <-
+    startCompletion (\tag -> withPermission scq (throwIfCallError <$> request tag))
+      `onException` release
+  case started of
+    Left e -> release >> return (Left e)
+    Right c -> do
+      r <- awaitCompletionOr c (\ev -> cancelArrived ev call `finally` release)
+      grpcDebug ("serverRequestCall: awaitCompletion finished: " ++ show r)
+      traverse (const build) r `finally` release
+
+abandonFailed :: SomeException -> IO ()
+abandonFailed e = grpcDebug ("dispatcher: abandon threw: " ++ show e)
+
+cancelArrived :: C.Event -> Ptr C.Call -> IO ()
+cancelArrived ev call =
+  when (isEventSuccessful ev) $ do
+    c <- peek call
+    C.grpcCallCancel c C.reserved
+    C.grpcCallUnref c
 
 -- | Translate 'C.Event' to an error. The caller is responsible for ensuring
 -- that the event actually corresponds to an error condition; a successful event
@@ -149,39 +237,72 @@ isEventSuccessful _ = False
 maxWorkPushers :: Int
 maxWorkPushers = 100 -- TODO: figure out what this should be.
 
-getCount :: CQOpType -> CompletionQueue -> TVar Int
-getCount Push = currentPushers
-getCount Pluck = currentPluckers
+--------------------------------------------------------------------------------
+-- Dispatcher
 
-getLimit :: CQOpType -> Int
-getLimit Push = maxWorkPushers
-getLimit Pluck = C.maxCompletionQueuePluckers
-
--- | Shuts down the completion queue. See the comment above 'CompletionQueue'
--- for the strategy we use to ensure that no one tries to use the
--- queue after we begin the shutdown process. Errors with
--- 'GRPCIOShutdownFailure' if the queue can't be shut down within 5 seconds.
-shutdownCompletionQueue :: CompletionQueue -> IO (Either GRPCIOError ())
-shutdownCompletionQueue CompletionQueue{..} = do
-  atomically $ writeTVar shuttingDown True
-  atomically $ do
-    readTVar currentPushers >>= check . (== 0)
-    readTVar currentPluckers >>= check . (== 0)
-  -- drain the queue
-  C.grpcCompletionQueueShutdown unsafeCQ
-  loopRes <- timeout (5 * 10 ^ (6 :: Int)) drainLoop
-  grpcDebug $ "Got CQ loop shutdown result of: " ++ show loopRes
-  case loopRes of
-    Nothing -> return $ Left GRPCIOShutdownFailure
-    Just () -> C.grpcCompletionQueueDestroy unsafeCQ >> return (Right ())
+-- | Forks the dispatcher thread for a queue. The dispatcher takes over the
+-- gRPC reference that 'createCompletionQueue' acquired for it (with
+-- grpc_init). It runs until the queue has been shut down and drained, then
+-- destroys the queue, releases that reference, and completes.
+--
+-- Because gRPC's init/shutdown calls are reference-counted, holding the
+-- reference until then means gRPC cannot be torn down while the dispatcher can
+-- still call into it, even if 'shutdownCompletionQueue' timed out and the user
+-- has already called 'Network.GRPC.LowLevel.GRPC.stopGRPC'.
+--
+-- If the dispatcher throws, it is restarted; it only exits once the queue
+-- reports shutdown.
+startDispatcher :: C.CompletionQueue -> IO (Async ())
+startDispatcher cq =
+  -- Masked so that nothing can kill the dispatcher: it only ever blocks inside
+  -- the foreign call to grpc_completion_queue_next.
+  async . mask_ $
+    fix (\again -> try (dispatcher cq) >>= either (restart again) return)
+      >> C.grpcCompletionQueueDestroy cq
+      >> C.grpcShutdown
   where
-    drainLoop :: IO ()
-    drainLoop = do
-      grpcDebug "drainLoop: before next() call"
-      ev <- C.withDeadlineSeconds 1 $ \deadline ->
-        C.grpcCompletionQueuePluck unsafeCQ C.noTag deadline C.reserved
-      grpcDebug $ "drainLoop: next() call got " ++ show ev
+    restart :: IO () -> SomeException -> IO ()
+    restart again _ = again
+
+-- | Reads events from the queue and delivers each one to the 'MVar' its tag
+-- points to, until the queue reports that it has shut down. Must be the only
+-- reader of the queue.
+dispatcher :: C.CompletionQueue -> IO ()
+dispatcher cq = C.withInfiniteDeadline loop
+  where
+    loop deadline = do
+      ev <- C.grpcCompletionQueueNext cq deadline C.reserved
       case C.eventCompletionType ev of
         C.QueueShutdown -> return ()
-        C.QueueTimeout -> drainLoop
-        C.OpComplete -> drainLoop
+        C.QueueTimeout -> loop deadline
+        C.OpComplete -> do
+          let C.Tag p = C.eventTag ev
+          unless (p == nullPtr) $ do
+            let sp = castPtrToStablePtr p :: StablePtr CompletionVar
+            var <- deRefStablePtr sp
+            delivered <- tryPutMVar var (Right ev)
+            freeStablePtr sp
+            unless delivered $
+              readMVar var >>= either (\abandon -> abandon ev `catch` abandonFailed) (const (return ()))
+          grpcDebug $ "dispatcher: delivered " ++ show ev
+          loop deadline
+
+-- | Shuts down the completion queue. No new work can be pushed onto the queue
+-- after this is called. The dispatcher destroys the queue once every operation
+-- already in flight has completed. Errors with 'GRPCIOShutdownFailure' if that
+-- doesn't happen within 5 seconds; in that case the queue is still destroyed
+-- if and when the outstanding operations do complete. Until then the
+-- dispatcher keeps its gRPC reference, so gRPC stays initialized even if
+-- 'Network.GRPC.LowLevel.GRPC.stopGRPC' is called in the meantime.
+shutdownCompletionQueue :: CompletionQueue -> IO (Either GRPCIOError ())
+shutdownCompletionQueue CompletionQueue{..} = do
+  uninterruptibleMask_ $ do
+    alreadyShuttingDown <- atomically $ swapTVar shuttingDown True
+    unless alreadyShuttingDown $ do
+      atomically $ readTVar currentPushers >>= check . (== 0)
+      C.grpcCompletionQueueShutdown unsafeCQ
+  res <- timeout (5 * 10 ^ (6 :: Int)) (waitCatch dispatcherThread)
+  grpcDebug $ "Got CQ dispatcher shutdown result of: " ++ show res
+  return $ case res of
+    Nothing -> Left GRPCIOShutdownFailure
+    Just _ -> Right ()
