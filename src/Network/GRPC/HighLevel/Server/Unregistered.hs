@@ -80,7 +80,7 @@ serverLoop ServerOptions{..} =
   -- In the GRPC library, "doc/core/epoll-polling-engine.md" seems
   -- to indicate that the thread which actually awakens from sleep
   -- on file descriptor events may differ from the one which seeks
-  -- to "pluck" the resulting event.
+  -- to read the resulting event.
   --
   -- Thus it seems possible that "dispatchLoop" may be waiting on
   -- a condition variable when the "serverLoop" thread is killed.

@@ -11,8 +11,15 @@
 
 module LowLevelTests where
 
-import Control.Concurrent (threadDelay)
+import Control.Concurrent (
+  newEmptyMVar,
+  putMVar,
+  readMVar,
+  takeMVar,
+  threadDelay,
+ )
 import Control.Concurrent.Async
+import Control.Exception (finally)
 import Control.Monad
 import Control.Monad.Managed
 import Data.ByteString (
@@ -27,10 +34,21 @@ import GHC.Exts (fromList, toList)
 import Network.GRPC.LowLevel
 import qualified Network.GRPC.LowLevel.Call.Unregistered as U
 import qualified Network.GRPC.LowLevel.Client.Unregistered as U
-import Network.GRPC.LowLevel.GRPC (threadDelaySecs)
+import Network.GRPC.LowLevel.CompletionQueue (
+  createCompletionQueue,
+  shutdownCompletionQueue,
+ )
+import Network.GRPC.LowLevel.CompletionQueue.Internal (maxWorkPushers)
+import Network.GRPC.LowLevel.GRPC (startGRPC, stopGRPC, threadDelaySecs)
 import qualified Network.GRPC.LowLevel.Server.Unregistered as U
-import Network.GRPC.Unsafe (grpcCppVersionMajor, grpcCppVersionMinor)
+import Network.GRPC.Unsafe (
+  grpcCppVersionMajor,
+  grpcCppVersionMinor,
+  grpcIsInitialized,
+ )
+import Network.GRPC.Unsafe.Constants (maxCompletionQueuePluckers)
 import qualified Pipes as P
+import System.Timeout (timeout)
 import Test.Tasty
 import Test.Tasty.HUnit as HU (
   Assertion,
@@ -71,6 +89,16 @@ lowLevelTests =
     , testServerStreamingUnregistered
     , testBiDiStreaming
     , testBiDiStreamingUnregistered
+    , -- The number of blocked operations per completion queue must not be
+      -- capped by gRPC's limit on concurrent pluckers.
+      testIdleStreams ServerRecv (maxCompletionQueuePluckers - 1)
+    , testIdleStreams ServerRecv maxCompletionQueuePluckers
+    , testIdleStreams ServerRecv (4 * maxCompletionQueuePluckers)
+    , testIdleStreams ClientRecv maxCompletionQueuePluckers
+    , testIdleStreams ClientRecv (4 * maxCompletionQueuePluckers)
+    , testStopServerWithPendingRequests
+    , testDispatcherHoldsGRPC
+    , testServerRequestInterruptible
     ]
 
 testGRPCBracket :: TestTree
@@ -632,6 +660,146 @@ testBiDiStreamingUnregistered =
         recv `is` Right Nothing
         return (trailMD, serverStatus, serverDtls)
       eea @?= Right ()
+
+-- | Which end of an idle stream is blocked in a gRPC receive.
+data IdleSide = ServerRecv | ClientRecv
+
+-- | Idle streams must not stall other calls.
+--
+-- @nIdle@ bidirectional streams are opened and left idle, with one end of each
+-- blocked in 'recv'. An unrelated unary call must still be answered.
+testIdleStreams :: IdleSide -> Int -> TestTree
+testIdleStreams side nIdle =
+  testCase ("Client/Server - unary call succeeds with " ++ show nIdle ++ " streams idle in " ++ sideName) $ do
+    -- One put per stream that is about to block in recv.
+    parked <- newEmptyMVar
+    -- Filled to let the idle streams finish.
+    release <- newEmptyMVar
+    clientDone <- newEmptyMVar
+    void $
+      runTestServer (TestServer defServerConf (server parked release clientDone))
+        `concurrently` ( threadDelay 100000
+                           >> runTestClient (stdTestClient (client parked release clientDone))
+                       )
+  where
+    sideName = case side of
+      ServerRecv -> "server recv"
+      ClientRecv -> "client recv"
+
+    server parked release clientDone s = do
+      replicateM_ (nIdle + 1) $ U.withServerCallAsync s $ \call ->
+        if U.callMethod call == "/idle"
+          then void $ U.serverRW s call mempty $ \_sc recv _send -> do
+            case side of
+              ServerRecv -> do
+                putMVar parked ()
+                -- Blocks until the client half-closes.
+                void recv
+              -- Not in a gRPC op: the client is the one blocked in recv.
+              ClientRecv -> readMVar release
+            return (mempty, StatusOk, "")
+          else void $ U.serverHandleNormalCall' s call mempty $ \_ _ ->
+            return ("pong", mempty, StatusOk, "")
+      -- Keep the server up until the client is done.
+      takeMVar clientDone
+
+    client parked release clientDone c = do
+      rmIdle <- clientRegisterMethodBiDiStreaming c "/idle"
+      rmPing <- clientRegisterMethodNormal c "/ping"
+      streams <- replicateM nIdle $ async $
+        clientRW c rmIdle 30 mempty $ \_cc _getMD recv _send writesDone ->
+          case side of
+            -- Not in a gRPC op: the server is the one blocked in recv.
+            ServerRecv -> do
+              readMVar release
+              void writesDone
+            ClientRecv -> do
+              putMVar parked ()
+              -- Blocks until the server finishes the call.
+              void recv
+      replicateM_ nIdle (takeMVar parked)
+      -- Let the streams enter recv.
+      threadDelay 200000
+      -- Always unblock the streams, so a stalled ping still shuts down cleanly.
+      r <-
+        clientRequest c rmPing 5 "ping" mempty
+          `finally` putMVar release ()
+      mapM_ wait streams
+      putMVar clientDone ()
+      case r of
+        Right rsp -> rspBody rsp @?= "pong"
+        Left e -> assertFailure ("ping stalled behind idle streams: " ++ show e)
+
+testStopServerWithPendingRequests :: TestTree
+testStopServerWithPendingRequests =
+  testCase ("Server - stops with " ++ show maxWorkPushers ++ " pending requests") $ do
+    pendingVar <- newEmptyMVar
+    r <-
+      timeout (20 * 10 ^ (6 :: Int)) $
+        runTestServer $
+          TestServer defServerConf $ \s -> do
+            -- No client ever connects, so every request stays pending.
+            pending <-
+              replicateM maxWorkPushers $
+                async (U.withServerCall s (\_ -> return (Right ())))
+            putMVar pendingVar pending
+            -- Let the requests reach gRPC before the server is stopped.
+            threadDelay 500000
+    -- The requests fail once the server shuts down; reap them either way.
+    pending <- takeMVar pendingVar
+    mapM_ cancel pending
+    r @?= Just ()
+
+-- | Each queue's dispatcher holds its own gRPC reference until it has destroyed
+-- the queue, so gRPC cannot be torn down while the dispatcher can still call
+-- into it (e.g. after 'shutdownCompletionQueue' times out and the user calls
+-- 'stopGRPC' anyway).
+--
+-- Relies on the suite running sequentially, so that no other test holds a gRPC
+-- reference at the same time.
+testDispatcherHoldsGRPC :: TestTree
+testDispatcherHoldsGRPC =
+  testCase "CompletionQueue - dispatcher keeps gRPC initialized until the queue is destroyed" $ do
+    before <- grpcIsInitialized
+    assertBool "gRPC was already initialized before the test" (not before)
+    g <- startGRPC
+    cq <- createCompletionQueue g
+    stopGRPC g
+    afterStop <- grpcIsInitialized
+    shutdownRes <- shutdownCompletionQueue cq
+    afterShutdown <- grpcIsInitialized
+    assertBool "gRPC was shut down while the dispatcher was still running" afterStop
+    shutdownRes @?= Right ()
+    assertBool "dispatcher did not release its gRPC reference" (not afterShutdown)
+
+testServerRequestInterruptible :: TestTree
+testServerRequestInterruptible =
+  testCase "Client/Server - interrupted request cancels the next call" $ do
+    abandoned <- newEmptyMVar
+    clientDone <- newEmptyMVar
+    void $
+      runTestServer (TestServer defServerConf (server abandoned clientDone))
+        `concurrently` ( threadDelay 100000
+                           >> runTestClient (stdTestClient (client abandoned clientDone))
+                       )
+  where
+    server abandoned clientDone s = do
+      r <- timeout 1000000 (U.withServerCall s (\_ -> return (Right ())))
+      r @?= Nothing
+      putMVar abandoned ()
+      void $ U.serverHandleNormalCall s mempty $ \_ _ ->
+        return ("pong", mempty, StatusOk, "")
+      takeMVar clientDone
+
+    client abandoned clientDone c = do
+      takeMVar abandoned
+      first <- U.clientRequest c "/ping" 5 "" mempty
+      second <- U.clientRequest c "/ping" 5 "" mempty
+      putMVar clientDone ()
+      case first of
+        Left (GRPCIOBadStatusCode StatusCancelled _) -> return ()
+        _ -> assertFailure ("expected the first call to be cancelled, got: " ++ show first)
+      fmap rspBody second @?= Right "pong"
 
 --------------------------------------------------------------------------------
 -- Unregistered tests

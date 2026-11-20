@@ -8,9 +8,8 @@
 
 module Network.GRPC.LowLevel.CompletionQueue.Unregistered where
 
-import Control.Monad.Managed
-import Control.Monad.Trans.Class (MonadTrans (lift))
-import Control.Monad.Trans.Except
+import Control.Exception (mask_)
+import Foreign.Marshal.Alloc (free, malloc)
 import Foreign.Storable (peek)
 import Network.GRPC.LowLevel.Call
 import qualified Network.GRPC.LowLevel.Call.Unregistered as U
@@ -31,7 +30,7 @@ channelCreateCall ::
   C.CTimeSpecPtr ->
   IO (Either GRPCIOError ClientCall)
 channelCreateCall chan parent mask cq@CompletionQueue{..} meth endpt deadline =
-  withPermission Push cq $ do
+  withPermission cq $ do
     call <-
       C.grpcChannelCreateCall
         chan
@@ -51,41 +50,28 @@ serverRequestCall ::
   -- | call CQ
   CompletionQueue ->
   IO (Either GRPCIOError U.ServerCall)
-serverRequestCall s scq ccq =
-  withPermission Push scq . with allocs $ \(call, meta, cd) ->
-    withPermission Pluck scq $ do
-      md <- peek meta
-      tag <- newTag scq
-      dbug $ "got pluck permission, registering call for tag=" ++ show tag
-      ce <- C.grpcServerRequestCall s call cd md (unsafeCQ ccq) (unsafeCQ scq) tag
-      runExceptT $ case ce of
-        C.CallOk -> do
-          ExceptT $ do
-            let
-              rec = do
-                -- yield every second, for interruptibility
-                r <- pluck' scq tag (Just 1)
-                case r of
-                  Left GRPCIOTimeout -> rec
-                  _ -> return r
-            r <- rec
-            dbug $ "pluck' finished: " ++ show r
-            return r
-          lift $
-            U.ServerCall
-              <$> peek call
-              <*> return ccq
-              <*> C.getAllMetadataArray md
-              <*> (C.timeSpec <$> C.callDetailsGetDeadline cd)
-              <*> (MethodName <$> C.callDetailsGetMethod cd)
-              <*> (Host <$> C.callDetailsGetHost cd)
-        _ -> do
-          lift $ dbug $ "Throwing callError: " ++ show ce
-          throwE $ GRPCIOCallError ce
+serverRequestCall s scq ccq = mask_ $ do
+  call <- malloc
+  meta <- C.metadataArrayCreate
+  cd <- C.createCallDetails
+  md <- peek meta
+  let release = free call >> C.metadataArrayDestroy meta >> C.destroyCallDetails cd
+      build =
+        U.ServerCall
+          <$> peek call
+          <*> return ccq
+          <*> C.getAllMetadataArray md
+          <*> (C.timeSpec <$> C.callDetailsGetDeadline cd)
+          <*> (MethodName <$> C.callDetailsGetMethod cd)
+          <*> (Host <$> C.callDetailsGetHost cd)
+  requestCall
+    scq
+    call
+    release
+    ( \tag -> do
+        dbug $ "registering call for tag=" ++ show tag
+        C.grpcServerRequestCall s call cd md (unsafeCQ ccq) (unsafeCQ scq) tag
+    )
+    build
   where
-    allocs =
-      (,,)
-        <$> mgdPtr
-        <*> managed C.withMetadataArrayPtr
-        <*> managed C.withCallDetails
     dbug = grpcDebug . ("serverRequestCall(U): " ++)
